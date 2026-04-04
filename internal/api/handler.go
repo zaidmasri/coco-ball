@@ -22,6 +22,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /plans", h.handleGetPlans)
 	mux.HandleFunc("GET /plans/{id}", h.handleGetPlan)
 	mux.HandleFunc("POST /plans/{id}/expenses", h.handleAddExpense)
+	mux.HandleFunc("POST /plans/{id}/revenues", h.handleAddRevenue)
 }
 
 // GET /plans
@@ -38,7 +39,7 @@ func (h *Handler) handleGetPlans(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // POST /plans
@@ -50,17 +51,17 @@ func (h *Handler) handleCreatePlan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := h.store.GenerateID()
-	plan, err := domain.NewPlan(id, req.Name)
+	plan, err := domain.NewPlan(id, req.Name, req.DurationMonths)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	h.store.Save(plan)
+	_ = h.store.Save(plan)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(mapToDTO(plan))
+	_ = json.NewEncoder(w).Encode(mapToDTO(plan))
 }
 
 // GET /plans/{id}
@@ -79,7 +80,7 @@ func (h *Handler) handleGetPlan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mapToDTO(plan))
+	_ = json.NewEncoder(w).Encode(mapToDTO(plan))
 }
 
 // POST /plans/{id}/expenses
@@ -91,7 +92,7 @@ func (h *Handler) handleAddExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req AddExpenseRequest
+	var req FinancialEntryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
@@ -104,14 +105,48 @@ func (h *Handler) handleAddExpense(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update the domain object
-	if err := plan.AddExpense(req.Name, domain.Money(req.Amount)); err != nil {
+	if err := plan.AddExpense(req.Name, domain.Money(req.Amount), domain.MonthIndex(req.MonthIndex)); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Save back to store
-	h.store.Save(plan)
+	_ = h.store.Save(plan)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mapToDTO(plan))
+	_ = json.NewEncoder(w).Encode(mapToDTO(plan))
+}
+
+// POST /plans/{id}/revenues
+func (h *Handler) handleAddRevenue(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	var req FinancialEntryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	plan, err := h.store.Get(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Update the domain object
+	if err := plan.AddRevenue(req.Name, domain.Money(req.Amount), domain.MonthIndex(req.MonthIndex)); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Save back to store
+	_ = h.store.Save(plan)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(mapToDTO(plan))
 }
