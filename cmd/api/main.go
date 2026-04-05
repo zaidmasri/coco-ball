@@ -15,6 +15,7 @@ func main() {
 	handler := api.NewHandler(memStore)
 
 	mux := http.NewServeMux()
+
 	handler.RegisterRoutes(mux)
 
 	port := ":8080"
