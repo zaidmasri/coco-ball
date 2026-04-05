@@ -77,42 +77,15 @@ func TestNewPlan(t *testing.T) {
 	}
 }
 
-func TestPlan_AddExpense(t *testing.T) {
-	plan := newValidPlan(t)
-
-	t.Run("Valid Expense", func(t *testing.T) {
-		err := plan.AddExpense("Rent", 5000, 0)
-		if err != nil {
-			t.Errorf("expected no error, got %v", err)
-		}
-		if len(plan.Expenses()) != 1 {
-			t.Errorf("expected 1 expense, got %d", len(plan.Expenses()))
-		}
-	})
-
-	t.Run("Fails on Negative Amount", func(t *testing.T) {
-		err := plan.AddExpense("Refunds", -100, 0)
-		if !errors.Is(err, ErrNegativeAmount) {
-			t.Errorf("expected ErrNegativeAmount, got %v", err)
-		}
-	})
-
-	t.Run("Fails on Empty Name", func(t *testing.T) {
-		err := plan.AddExpense(" ", 500, 0)
-		if !errors.Is(err, ErrInvalidName) {
-			t.Errorf("expected ErrInvalidName, got %v", err)
-		}
-	})
-}
-
 func TestPlan_TotalExpenses(t *testing.T) {
 	plan := newValidPlan(t)
 
-	_ = plan.AddExpense("Rent", 2000, 0)
-	_ = plan.AddExpense("Software", 500, 0)
-	_ = plan.AddExpense("Insurance", 300, 0)
+	_ = plan.AddCOGS("Metal", 2000, GrowthStrategy{Type: FlatGrowth})
+	_ = plan.AddOpEx("Software", 500, GrowthStrategy{Type: FlatGrowth})
+	_ = plan.AddCOGS("Wood", 300, GrowthStrategy{Type: FlatGrowth})
 
-	expectedTotal := Money(2800)
+	// expectedTotal := Money(2800)
+	expectedTotal := Money(33600)
 
 	if got := plan.TotalExpenses(); got != expectedTotal {
 		t.Errorf("expected total %d, got %d", expectedTotal, got)
@@ -123,7 +96,7 @@ func TestPlan_MonthIndexBounds(t *testing.T) {
 	plan := newValidPlan(t)
 
 	// Valid Month (Month 0 is the 1st month)
-	err := plan.AddExpense("Valid Rent", 1000, 0)
+	err := plan.AddOpEx("Valid Rent", 1000, GrowthStrategy{Type: FlatGrowth})
 	if err != nil {
 		t.Errorf("expected no error for MonthIndex 0, got %v", err)
 	}
@@ -134,12 +107,6 @@ func TestPlan_MonthIndexBounds(t *testing.T) {
 		t.Errorf("expected no error for MonthIndex 11, got %v", err)
 	}
 
-	// Invalid Negative Month
-	err = plan.AddExpense("Time Travel", 100, -1)
-	if !errors.Is(err, ErrInvalidMonthIndex) {
-		t.Errorf("expected ErrInvalidMonthIndex for -1, got %v", err)
-	}
-
 	// Invalid Future Month
 	err = plan.AddRevenue("Distant Future", 100, 12)
 	if !errors.Is(err, ErrInvalidMonthIndex) {
@@ -148,40 +115,44 @@ func TestPlan_MonthIndexBounds(t *testing.T) {
 }
 
 func TestPlan_MonthlyLedgerMath(t *testing.T) {
-	plan := newValidPlan(t)
+	plan := newValidPlan(t) // This is a 12-month plan
 
-	// Month 0 setup (Loss)
-	_ = plan.AddRevenue("Sales", 2000, 0)
-	_ = plan.AddExpense("Rent", 1500, 0)
-	_ = plan.AddExpense("Marketing", 1000, 0) // Total Expense: 2500
+	// 1. Setup Continuous Costs (Apply to ALL months automatically)
+	_ = plan.AddOpEx("Rent", 1500, GrowthStrategy{Type: FlatGrowth})
+	_ = plan.AddOpEx("Marketing", 1000, GrowthStrategy{Type: FlatGrowth})
+	// Total OpEx per month = 2500
 
-	// Month 1 setup (Profit)
-	_ = plan.AddRevenue("Sales", 5000, 1)
-	_ = plan.AddExpense("Rent", 1500, 1) // Total Expense: 1500
+	// 2. Setup Discrete Revenues
+	_ = plan.AddRevenue("Sales", 2000, 0) // Month 0 (Loss)
+	_ = plan.AddRevenue("Sales", 5000, 1) // Month 1 (Profit)
 
-	// Assertions Month 0
+	// --- Monthly Assertions ---
+
+	// Month 0: Revenue (2000) - OpEx (2500) = -500
 	if got := plan.MonthlyNetCashFlow(0); got != -500 {
 		t.Errorf("expected Month 0 net flow of -500, got %d", got)
 	}
 
-	// Assertions Month 1
-	if got := plan.MonthlyNetCashFlow(1); got != 3500 {
-		t.Errorf("expected Month 1 net flow of 3500, got %d", got)
+	// Month 1: Revenue (5000) - OpEx (2500) = 2500
+	if got := plan.MonthlyNetCashFlow(1); got != 2500 {
+		t.Errorf("expected Month 1 net flow of 2500, got %d", got)
 	}
 
-	// Assertions Month 2 (Empty)
-	if got := plan.MonthlyNetCashFlow(2); got != 0 {
-		t.Errorf("expected Month 2 net flow of 0, got %d", got)
+	// Month 2: Revenue (0) - OpEx (2500) = -2500
+	if got := plan.MonthlyNetCashFlow(2); got != -2500 {
+		t.Errorf("expected Month 2 net flow of -2500, got %d", got)
 	}
 
-	// Assertions Total Expense
-	if got := plan.TotalExpenses(); got != 4000 {
-		t.Errorf("expected Total Expenses of 4000, got %d", got)
+	// --- Lifetime Assertions ---
+
+	// Total Expenses: 2500/mo * 12 months = 30000
+	if got := plan.TotalExpenses(); got != 30000 {
+		t.Errorf("expected Total Expenses of 30000, got %d", got)
 	}
 
-	// Assertions Total Revenues
+	// Total Revenues: 2000 + 5000 = 7000
 	if got := plan.TotalRevenues(); got != 7000 {
-		t.Errorf("expected Total Expenses of 7000, got %d", got)
+		t.Errorf("expected Total Revenues of 7000, got %d", got)
 	}
 }
 
@@ -271,5 +242,81 @@ func TestPlan_AddCapitalPurchase_Validation(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("expected future asset to be valid, got %v", err)
+	}
+}
+
+func TestCost_ProjectedAmount_Flat(t *testing.T) {
+	cost := Cost{
+		Name:               "Rent",
+		BaseAmountPerMonth: 5000,
+		Growth: GrowthStrategy{
+			Type: FlatGrowth,
+		},
+	}
+
+	if got := cost.ProjectedAmount(0); got != 5000 {
+		t.Errorf("expected Month 0 to be 5000, got %d", got)
+	}
+	if got := cost.ProjectedAmount(24); got != 5000 {
+		t.Errorf("expected Month 24 to be 5000, got %d", got)
+	}
+}
+
+func TestCost_ProjectedAmount_AnnualStepPercent(t *testing.T) {
+	cost := Cost{
+		Name:               "Software Licenses",
+		BaseAmountPerMonth: 1000,
+		Growth: GrowthStrategy{
+			Type:       AnnualStepPercent,
+			AnnualRate: 0.10, // 10% increase every year
+		},
+	}
+
+	// Year 1 (Months 0-11) should be base amount
+	if got := cost.ProjectedAmount(0); got != 1000 {
+		t.Errorf("expected Month 0 to be 1000, got %d", got)
+	}
+	if got := cost.ProjectedAmount(11); got != 1000 {
+		t.Errorf("expected Month 11 to be 1000, got %d", got)
+	}
+
+	// Year 2 (Months 12-23) should be 1000 * 1.10 = 1100
+	if got := cost.ProjectedAmount(12); got != 1100 {
+		t.Errorf("expected Month 12 to be 1100, got %d", got)
+	}
+	if got := cost.ProjectedAmount(23); got != 1100 {
+		t.Errorf("expected Month 23 to be 1100, got %d", got)
+	}
+
+	// Year 3 (Months 24-35) should be 1100 * 1.10 = 1210
+	if got := cost.ProjectedAmount(24); got != 1210 {
+		t.Errorf("expected Month 24 to be 1210, got %d", got)
+	}
+}
+
+func TestPlan_AddExpenditures(t *testing.T) {
+	plan := newValidPlan(t)
+
+	// Add an OpEx
+	err := plan.AddOpEx("Salaries", 10000, GrowthStrategy{Type: FlatGrowth})
+	if err != nil {
+		t.Errorf("expected no error adding OpEx, got %v", err)
+	}
+
+	// Add a COGS
+	err = plan.AddCOGS("Server Hosting", 2000, GrowthStrategy{Type: AnnualStepPercent, AnnualRate: 0.05})
+	if err != nil {
+		t.Errorf("expected no error adding COGS, got %v", err)
+	}
+
+	// Validation checks
+	if err := plan.AddOpEx("", 100, GrowthStrategy{Type: FlatGrowth}); !errors.Is(err, ErrInvalidName) {
+		t.Errorf("expected ErrInvalidName, got %v", err)
+	}
+	if err := plan.AddCOGS("Bad Cost", -10, GrowthStrategy{Type: FlatGrowth}); !errors.Is(err, ErrNegativeAmount) {
+		t.Errorf("expected ErrNegativeAmount, got %v", err)
+	}
+	if err := plan.AddOpEx("Bad Growth", 100, GrowthStrategy{Type: "FakeGrowth"}); !errors.Is(err, ErrInvalidGrowthType) {
+		t.Errorf("expected ErrInvalidGrowthType, got %v", err)
 	}
 }

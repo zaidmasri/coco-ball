@@ -3,19 +3,24 @@ package domain
 
 import (
 	"errors"
+	"math"
 	"strings"
 )
 
-// MonthIndex normalizes time. 0 = Month 1 of operations, 1 = Month 2, etc.
-type MonthIndex int64
-
-type Money int64
-
-type DepreciationMethod string
+type (
+	// MonthIndex normalizes time. 0 = Month 1 of operations, 1 = Month 2, etc.
+	MonthIndex         int64
+	Money              int64
+	DepreciationMethod string
+	GrowthType         string
+)
 
 const (
 	StraightLine    DepreciationMethod = "StraightLine"
 	DoubleDeclining DepreciationMethod = "DoubleDeclining"
+
+	FlatGrowth        GrowthType = "Flat"
+	AnnualStepPercent GrowthType = "AnnualStepPercent"
 )
 
 var (
@@ -26,6 +31,7 @@ var (
 	ErrInvalidDepreciationMethod        = errors.New("invalid deprecation method")
 	ErrInvalidUsefulLife                = errors.New("invalid useful life")
 	ErrPurchaseCostLessThanSalvageValue = errors.New("purchase cost cannot be less than salvage value")
+	ErrInvalidGrowthType                = errors.New("invalid growth type")
 )
 
 type FinancingTerm struct {
@@ -41,24 +47,23 @@ type CapitalAsset struct {
 	SalvageValue       Money
 	PurchaseMonthIndex MonthIndex
 	DepreciationMethod DepreciationMethod
-	// AssociatedLoan *FinancingTerm
+	AssociatedLoan     *FinancingTerm
 }
 
 // DepreciationForMonth calculates the exact depreciation expense for a specific normalized month.
 func (c CapitalAsset) DepreciationForMonth(month MonthIndex) Money {
-	// 1. Edge Case: Asset hasn't been purchased yet
+	// Edge Case: Asset hasn't been purchased yet
 	if month < c.PurchaseMonthIndex {
 		return 0
 	}
 
-	// 2. Edge Case: Asset is past its useful life
+	// Edge Case: Asset is past its useful life
 	if month >= c.PurchaseMonthIndex+MonthIndex(c.UsefulLifeMonths) {
 		return 0
 	}
 
 	monthSincePurchase := int(month - c.PurchaseMonthIndex)
 
-	// --- Straight-Line Math ---
 	if c.DepreciationMethod == StraightLine {
 		depreciableBase := c.PurchaseCost - c.SalvageValue
 		if depreciableBase <= 0 {
@@ -67,9 +72,7 @@ func (c CapitalAsset) DepreciationForMonth(month MonthIndex) Money {
 		return depreciableBase / Money(c.UsefulLifeMonths)
 	}
 
-	// --- Double Declining Balance Math ---
 	if c.DepreciationMethod == DoubleDeclining {
-		// DDB Rate = 2 / Useful Life
 		rate := 2.0 / float64(c.UsefulLifeMonths)
 		bookValue := float64(c.PurchaseCost)
 
@@ -101,10 +104,28 @@ func (c CapitalAsset) DepreciationForMonth(month MonthIndex) Money {
 	return 0
 }
 
-type Expense struct {
-	Name   string
-	Amount Money
-	Month  MonthIndex
+type GrowthStrategy struct {
+	Type       GrowthType
+	AnnualRate float64
+}
+
+type Cost struct {
+	Name               string
+	BaseAmountPerMonth Money
+	Growth             GrowthStrategy
+}
+
+func (c Cost) ProjectedAmount(month MonthIndex) Money {
+	if c.Growth.Type == AnnualStepPercent && c.Growth.AnnualRate > 0 {
+		yearsPassed := int(month) / 12
+		if yearsPassed > 0 {
+			// Compound the base amount annually: Base * (1 + rate)^years
+			multiplier := math.Pow(1.0+c.Growth.AnnualRate, float64(yearsPassed))
+			return Money(float64(c.BaseAmountPerMonth) * multiplier)
+		}
+	}
+
+	return c.BaseAmountPerMonth
 }
 
 type Revenue struct {
@@ -117,8 +138,9 @@ type Plan struct {
 	id              int
 	name            string
 	duration        int // Total months the projection spans
-	expenses        []Expense
 	revenues        []Revenue
+	opEx            []Cost
+	cogs            []Cost
 	futurePurchases []CapitalAsset
 }
 
@@ -136,29 +158,101 @@ func NewPlan(id int, name string, duration int) (*Plan, error) {
 		name:     name,
 		duration: duration,
 		// Always initialize slices so they aren't nil
-		expenses:        make([]Expense, 0),
 		revenues:        make([]Revenue, 0),
+		opEx:            make([]Cost, 0),
+		cogs:            make([]Cost, 0),
 		futurePurchases: make([]CapitalAsset, 0),
 	}, nil
 }
 
-func (p *Plan) AddExpense(name string, amount Money, month MonthIndex) error {
-	if strings.TrimSpace(name) == "" {
-		return ErrInvalidName
-	}
-	if amount < 0 {
-		return ErrNegativeAmount
-	}
-	if int(month) < 0 || int(month) >= p.duration {
-		return ErrInvalidMonthIndex
-	}
+func (p *Plan) ID() int       { return p.id }
+func (p *Plan) Name() string  { return p.name }
+func (p *Plan) Duration() int { return p.duration }
 
-	p.expenses = append(p.expenses, Expense{
-		Name:   name,
-		Amount: amount,
-		Month:  month,
-	})
-	return nil
+func (p *Plan) Revenues() []Revenue {
+	res := make([]Revenue, len(p.revenues))
+	copy(res, p.revenues)
+	return res
+}
+
+func (p *Plan) FuturePurchases() []CapitalAsset {
+	res := make([]CapitalAsset, len(p.futurePurchases))
+	copy(res, p.futurePurchases)
+	return res
+}
+
+func (p *Plan) MonthlyRevenue(month MonthIndex) Money {
+	var total Money
+	for _, rev := range p.revenues {
+		if rev.Month == month {
+			total += rev.Amount
+		}
+	}
+	return total
+}
+
+// MonthlyDepreciation calculates the total non-cash depreciation expense for all assets in a given month.
+func (p *Plan) MonthlyDepreciation(month MonthIndex) Money {
+	var total Money
+	for _, asset := range p.futurePurchases {
+		total += asset.DepreciationForMonth(month)
+	}
+	return total
+}
+
+func (p *Plan) MonthlyOpEx(month MonthIndex) Money {
+	var total Money
+	for _, exp := range p.opEx {
+		total += exp.ProjectedAmount(month)
+	}
+	return total
+}
+
+// MonthlyCOGS calculates the projected COGS for a specific month
+func (p *Plan) MonthlyCOGS(month MonthIndex) Money {
+	var total Money
+	for _, cogs := range p.cogs {
+		total += cogs.ProjectedAmount(month)
+	}
+	return total
+}
+
+func (p *Plan) MonthlyNetCashFlow(month MonthIndex) Money {
+	if int(month) < 0 || int(month) >= p.duration {
+		return 0
+	}
+	return p.MonthlyRevenue(month) - p.MonthlyOpEx(month) - p.MonthlyCOGS(month)
+}
+
+func (p *Plan) TotalRevenues() Money {
+	var total Money = 0
+	for _, exp := range p.revenues {
+		total += exp.Amount
+	}
+	return total
+}
+
+// TotalOpEx calculates the lifetime operating expenses over the plan's duration.
+func (p *Plan) TotalOpEx() Money {
+	var total Money
+	for i := 0; i < p.duration; i++ {
+		total += p.MonthlyOpEx(MonthIndex(i))
+	}
+	return total
+}
+
+// TotalCOGS calculates the lifetime COGS over the plan's duration.
+func (p *Plan) TotalCOGS() Money {
+	var total Money
+	for i := 0; i < p.duration; i++ {
+		total += p.MonthlyCOGS(MonthIndex(i))
+	}
+	return total
+}
+
+// TotalExpenses calculates the total lifetime expenses (OpEx + COGS).
+func (p *Plan) TotalExpenses() Money {
+	return p.TotalOpEx() + p.TotalCOGS()
 }
 
 func (p *Plan) AddRevenue(name string, amount Money, month MonthIndex) error {
@@ -176,66 +270,34 @@ func (p *Plan) AddRevenue(name string, amount Money, month MonthIndex) error {
 	return nil
 }
 
-func (p *Plan) ID() int       { return p.id }
-func (p *Plan) Name() string  { return p.name }
-func (p *Plan) Duration() int { return p.duration }
-
-func (p *Plan) Expenses() []Expense {
-	res := make([]Expense, len(p.expenses))
-	copy(res, p.expenses)
-	return res
-}
-
-func (p *Plan) Revenues() []Revenue {
-	res := make([]Revenue, len(p.revenues))
-	copy(res, p.revenues)
-	return res
-}
-
-func (p *Plan) FuturePurchases() []CapitalAsset {
-	res := make([]CapitalAsset, len(p.futurePurchases))
-	copy(res, p.futurePurchases)
-	return res
-}
-
-func (p *Plan) MonthlyExpense(month MonthIndex) Money {
-	var total Money
-	for _, exp := range p.expenses {
-		if exp.Month == month {
-			total += exp.Amount
-		}
+func (p *Plan) AddOpEx(name string, baseAmount Money, growth GrowthStrategy) error {
+	if strings.TrimSpace(name) == "" {
+		return ErrInvalidName
 	}
-	return total
-}
-
-func (p *Plan) MonthlyRevenue(month MonthIndex) Money {
-	var total Money
-	for _, rev := range p.revenues {
-		if rev.Month == month {
-			total += rev.Amount
-		}
+	if baseAmount < 0 {
+		return ErrNegativeAmount
 	}
-	return total
-}
-
-func (p *Plan) MonthlyNetCashFlow(month MonthIndex) Money {
-	return p.MonthlyRevenue(month) - p.MonthlyExpense(month)
-}
-
-func (p *Plan) TotalExpenses() Money {
-	var total Money = 0
-	for _, exp := range p.expenses {
-		total += exp.Amount
+	if growth.Type != FlatGrowth && growth.Type != AnnualStepPercent {
+		return ErrInvalidGrowthType
 	}
-	return total
+
+	p.opEx = append(p.opEx, Cost{Name: name, BaseAmountPerMonth: baseAmount, Growth: growth})
+	return nil
 }
 
-func (p *Plan) TotalRevenues() Money {
-	var total Money = 0
-	for _, exp := range p.revenues {
-		total += exp.Amount
+func (p *Plan) AddCOGS(name string, baseAmount Money, growth GrowthStrategy) error {
+	if strings.TrimSpace(name) == "" {
+		return ErrInvalidName
 	}
-	return total
+	if baseAmount < 0 {
+		return ErrNegativeAmount
+	}
+	if growth.Type != FlatGrowth && growth.Type != AnnualStepPercent {
+		return ErrInvalidGrowthType
+	}
+
+	p.cogs = append(p.cogs, Cost{Name: name, BaseAmountPerMonth: baseAmount, Growth: growth})
+	return nil
 }
 
 // AddCapitalPurchase validates and appends a new asset.
@@ -258,13 +320,4 @@ func (p *Plan) AddCapitalPurchase(asset CapitalAsset) error {
 
 	p.futurePurchases = append(p.futurePurchases, asset)
 	return nil
-}
-
-// MonthlyDepreciation calculates the total non-cash depreciation expense for all assets in a given month.
-func (p *Plan) MonthlyDepreciation(month MonthIndex) Money {
-	var total Money
-	for _, asset := range p.futurePurchases {
-		total += asset.DepreciationForMonth(month)
-	}
-	return total
 }
