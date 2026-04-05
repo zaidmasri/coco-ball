@@ -48,7 +48,7 @@ func mapToDTO(p *domain.Plan) PlanResponse {
 	for _, rev := range p.Revenues() {
 		resp.Revenues = append(resp.Revenues, FinancialEntryResponse{
 			Name:       rev.Name,
-			Amount:     int64(rev.Amount),
+			Amount:     int64(rev.BaseAmountPerMonth),
 			MonthIndex: int(rev.Month),
 		})
 	}

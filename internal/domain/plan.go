@@ -128,17 +128,28 @@ func (c Cost) ProjectedAmount(month MonthIndex) Money {
 	return c.BaseAmountPerMonth
 }
 
-type Revenue struct {
-	Name   string
-	Amount Money
-	Month  MonthIndex
+type RevenueStream struct {
+	Name               string
+	BaseAmountPerMonth Money
+	Growth             GrowthStrategy
+}
+
+func (r RevenueStream) ProjectedAmount(month MonthIndex) Money {
+	if r.Growth.Type == AnnualStepPercent && r.Growth.AnnualRate > 0 {
+		yearsPassed := int(month) / 12
+		if yearsPassed > 0 {
+			multiplier := math.Pow(1.0+r.Growth.AnnualRate, float64(yearsPassed))
+			return Money(float64(r.BaseAmountPerMonth) * multiplier)
+		}
+	}
+	return r.BaseAmountPerMonth
 }
 
 type Plan struct {
 	id              int
 	name            string
 	duration        int // Total months the projection spans
-	revenues        []Revenue
+	revenues        []RevenueStream
 	opEx            []Cost
 	cogs            []Cost
 	futurePurchases []CapitalAsset
@@ -158,7 +169,7 @@ func NewPlan(id int, name string, duration int) (*Plan, error) {
 		name:     name,
 		duration: duration,
 		// Always initialize slices so they aren't nil
-		revenues:        make([]Revenue, 0),
+		revenues:        make([]RevenueStream, 0),
 		opEx:            make([]Cost, 0),
 		cogs:            make([]Cost, 0),
 		futurePurchases: make([]CapitalAsset, 0),
@@ -169,8 +180,8 @@ func (p *Plan) ID() int       { return p.id }
 func (p *Plan) Name() string  { return p.name }
 func (p *Plan) Duration() int { return p.duration }
 
-func (p *Plan) Revenues() []Revenue {
-	res := make([]Revenue, len(p.revenues))
+func (p *Plan) Revenues() []RevenueStream {
+	res := make([]RevenueStream, len(p.revenues))
 	copy(res, p.revenues)
 	return res
 }
@@ -181,12 +192,20 @@ func (p *Plan) FuturePurchases() []CapitalAsset {
 	return res
 }
 
+// MonthlyRevenue calculates the projected revenue for a specific month
 func (p *Plan) MonthlyRevenue(month MonthIndex) Money {
 	var total Money
 	for _, rev := range p.revenues {
-		if rev.Month == month {
-			total += rev.Amount
-		}
+		total += rev.ProjectedAmount(month)
+	}
+	return total
+}
+
+// TotalRevenues now loops through the timeline to sum the continuous curves.
+func (p *Plan) TotalRevenues() Money {
+	var total Money
+	for i := 0; i < p.duration; i++ {
+		total += p.MonthlyRevenue(MonthIndex(i))
 	}
 	return total
 }
@@ -224,14 +243,6 @@ func (p *Plan) MonthlyNetCashFlow(month MonthIndex) Money {
 	return p.MonthlyRevenue(month) - p.MonthlyOpEx(month) - p.MonthlyCOGS(month)
 }
 
-func (p *Plan) TotalRevenues() Money {
-	var total Money = 0
-	for _, exp := range p.revenues {
-		total += exp.Amount
-	}
-	return total
-}
-
 // TotalOpEx calculates the lifetime operating expenses over the plan's duration.
 func (p *Plan) TotalOpEx() Money {
 	var total Money
@@ -255,18 +266,22 @@ func (p *Plan) TotalExpenses() Money {
 	return p.TotalOpEx() + p.TotalCOGS()
 }
 
-func (p *Plan) AddRevenue(name string, amount Money, month MonthIndex) error {
+func (p *Plan) AddRevenue(name string, baseAmount Money, growth GrowthStrategy) error {
 	if strings.TrimSpace(name) == "" {
 		return ErrInvalidName
 	}
-	if amount < 0 {
+	if baseAmount < 0 {
 		return ErrNegativeAmount
 	}
-	if int(month) < 0 || int(month) >= p.duration {
-		return ErrInvalidMonthIndex
+	if growth.Type != FlatGrowth && growth.Type != AnnualStepPercent {
+		return ErrInvalidGrowthType
 	}
 
-	p.revenues = append(p.revenues, Revenue{Name: name, Amount: amount, Month: month})
+	p.revenues = append(p.revenues, RevenueStream{
+		Name:               name,
+		BaseAmountPerMonth: baseAmount,
+		Growth:             growth,
+	})
 	return nil
 }
 
