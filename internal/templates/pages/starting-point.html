@@ -1,0 +1,646 @@
+{{ template "base" . }} {{ define "content" }}
+<div
+  class="container-fluid max-w-custom"
+  style="max-width: 900px; margin: 0 auto"
+>
+  <!-- Data Lists for Suggestions -->
+  <datalist id="fixedAssetsList">
+    <option value="Real Estate-Land"></option>
+    <option value="Real Estate-Buildings"></option>
+    <option value="Leasehold Improvements"></option>
+    <option value="Equipment"></option>
+    <option value="Furniture and Fixtures"></option>
+    <option value="Vehicles"></option>
+  </datalist>
+
+  <datalist id="opCapitalList">
+    <option value="Pre-Opening Salaries and Wages"></option>
+    <option value="Prepaid Insurance Premiums"></option>
+    <option value="Inventory"></option>
+    <option value="Legal and Accounting"></option>
+    <option value="Rent Deposits"></option>
+    <option value="Utility Deposits"></option>
+    <option value="Supplies"></option>
+    <option value="Advertising and Promotions"></option>
+    <option value="Licenses"></option>
+    <option value="Other Initial Startup Costs"></option>
+    <option value="Working Capital (Cash on Hand)"></option>
+  </datalist>
+
+  <datalist id="fundingList">
+    <option value="Owners Equity"></option>
+    <option value="Outside Investors"></option>
+    <option value="Commercial Loan"></option>
+    <option value="Commercial Mortgage"></option>
+    <option value="Credit Card Debt"></option>
+    <option value="Vehicle Loans"></option>
+    <option value="Other Bank Debt"></option>
+  </datalist>
+
+  <div class="card shadow-sm border-0 rounded-3">
+    <!-- Step Header -->
+    <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4 px-md-5">
+      <span class="badge bg-primary bg-opacity-10 text-primary mb-2"
+        >Step 1 of 9</span
+      >
+      <h2 class="card-title fw-bold mb-3">Starting Point</h2>
+      <p class="lead text-secondary" style="font-size: 1.1rem">
+        Let's establish your baseline. We'll look at your fixed assets,
+        operating capital, and funding sources to set the foundation for your
+        projections.
+      </p>
+      <hr class="mt-4 mb-0 text-muted" />
+    </div>
+
+    <!-- Form Body -->
+    <div class="card-body p-4 p-md-5">
+      <form action="/starting-point" id="startingPointForm" method="POST">
+        <!-- ============================== -->
+        <!-- SECTION 1: FIXED ASSETS        -->
+        <!-- ============================== -->
+        <div class="mb-5 section-container" id="fixedAssetsSection">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="text-primary mb-0">
+              <i class="bi bi-building me-2"></i>Fixed Assets
+            </h5>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-primary add-row-btn"
+              data-target="fixedAssetTemplate"
+              data-container="fixedAssetsContainer"
+            >
+              <i class="bi bi-plus-lg"></i> Add Asset
+            </button>
+          </div>
+
+          <div id="fixedAssetsContainer" class="d-flex flex-column gap-3 mb-3">
+            <!-- Dynamic rows will be injected here -->
+          </div>
+
+          <div
+            class="d-flex justify-content-end align-items-center border-top pt-3"
+          >
+            <h6 class="mb-0 fw-bold me-3">Total Fixed Assets:</h6>
+            <h5 class="mb-0 text-success fw-bold sum-display">$0.00</h5>
+          </div>
+        </div>
+
+        <!-- ============================== -->
+        <!-- SECTION 2: OPERATING CAPITAL   -->
+        <!-- ============================== -->
+        <div class="mb-5 section-container" id="opCapitalSection">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="text-primary mb-0">
+              <i class="bi bi-cash-coin me-2"></i>Operating Capital
+            </h5>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-primary add-row-btn"
+              data-target="opCapitalTemplate"
+              data-container="opCapitalContainer"
+            >
+              <i class="bi bi-plus-lg"></i> Add Capital
+            </button>
+          </div>
+
+          <div id="opCapitalContainer" class="d-flex flex-column gap-3 mb-3">
+            <!-- Dynamic rows will be injected here -->
+          </div>
+
+          <div
+            class="d-flex justify-content-end align-items-center border-top pt-3"
+          >
+            <h6 class="mb-0 fw-bold me-3">Total Operating Capital:</h6>
+            <h5 class="mb-0 text-success fw-bold sum-display">$0.00</h5>
+          </div>
+        </div>
+
+        <!-- ============================== -->
+        <!-- SECTION 3: SOURCES OF FUNDING  -->
+        <!-- ============================== -->
+        <div class="mb-5 section-container" id="fundingSection">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="text-primary mb-0">
+              <i class="bi bi-piggy-bank me-2"></i>Sources of Funding
+            </h5>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-primary add-row-btn"
+              data-target="fundingTemplate"
+              data-container="fundingContainer"
+            >
+              <i class="bi bi-plus-lg"></i> Add Funding
+            </button>
+          </div>
+
+          <div id="fundingContainer" class="d-flex flex-column gap-3 mb-3">
+            <!-- Dynamic rows will be injected here -->
+          </div>
+
+          <div
+            class="d-flex justify-content-end align-items-center border-top pt-3"
+          >
+            <h6 class="mb-0 fw-bold me-3">Total Funding:</h6>
+            <h5 class="mb-0 text-success fw-bold sum-display">$0.00</h5>
+          </div>
+        </div>
+
+        <!-- ============================== -->
+        <!-- SECTION 4: CASH ON HAND        -->
+        <!-- ============================== -->
+        <div class="mb-4 section-container" id="cashOnHandSection">
+          <div class="mb-3">
+            <h5 class="text-primary mb-1">
+              <i class="bi bi-wallet2 me-2"></i>Cash on Hand
+            </h5>
+            <small class="text-muted">(For existing businesses only)</small>
+          </div>
+
+          <div class="d-flex flex-column gap-2 mb-3">
+            <!-- Static Rows -->
+            <div class="row g-2 align-items-center">
+              <div class="col-md-3"><span class="fw-bold fs-6">Cash</span></div>
+              <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">$</span>
+                  <input
+                    type="number"
+                    class="form-control amount-calc"
+                    name="coh_cash_amount"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  name="coh_cash_notes"
+                  placeholder="Notes"
+                />
+              </div>
+            </div>
+
+            <div class="row g-2 align-items-center">
+              <div class="col-md-3">
+                <span class="fw-bold fs-6">Accounts Receivable</span>
+              </div>
+              <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">$</span>
+                  <input
+                    type="number"
+                    class="form-control amount-calc"
+                    name="coh_ar_amount"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  name="coh_ar_notes"
+                  placeholder="Notes"
+                />
+              </div>
+            </div>
+
+            <div class="row g-2 align-items-center">
+              <div class="col-md-3">
+                <span class="fw-bold fs-6">Prepaid Expenses</span>
+              </div>
+              <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">$</span>
+                  <input
+                    type="number"
+                    class="form-control amount-calc"
+                    name="coh_pe_amount"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  name="coh_pe_notes"
+                  placeholder="Notes"
+                />
+              </div>
+            </div>
+
+            <div class="row g-2 align-items-center">
+              <div class="col-md-3">
+                <span class="fw-bold fs-6">Accounts Payable</span>
+              </div>
+              <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">$</span>
+                  <input
+                    type="number"
+                    class="form-control amount-calc"
+                    name="coh_ap_amount"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  name="coh_ap_notes"
+                  placeholder="Notes"
+                />
+              </div>
+            </div>
+
+            <div class="row g-2 align-items-center">
+              <div class="col-md-3">
+                <span class="fw-bold fs-6">Accrued Expenses</span>
+              </div>
+              <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">$</span>
+                  <input
+                    type="number"
+                    class="form-control amount-calc"
+                    name="coh_ae_amount"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  name="coh_ae_notes"
+                  placeholder="Notes"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="d-flex justify-content-end align-items-center border-top pt-3"
+          >
+            <h6 class="mb-0 fw-bold me-3">Total Cash on Hand:</h6>
+            <h5 class="mb-0 text-success fw-bold sum-display">$0.00</h5>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Footer Navigation (Back / Next) -->
+    <div
+      class="card-footer bg-light border-top p-4 px-md-5 d-flex justify-content-between align-items-center rounded-bottom-3"
+    >
+      <!-- Changed href to javascript function to handle dirty check -->
+      <button
+        onclick="handleBackNavigation('/setup')"
+        class="btn btn-outline-secondary px-4 py-2 text-uppercase fw-bold"
+        style="font-size: 0.85rem"
+      >
+        <i class="bi bi-arrow-left me-1"></i> Back
+      </button>
+      <button
+        class="btn btn-primary px-5 py-2 text-uppercase fw-bold shadow-sm"
+        style="font-size: 0.85rem"
+        type="submit"
+        form="startingPointForm"
+      >
+        Save & Continue <i class="bi bi-arrow-right ms-1"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================== -->
+<!-- TEMPLATES (Invisible HTML for dynamic rows)-->
+<!-- ========================================== -->
+
+<!-- Template: Fixed Asset -->
+<template id="fixedAssetTemplate">
+  <div
+    class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row"
+  >
+    <div class="col-md-3">
+      <input
+        type="text"
+        list="fixedAssetsList"
+        class="form-control form-control-sm"
+        name="fa_type[]"
+        placeholder="Asset Type"
+        required
+      />
+    </div>
+    <div class="col-md-2">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text">$</span>
+        <input
+          type="number"
+          class="form-control amount-calc"
+          name="fa_amount[]"
+          placeholder="0.00"
+          required
+        />
+      </div>
+    </div>
+    <div class="col-md-2">
+      <input
+        type="number"
+        class="form-control form-control-sm"
+        name="fa_depreciation[]"
+        placeholder="Depr. Years"
+      />
+    </div>
+    <div class="col-md-4">
+      <input
+        type="text"
+        class="form-control form-control-sm"
+        name="fa_notes[]"
+        placeholder="Notes"
+      />
+    </div>
+    <div class="col-md-1 text-end">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-danger remove-row-btn"
+        title="Remove row"
+      >
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+  </div>
+</template>
+
+<!-- Template: Operating Capital -->
+<template id="opCapitalTemplate">
+  <div
+    class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row"
+  >
+    <div class="col-md-4">
+      <input
+        type="text"
+        list="opCapitalList"
+        class="form-control form-control-sm"
+        name="oc_type[]"
+        placeholder="Capital Category"
+        required
+      />
+    </div>
+    <div class="col-md-3">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text">$</span>
+        <input
+          type="number"
+          class="form-control amount-calc"
+          name="oc_amount[]"
+          placeholder="0.00"
+          required
+        />
+      </div>
+    </div>
+    <div class="col-md-4">
+      <input
+        type="text"
+        class="form-control form-control-sm"
+        name="oc_notes[]"
+        placeholder="Notes"
+      />
+    </div>
+    <div class="col-md-1 text-end">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-danger remove-row-btn"
+      >
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+  </div>
+</template>
+
+<!-- Template: Funding -->
+<template id="fundingTemplate">
+  <div
+    class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row"
+  >
+    <div class="col-md-2">
+      <input
+        type="text"
+        list="fundingList"
+        class="form-control form-control-sm"
+        name="fund_type[]"
+        placeholder="Source"
+        required
+      />
+    </div>
+    <div class="col-md-2">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text">$</span>
+        <!-- Added loan-calc class to trigger PMT calculations -->
+        <input
+          type="number"
+          class="form-control amount-calc loan-calc loan-principal"
+          name="fund_amount[]"
+          placeholder="Amt"
+          required
+        />
+      </div>
+    </div>
+    <div class="col-md-1">
+      <div class="input-group input-group-sm">
+        <input
+          type="number"
+          step="0.01"
+          class="form-control loan-calc loan-rate"
+          name="fund_rate[]"
+          placeholder="Rate"
+        />
+        <span class="input-group-text">%</span>
+      </div>
+    </div>
+    <div class="col-md-1">
+      <input
+        type="number"
+        class="form-control form-control-sm loan-calc loan-term"
+        name="fund_term[]"
+        placeholder="Mos"
+      />
+    </div>
+    <div class="col-md-2">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text bg-white">PMT</span>
+        <input
+          type="text"
+          class="form-control bg-white text-muted loan-payment"
+          name="fund_pmt[]"
+          placeholder="$0.00"
+          readonly
+        />
+      </div>
+    </div>
+    <div class="col-md-3">
+      <input
+        type="text"
+        class="form-control form-control-sm"
+        name="fund_notes[]"
+        placeholder="Notes"
+      />
+    </div>
+    <div class="col-md-1 text-end">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-danger remove-row-btn"
+      >
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+  </div>
+</template>
+
+<!-- Page Specific Scripts -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // --- DIRTY FORM TRACKING ---
+    let formIsDirty = false;
+    const form = document.getElementById("startingPointForm");
+
+    form.addEventListener("input", () => {
+      formIsDirty = true;
+    });
+
+    // Make the handler available globally for the Back button
+    window.handleBackNavigation = function (targetUrl) {
+      if (formIsDirty) {
+        const confirmLeave = confirm(
+          "You have unsaved changes. Are you sure you want to go back? All current edits will be lost.",
+        );
+        if (confirmLeave) {
+          window.location.href = targetUrl;
+        }
+      } else {
+        window.location.href = targetUrl;
+      }
+    };
+
+    // --- DYNAMIC ROWS ADDITION ---
+    document.querySelectorAll(".add-row-btn").forEach((btn) => {
+      btn.addEventListener("click", function () {
+        const templateId = this.getAttribute("data-target");
+        const containerId = this.getAttribute("data-container");
+
+        const template = document.getElementById(templateId);
+        const container = document.getElementById(containerId);
+
+        // Clone the content of the template
+        const clone = template.content.cloneNode(true);
+        container.appendChild(clone);
+      });
+    });
+
+    // --- DYNAMIC ROWS REMOVAL (Event Delegation) ---
+    form.addEventListener("click", function (e) {
+      // Find the closest button that has the remove class
+      const removeBtn = e.target.closest(".remove-row-btn");
+      if (removeBtn) {
+        const row = removeBtn.closest(".dynamic-row");
+        const section = row.closest(".section-container");
+        row.remove();
+
+        // Recalculate totals for this section since a row was removed
+        updateSectionTotal(section);
+        formIsDirty = true;
+      }
+    });
+
+    // --- CALCULATIONS (Totals & Loans) ---
+    form.addEventListener("input", function (e) {
+      // 1. Calculate section sum if an amount was changed
+      if (e.target.classList.contains("amount-calc")) {
+        const section = e.target.closest(".section-container");
+        updateSectionTotal(section);
+      }
+
+      // 2. Calculate Loan PMT if a loan variable was changed
+      if (e.target.classList.contains("loan-calc")) {
+        const row = e.target.closest(".dynamic-row");
+        updateLoanPayment(row);
+      }
+    });
+
+    // Helper: Sum inputs in a section
+    function updateSectionTotal(section) {
+      let sum = 0;
+      const amounts = section.querySelectorAll(".amount-calc");
+      amounts.forEach((input) => {
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) sum += val;
+      });
+
+      const display = section.querySelector(".sum-display");
+      if (display) {
+        // Format as currency
+        display.textContent = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(sum);
+      }
+    }
+
+    // Helper: Calculate Standard Amortizing Loan Payment
+    function updateLoanPayment(row) {
+      const pInput = row.querySelector(".loan-principal");
+      const rInput = row.querySelector(".loan-rate");
+      const nInput = row.querySelector(".loan-term");
+      const pmtInput = row.querySelector(".loan-payment");
+
+      const P = parseFloat(pInput.value);
+      const annualRate = parseFloat(rInput.value);
+      const N = parseInt(nInput.value);
+
+      // Only calculate if we have all valid numbers
+      if (
+        !isNaN(P) &&
+        P > 0 &&
+        !isNaN(annualRate) &&
+        annualRate >= 0 &&
+        !isNaN(N) &&
+        N > 0
+      ) {
+        if (annualRate === 0) {
+          // 0% interest edge case
+          pmtInput.value = new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+          }).format(P / N);
+          return;
+        }
+
+        const r = annualRate / 100 / 12; // Monthly interest rate
+        // Standard PMT formula
+        const pmt = (P * (r * Math.pow(1 + r, N))) / (Math.pow(1 + r, N) - 1);
+
+        pmtInput.value = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(pmt);
+      } else {
+        pmtInput.value = "$0.00";
+      }
+    }
+
+    // Initialize the form with one empty row for the dynamic sections so the user knows what to do
+    document.querySelector('[data-target="fixedAssetTemplate"]').click();
+    document.querySelector('[data-target="opCapitalTemplate"]').click();
+    document.querySelector('[data-target="fundingTemplate"]').click();
+
+    // Reset dirty flag to false since those initial clicks trigger the 'input' observer
+    setTimeout(() => {
+      formIsDirty = false;
+    }, 50);
+  });
+</script>
+
+{{ end }}

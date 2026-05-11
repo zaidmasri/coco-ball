@@ -5,28 +5,26 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
 )
 
 // PlanStore defines how we save and retrieve plans.
 type PlanStore interface {
 	Save(p *domain.Plan) error
-	Get(id int) (*domain.Plan, error)
+	Get(id uuid.UUID) (*domain.Plan, error)
 	GetAll() ([]*domain.Plan, error)
-	GenerateID() int
 }
 
 // MemoryStore is our temporary database.
 type MemoryStore struct {
-	mu     sync.RWMutex
-	plans  map[int]*domain.Plan
-	nextID int
+	mu    sync.RWMutex
+	plans map[uuid.UUID]*domain.Plan
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		plans:  make(map[int]*domain.Plan),
-		nextID: 1,
+		plans: make(map[uuid.UUID]*domain.Plan),
 	}
 }
 
@@ -53,7 +51,7 @@ func (m *MemoryStore) Save(p *domain.Plan) error {
 	return nil
 }
 
-func (m *MemoryStore) Get(id int) (*domain.Plan, error) {
+func (m *MemoryStore) Get(id uuid.UUID) (*domain.Plan, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	plan, exists := m.plans[id]
@@ -61,12 +59,4 @@ func (m *MemoryStore) Get(id int) (*domain.Plan, error) {
 		return nil, errors.New("plan not found")
 	}
 	return plan, nil
-}
-
-func (m *MemoryStore) GenerateID() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	id := m.nextID
-	m.nextID++
-	return id
 }

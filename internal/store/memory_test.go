@@ -4,29 +4,17 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
 )
 
-func TestMemoryStore_GenerateID(t *testing.T) {
-	store := NewMemoryStore()
-
-	id1 := store.GenerateID()
-	id2 := store.GenerateID()
-
-	if id1 != 1 {
-		t.Errorf("expected first ID to be 1, got %d", id1)
-	}
-	if id2 != 2 {
-		t.Errorf("expected second ID to be 2, got %d", id2)
-	}
-}
-
 func TestMemoryStore_SaveAndGet(t *testing.T) {
 	store := NewMemoryStore()
-	plan, _ := domain.NewPlan(1, "Test Business")
+	id := uuid.New()
+	plan, _ := domain.NewPlan(id, "Test Business", 1, 2026)
 
 	// 1. Test Get on an empty store
-	_, err := store.Get(1)
+	_, err := store.Get(id)
 	if err == nil || err.Error() != "plan not found" {
 		t.Errorf("expected 'plan not found' error, got %v", err)
 	}
@@ -38,7 +26,7 @@ func TestMemoryStore_SaveAndGet(t *testing.T) {
 	}
 
 	// 3. Test Get on a populated store
-	savedPlan, err := store.Get(1)
+	savedPlan, err := store.Get(id)
 	if err != nil {
 		t.Errorf("expected no error on get, got %v", err)
 	}
@@ -60,8 +48,8 @@ func TestMemoryStore_GetAll(t *testing.T) {
 	}
 
 	// 2. Populate store
-	plan1, _ := domain.NewPlan(1, "Plan One")
-	plan2, _ := domain.NewPlan(2, "Plan Two")
+	plan1, _ := domain.NewPlan(uuid.New(), "Plan One", 12, 2025)
+	plan2, _ := domain.NewPlan(uuid.New(), "Plan Two", 6, 2026)
 	_ = store.Save(plan1)
 	_ = store.Save(plan2)
 
@@ -86,11 +74,11 @@ func TestMemoryStore_Concurrency(t *testing.T) {
 	// 1. Concurrent Writes (Simulating 100 simultaneous POST requests)
 	for i := 1; i <= workers; i++ {
 		wg.Add(1)
-		go func(id int) {
+		go func(id uuid.UUID) {
 			defer wg.Done()
-			plan, _ := domain.NewPlan(id, "Concurrent Plan")
+			plan, _ := domain.NewPlan(id, "Concurrent Plan", 2, 2024)
 			_ = store.Save(plan)
-		}(i)
+		}(uuid.New())
 	}
 	wg.Wait() // Wait for all writes to finish
 
@@ -100,21 +88,22 @@ func TestMemoryStore_Concurrency(t *testing.T) {
 		t.Fatalf("expected %d plans saved, got %d", workers, len(plans))
 	}
 
-	// 2. Concurrent Reads and ID Generations (Simulating a mix of POST and GET requests)
-	for i := 1; i <= workers; i++ {
+	// 2. Concurrent Reads and Writes (Simulating a mix of POST and GET requests)
+	for i := 0; i < workers; i++ {
 		wg.Add(2) // Adding 2 because we are launching 2 goroutines per worker
 
-		// Routine A: Try to read the plan
-		go func(id int) {
+		// Routine A: Try to read the plan using an actual UUID from our saved plans
+		go func(p *domain.Plan) {
 			defer wg.Done()
-			_, _ = store.Get(id)
-		}(i)
+			_, _ = store.Get(p.ID())
+		}(plans[i]) // Pass the plan from the slice we just verified
 
-		// Routine B: Try to generate a new ID
-		go func() {
+		// Routine B: Write brand new plans concurrently to test Lock contention
+		go func(id uuid.UUID) {
 			defer wg.Done()
-			_ = store.GenerateID()
-		}()
+			newPlan, _ := domain.NewPlan(id, "Another Concurrent Plan", 3, 2025)
+			_ = store.Save(newPlan)
+		}(uuid.New())
 	}
-	wg.Wait() // Wait for all reads and ID generations to finish
+	wg.Wait() // Wait for all reads and writes to finish
 }

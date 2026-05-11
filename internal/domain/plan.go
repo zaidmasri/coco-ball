@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type (
@@ -27,7 +29,7 @@ var (
 	ErrInvalidName                      = errors.New("name cannot be empty")
 	ErrNegativeAmount                   = errors.New("expense amount cannot be negative")
 	ErrInvalidMonthIndex                = errors.New("month index is out of bounds")
-	ErrInvalidDuration                  = errors.New("plan duration must be at least 1 month")
+	ErrInvalidStartingMonth             = errors.New("plan starting month must be between 1-12")
 	ErrInvalidDepreciationMethod        = errors.New("invalid deprecation method")
 	ErrInvalidUsefulLife                = errors.New("invalid useful life")
 	ErrPurchaseCostLessThanSalvageValue = errors.New("purchase cost cannot be less than salvage value")
@@ -146,28 +148,30 @@ func (r RevenueStream) ProjectedAmount(month MonthIndex) Money {
 }
 
 type Plan struct {
-	id              int
+	id              uuid.UUID
 	name            string
-	duration        int // Total months the projection spans
+	startingMonth   int
+	startingYear    int
 	revenues        []RevenueStream
 	opEx            []Cost
 	cogs            []Cost
 	futurePurchases []CapitalAsset
 }
 
-func NewPlan(id int, name string, duration int) (*Plan, error) {
+func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int) (*Plan, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, ErrInvalidName
 	}
 
-	if duration <= 0 {
-		return nil, ErrInvalidDuration
+	if startingMonth < 1 || startingMonth > 12 {
+		return nil, ErrInvalidStartingMonth
 	}
 
 	return &Plan{
-		id:       id,
-		name:     name,
-		duration: duration,
+		id:            id,
+		name:          name,
+		startingMonth: startingMonth,
+		startingYear:  startingYear,
 		// Always initialize slices so they aren't nil
 		revenues:        make([]RevenueStream, 0),
 		opEx:            make([]Cost, 0),
@@ -176,9 +180,10 @@ func NewPlan(id int, name string, duration int) (*Plan, error) {
 	}, nil
 }
 
-func (p *Plan) ID() int       { return p.id }
-func (p *Plan) Name() string  { return p.name }
-func (p *Plan) Duration() int { return p.duration }
+func (p *Plan) ID() uuid.UUID      { return p.id }
+func (p *Plan) Name() string       { return p.name }
+func (p *Plan) StartingMonth() int { return p.startingMonth }
+func (p *Plan) StartingYear() int  { return p.startingYear }
 
 func (p *Plan) Revenues() []RevenueStream {
 	res := make([]RevenueStream, len(p.revenues))
@@ -202,9 +207,9 @@ func (p *Plan) MonthlyRevenue(month MonthIndex) Money {
 }
 
 // TotalRevenues now loops through the timeline to sum the continuous curves.
-func (p *Plan) TotalRevenues() Money {
+func (p *Plan) TotalRevenues(duration int) Money {
 	var total Money
-	for i := 0; i < p.duration; i++ {
+	for i := 0; i < duration; i++ {
 		total += p.MonthlyRevenue(MonthIndex(i))
 	}
 	return total
@@ -236,34 +241,34 @@ func (p *Plan) MonthlyCOGS(month MonthIndex) Money {
 	return total
 }
 
-func (p *Plan) MonthlyNetCashFlow(month MonthIndex) Money {
-	if int(month) < 0 || int(month) >= p.duration {
+func (p *Plan) MonthlyNetCashFlow(month MonthIndex, duration int) Money {
+	if int(month) < 0 || int(month) >= duration {
 		return 0
 	}
 	return p.MonthlyRevenue(month) - p.MonthlyOpEx(month) - p.MonthlyCOGS(month)
 }
 
 // TotalOpEx calculates the lifetime operating expenses over the plan's duration.
-func (p *Plan) TotalOpEx() Money {
+func (p *Plan) TotalOpEx(duration int) Money {
 	var total Money
-	for i := 0; i < p.duration; i++ {
+	for i := 0; i < duration; i++ {
 		total += p.MonthlyOpEx(MonthIndex(i))
 	}
 	return total
 }
 
 // TotalCOGS calculates the lifetime COGS over the plan's duration.
-func (p *Plan) TotalCOGS() Money {
+func (p *Plan) TotalCOGS(duration int) Money {
 	var total Money
-	for i := 0; i < p.duration; i++ {
+	for i := 0; i < duration; i++ {
 		total += p.MonthlyCOGS(MonthIndex(i))
 	}
 	return total
 }
 
 // TotalExpenses calculates the total lifetime expenses (OpEx + COGS).
-func (p *Plan) TotalExpenses() Money {
-	return p.TotalOpEx() + p.TotalCOGS()
+func (p *Plan) TotalExpenses(duration int) Money {
+	return p.TotalOpEx(duration) + p.TotalCOGS(duration)
 }
 
 func (p *Plan) AddRevenue(name string, baseAmount Money, growth GrowthStrategy) error {

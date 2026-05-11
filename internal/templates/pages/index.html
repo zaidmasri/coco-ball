@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/icons/bootstrap-icons.css" />
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css" />
+  </head>
+  <body class="bg-light p-3">
+    <div class="container py-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-9">
+          <!-- Intro Card -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-body p-4">
+              <h3 class="card-title mb-3">
+                Welcome to the Financial Projections Builder
+              </h3>
+              <p class="lead mb-3">
+                This guided tool helps you assess the financial viability of
+                your business idea—no spreadsheets or accounting experience
+                required.
+              </p>
+              <p class="mb-4">
+                Work at your own pace. Your progress saves automatically,
+                allowing you to return anytime and complete things gradually.
+              </p>
+              <a class="btn btn-primary btn-sm" href="/setup">Get Started</a>
+            </div>
+          </div>
+
+          <!-- Accordion -->
+          <div class="accordion accordion-flush" id="directionsAccordion">
+            <!-- Section 1 -->
+            <div class="accordion-item mb-3 border rounded shadow-sm">
+              <h2 class="accordion-header">
+                <button
+                  class="accordion-button bg-primary text-white collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapseOne"
+                >
+                  <i class="bi bi-graph-up-arrow me-2"></i> What This Tool Helps
+                  You Create
+                </button>
+              </h2>
+              <div
+                id="collapseOne"
+                class="accordion-collapse collapse"
+                data-bs-parent="#directionsAccordion"
+              >
+                <div class="accordion-body pt-4 pb-3 px-4">
+                  <p class="lead mb-4">
+                    As you answer questions, we automatically generate your
+                    essential financial statements.
+                  </p>
+                  <ul class="mb-4">
+                    <li>Profitability overview</li>
+                    <li>Projected income statement</li>
+                    <li>Projected balance sheet</li>
+                    <li>Cash flow forecast</li>
+                  </ul>
+                  <small class="text-muted">
+                    All calculations are handled behind the scenes—no formulas
+                    required.
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 2 -->
+            <div class="accordion-item mb-3 border rounded shadow-sm">
+              <h2 class="accordion-header">
+                <button
+                  class="accordion-button bg-primary text-white collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapseTwo"
+                >
+                  <i class="bi bi-info-circle me-2"></i> How It Works
+                </button>
+              </h2>
+              <div
+                id="collapseTwo"
+                class="accordion-collapse collapse"
+                data-bs-parent="#directionsAccordion"
+              >
+                <div class="accordion-body pt-4 pb-3 px-4">
+                  <p class="lead mb-4">
+                    The process is simple—just follow each step and provide the
+                    details you know.
+                  </p>
+                  <ol class="mb-4">
+                    <li>
+                      Answer straightforward questions about your business.
+                    </li>
+                    <li>We calculate your projections automatically.</li>
+                    <li>
+                      Review the results in clean, professional financial
+                      statements.
+                    </li>
+                    <li>
+                      Update your assumptions anytime—nothing is locked in.
+                    </li>
+                  </ol>
+                  <small class="text-muted">
+                    You can revise your inputs at any point in the process.
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3 -->
+            <div class="accordion-item mb-3 border rounded shadow-sm">
+              <h2 class="accordion-header">
+                <button
+                  class="accordion-button bg-primary text-white collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapseThree"
+                >
+                  <i class="bi bi-lightbulb me-2"></i> Helpful Tips
+                </button>
+              </h2>
+              <div
+                id="collapseThree"
+                class="accordion-collapse collapse"
+                data-bs-parent="#directionsAccordion"
+              >
+                <div class="accordion-body pt-4 pb-3 px-4">
+                  <p class="lead mb-4">
+                    These tips will help you get the most out of the tool.
+                  </p>
+                  <ul class="mb-4">
+                    <li>Required fields are clearly marked.</li>
+                    <li>Guidance and examples appear throughout the app.</li>
+                    <li>Your progress is saved automatically.</li>
+                    <li>
+                      You can complete this step-by-step and return anytime.
+                    </li>
+                  </ul>
+                  <small class="text-muted">
+                    Estimates don’t need to be perfect—you can refine them
+                    later.
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- /accordion -->
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/js/bootstrap.min.js"></script>
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
