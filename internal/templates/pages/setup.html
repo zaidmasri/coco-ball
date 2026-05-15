@@ -1,8 +1,5 @@
 {{ template "base" . }} {{ define "content" }}
-<div
-  class="container-fluid max-w-custom"
-  style="max-width: 800px; margin: 0 auto"
->
+<div class="container-fluid container mx-auto">
   <div class="card shadow-sm border-0 rounded-3">
     <!-- Step Header -->
     <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4 px-md-5">
@@ -20,7 +17,7 @@
 
     <!-- Form Body -->
     <div class="card-body p-4 p-md-5">
-      <form action="/setup" method="POST" id="setupForm">
+      <form action="/plan/{{ .Plan.ID }}/setup" method="POST" id="setupForm">
         <!-- SECTION 1: Company Details -->
         <h5 class="mb-4 text-primary">
           <i class="bi bi-buildings me-2"></i>Company Details
@@ -36,6 +33,7 @@
               <span class="input-group-text bg-light text-muted"
                 ><i class="bi bi-briefcase"></i
               ></span>
+              <!-- Calling the .Name method -->
               <input
                 type="text"
                 class="form-control"
@@ -43,6 +41,7 @@
                 name="companyName"
                 placeholder="e.g., Acme Corp LLC"
                 required
+                value="{{ if .Plan }}{{ .Plan.Name }}{{ end }}"
               />
             </div>
           </div>
@@ -62,19 +61,190 @@
                 name="startMonth"
                 required
               >
-                <option value="" selected disabled>Select month...</option>
-                <option value="1">January</option>
-                <option value="2">February</option>
-                <option value="3">March</option>
-                <option value="4">April</option>
-                <option value="5">May</option>
-                <option value="6">June</option>
-                <option value="7">July</option>
-                <option value="8">August</option>
-                <option value="9">September</option>
-                <option value="10">October</option>
-                <option value="11">November</option>
-                <option value="12">December</option>
+                <option value="" {{ if not .Plan }}selected{{ end }} disabled>
+                  Select month...
+                </option>
+                <!-- Calling the .StartingMonth method and comparing to integers -->
+                <option
+                  value="1"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  1)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  January
+                </option>
+                <option
+                  value="2"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  2)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  February
+                </option>
+                <option
+                  value="3"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  3)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  March
+                </option>
+                <option
+                  value="4"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  4)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  April
+                </option>
+                <option
+                  value="5"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  5)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  May
+                </option>
+                <option
+                  value="6"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  6)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  June
+                </option>
+                <option
+                  value="7"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  7)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  July
+                </option>
+                <option
+                  value="8"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  8)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  August
+                </option>
+                <option
+                  value="9"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  9)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  September
+                </option>
+                <option
+                  value="10"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  10)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  October
+                </option>
+                <option
+                  value="11"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  11)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  November
+                </option>
+                <option
+                  value="12"
+                  {{
+                  if
+                  and
+                  .Plan
+                  (eq
+                  .Plan.StartingMonth
+                  12)
+                  }}selected{{
+                  end
+                  }}
+                >
+                  December
+                </option>
               </select>
             </div>
           </div>
@@ -88,6 +258,7 @@
               <span class="input-group-text bg-light text-muted"
                 ><i class="bi bi-calendar-event"></i
               ></span>
+              <!-- Calling the .StartingYear method -->
               <input
                 type="number"
                 class="form-control"
@@ -97,6 +268,7 @@
                 min="2000"
                 max="2100"
                 required
+                value="{{ if .Plan }}{{ .Plan.StartingYear }}{{ end }}"
               />
             </div>
           </div>

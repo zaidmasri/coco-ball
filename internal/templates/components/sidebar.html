@@ -9,13 +9,16 @@
     Your Plan Steps
   </h6>
   <nav class="nav flex-column gap-1">
+    
     <!-- 0. Setup -->
-    <a class="nav-link {{ if eq .Path "/setup"}} active text-primary {{else}} text-dark {{end}} py-2 px-3" href="/setup">
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/setup" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+       href="/plan/{{ .Plan.ID }}/setup">
       <i class="bi bi-circle me-2"></i> 0. Setup
     </a>
 
-    <!-- 1. Starting Point (Current Active Step) -->
-    <a class="nav-link {{ if eq .Path "/starting-point" }} active text-primary {{else}} text-dark {{end}} py-2 px-3" href="/starting-point">
+    <!-- 1. Starting Point -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/starting-point" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+       href="/plan/{{ .Plan.ID }}/starting-point">
       <i class="bi bi-circle me-2"></i> 1. Starting Point
     </a>
 
