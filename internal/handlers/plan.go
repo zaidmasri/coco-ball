@@ -39,6 +39,7 @@ func (app *App) renderPage(w http.ResponseWriter, cacheKey string, templateName 
 
 	err := ts.ExecuteTemplate(w, templateName, data)
 	if err != nil {
+		log.Printf("❌ Template Execution Error (%s): %v", cacheKey, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -349,6 +350,162 @@ func (app *App) PostStartingPoint() http.HandlerFunc {
 
 		// Redirect on success
 		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+	}
+}
+
+func (app *App) GetPayroll() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Plan not found")
+			return
+		}
+
+		// For now, we pass nil for the Plan to force the empty state.
+		app.renderPage(w, "payroll.html", "base", map[string]interface{}{
+			"Title": "Payroll | Business Planning Tool",
+			"Path":  r.URL.Path,
+			"Plan":  plan, // This forces the empty state!
+		})
+	}
+}
+
+func (app *App) GetSalesForecast() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
+			return
+		}
+
+		app.renderPage(w, "sales-forecast.html", "base", map[string]interface{}{
+			"Plan": plan,
+			"Path": r.URL.Path,
+		})
+	}
+}
+
+func (app *App) GetOpExpenses() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
+			return
+		}
+
+		app.renderPage(w, "op-expenses.html", "base", map[string]interface{}{
+			"Plan": plan,
+			"Path": r.URL.Path,
+		})
+	}
+}
+
+func (app *App) GetCashFlow() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
+			return
+		}
+
+		app.renderPage(w, "cash-flow.html", "base", map[string]interface{}{
+			"Plan": plan,
+			"Path": r.URL.Path,
+		})
+	}
+}
+
+func (app *App) GetIncomeStatement() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
+			return
+		}
+
+		app.renderPage(w, "income-statement.html", "base", map[string]interface{}{
+			"Plan": plan,
+			"Path": r.URL.Path,
+		})
+	}
+}
+
+func (app *App) GetBalanceSheet() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
+			return
+		}
+
+		app.renderPage(w, "balance-sheet.html", "base", map[string]interface{}{
+			"Plan": plan,
+			"Path": r.URL.Path,
+		})
+	}
+}
+
+func (app *App) GetAnalytics() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
+			return
+		}
+		app.renderPage(w, "analytics.html", "base", map[string]interface{}{
+			"Plan": plan,
+			"Path": r.URL.Path,
+		})
 	}
 }
 
