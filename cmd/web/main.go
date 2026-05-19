@@ -58,12 +58,21 @@ func main() {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", staticFileServer))
 
 	// Routes
+	// Root Page
 	mux.HandleFunc("GET /{$}", app.GetRoot())
+
+	// New plan
 	mux.HandleFunc("POST /plan/setup", app.PostSetup())
 
+	// Setup Page
 	mux.HandleFunc("GET /plan/{id}/setup", app.GetSetup())
-	mux.HandleFunc("GET /plan/{id}/starting-point", app.GetStartingPoint())
+	mux.HandleFunc("POST /plan/{id}/setup", app.PostUpdateSetup())
 
+	// Starting Point
+	mux.HandleFunc("GET /plan/{id}/starting-point", app.GetStartingPoint())
+	mux.HandleFunc("POST /plan/{id}/starting-point", app.PostStartingPoint())
+	// Catch-all fallback route for any unmatched URLs
+	mux.HandleFunc("/", app.NotFound())
 	// Configure a robust http server
 	srv := &http.Server{
 		Addr:         ":8080",

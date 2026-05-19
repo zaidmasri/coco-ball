@@ -3,13 +3,16 @@ package domain
 import (
 	"errors"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 // --- Helper Functions ---
 
 func newValidPlan(t *testing.T) *Plan {
 	t.Helper()
-	plan, err := NewPlan(1, "Simple Startup", 12)
+	// FIX: Use uuid.New(), startingMonth, and startingYear instead of int and duration
+	plan, err := NewPlan(uuid.New(), "Simple Startup", 1, 2024)
 	if err != nil {
 		t.Fatalf("failed to create valid plan: %v", err)
 	}
@@ -19,47 +22,53 @@ func newValidPlan(t *testing.T) *Plan {
 // --- Tests ---
 
 func TestNewPlan(t *testing.T) {
+	validID := uuid.New()
+
 	tests := []struct {
-		testName    string
-		id          int
-		planName    string
-		duration    int
-		expectedErr error
+		testName      string
+		id            uuid.UUID
+		planName      string
+		startingMonth int
+		startingYear  int
+		expectedErr   error
 	}{
 		{
-			testName:    "Valid business plan",
-			id:          1,
-			planName:    "Coffee Shop",
-			expectedErr: nil,
-			duration:    12,
+			testName:      "Valid business plan",
+			id:            validID,
+			planName:      "Coffee Shop",
+			startingMonth: 1,
+			startingYear:  2024,
+			expectedErr:   nil,
 		},
 		{
-			testName:    "Fails on empty name",
-			id:          2,
-			planName:    "   ",
-			expectedErr: ErrInvalidName,
-			duration:    12,
+			testName:      "Fails on empty name",
+			id:            uuid.New(),
+			planName:      "   ",
+			startingMonth: 1,
+			startingYear:  2024,
+			expectedErr:   ErrInvalidName,
 		},
 		{
-			testName:    "Fails on zero duration",
-			id:          3,
-			planName:    "Mass Market",
-			expectedErr: ErrInvalidDuration,
-			duration:    0,
+			testName:      "Fails on invalid month (0)",
+			id:            uuid.New(),
+			planName:      "Mass Market",
+			startingMonth: 0,
+			startingYear:  2024,
+			expectedErr:   ErrInvalidStartingMonth,
 		},
-
 		{
-			testName:    "Fails on negative duration",
-			id:          4,
-			planName:    "Mass Market",
-			expectedErr: ErrInvalidDuration,
-			duration:    0,
+			testName:      "Fails on invalid year",
+			id:            uuid.New(),
+			planName:      "Mass Market",
+			startingMonth: 1,
+			startingYear:  1800, // Assuming the 1900-2100 bounds from our helper
+			expectedErr:   ErrInvalidStartingYear,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
-			plan, err := NewPlan(tc.id, tc.planName, tc.duration)
+			plan, err := NewPlan(tc.id, tc.planName, tc.startingMonth, tc.startingYear)
 
 			if !errors.Is(err, tc.expectedErr) {
 				t.Errorf("expected error %v, got %v", tc.expectedErr, err)
@@ -70,7 +79,7 @@ func TestNewPlan(t *testing.T) {
 					t.Errorf("expected name %s, got %s", tc.planName, plan.Name())
 				}
 				if plan.ID() != tc.id {
-					t.Errorf("expected id %d, got %d", tc.id, plan.ID())
+					t.Errorf("expected id %s, got %s", tc.id, plan.ID())
 				}
 			}
 		})
@@ -84,16 +93,16 @@ func TestPlan_TotalExpenses(t *testing.T) {
 	_ = plan.AddOpEx("Software", 500, GrowthStrategy{Type: FlatGrowth})
 	_ = plan.AddCOGS("Wood", 300, GrowthStrategy{Type: FlatGrowth})
 
-	// expectedTotal := Money(2800)
 	expectedTotal := Money(33600)
 
-	if got := plan.TotalExpenses(); got != expectedTotal {
+	// FIX: Pass duration (e.g., 12 months) into TotalExpenses
+	if got := plan.TotalExpenses(12); got != expectedTotal {
 		t.Errorf("expected total %d, got %d", expectedTotal, got)
 	}
 }
 
 func TestPlan_MonthlyLedgerMath(t *testing.T) {
-	plan := newValidPlan(t) // 12-month plan
+	plan := newValidPlan(t)
 
 	// 5000/mo * 12 months = 60,000
 	_ = plan.AddRevenue("Software Subs", 5000, GrowthStrategy{Type: FlatGrowth})
@@ -104,26 +113,27 @@ func TestPlan_MonthlyLedgerMath(t *testing.T) {
 
 	// --- Monthly Assertions ---
 
-	// Every month should be Revenue (5000) - OpEx (2500) = 2500 Profit
-	if got := plan.MonthlyNetCashFlow(0); got != 2500 {
+	// FIX: Pass duration (12) to MonthlyNetCashFlow checks
+	if got := plan.MonthlyNetCashFlow(0, 12); got != 2500 {
 		t.Errorf("expected Month 0 net flow of 2500, got %d", got)
 	}
-	if got := plan.MonthlyNetCashFlow(11); got != 2500 {
+	if got := plan.MonthlyNetCashFlow(11, 12); got != 2500 {
 		t.Errorf("expected Month 11 net flow of 2500, got %d", got)
 	}
 
 	// Month 12 is out of bounds (12-month plan ends at index 11)
-	if got := plan.MonthlyNetCashFlow(12); got != 0 {
+	if got := plan.MonthlyNetCashFlow(12, 12); got != 0 {
 		t.Errorf("expected Month 12 net flow of 0 (out of bounds), got %d", got)
 	}
 
 	// --- Lifetime Assertions ---
 
-	if got := plan.TotalExpenses(); got != 30000 {
+	// FIX: Pass duration (12) to Total methods
+	if got := plan.TotalExpenses(12); got != 30000 {
 		t.Errorf("expected Total Expenses of 30000, got %d", got)
 	}
 
-	if got := plan.TotalRevenues(); got != 60000 {
+	if got := plan.TotalRevenues(12); got != 60000 {
 		t.Errorf("expected Total Revenues of 60000, got %d", got)
 	}
 }
@@ -309,23 +319,24 @@ func TestPlan_AddRevenue_Validation(t *testing.T) {
 }
 
 func TestPlan_OutOfBoundsRetrieval(t *testing.T) {
-	plan := newValidPlan(t) // Creates a 12-month plan (Valid indices: 0 to 11)
+	plan := newValidPlan(t)
 
 	// Setup a continuous revenue curve so we have data to check against
 	_ = plan.AddRevenue("Sales", 5000, GrowthStrategy{Type: FlatGrowth})
 
+	// FIX: Pass duration 12 to all MonthlyNetCashFlow checks
 	// 1. Valid End Month (Index 11)
-	if got := plan.MonthlyNetCashFlow(11); got != 5000 {
+	if got := plan.MonthlyNetCashFlow(11, 12); got != 5000 {
 		t.Errorf("expected Month 11 to return 5000, got %d", got)
 	}
 
 	// 2. Invalid Negative Month (Time Travel)
-	if got := plan.MonthlyNetCashFlow(-1); got != 0 {
+	if got := plan.MonthlyNetCashFlow(-1, 12); got != 0 {
 		t.Errorf("expected negative month to return 0, got %d", got)
 	}
 
 	// 3. Invalid Future Month (Index 12 is the 13th month, out of bounds)
-	if got := plan.MonthlyNetCashFlow(12); got != 0 {
+	if got := plan.MonthlyNetCashFlow(12, 12); got != 0 {
 		t.Errorf("expected future month to return 0, got %d", got)
 	}
 }

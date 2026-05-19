@@ -2,10 +2,12 @@
 package handlers
 
 import (
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,12 +43,42 @@ func (app *App) renderPage(w http.ResponseWriter, cacheKey string, templateName 
 	}
 }
 
-// --- HANDLERS (Exported with Capital Letters) ---
+// Helper to cleanly render the full-page error UI
+func (app *App) renderErrorPage(w http.ResponseWriter, r *http.Request, statusCode int, message string) {
+	w.WriteHeader(statusCode)
+
+	// http.StatusText converts "404" to "Not Found", or "500" to "Internal Server Error"
+	statusText := http.StatusText(statusCode)
+
+	app.renderPage(w, "error.html", "error.html", map[string]interface{}{
+		"ErrorTitle":       statusText,
+		"ErrorStatusCode":  statusCode,
+		"ErrorDescription": statusText,
+		"Message":          message,
+		"Path":             r.URL.Path, // Keeps your sidebar navigation clean
+	})
+}
+
+// GET /* (Custom 404 Catch-All for bad URLs)
+func (app *App) NotFound() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		app.renderErrorPage(w, r, http.StatusNotFound, "The URL you entered does not exist. Please check the address and try again.")
+	}
+}
+
 func (app *App) GetRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Fetch all plans from your database/store
+		plans, err := app.Store.GetAll() // Ensure this method exists on your store interface
+		if err != nil {
+			// If it fails, just pass an empty slice so the page still loads the empty state
+			plans = []*domain.Plan{}
+		}
+
 		app.renderPage(w, "index.html", "index.html", map[string]interface{}{
 			"Title": "Business Planning Tool",
 			"Path":  r.URL.Path,
+			"Plans": plans, // Inject the plans into the HTML
 		})
 	}
 }
@@ -81,19 +113,66 @@ func (app *App) PostSetup() http.HandlerFunc {
 	}
 }
 
+// POST /plan/{id}/setup (Updates an existing plan)
+func (app *App) PostUpdateSetup() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		id, err := uuid.Parse(r.PathValue("id"))
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
+			return
+		}
+
+		// Group extraction and type conversion together
+		companyName := r.PostForm.Get("companyName")
+		startMonth, errMonth := strconv.Atoi(r.PostForm.Get("startMonth"))
+		startYear, errYear := strconv.Atoi(r.PostForm.Get("startYear"))
+
+		// Combine the error checks for related fields
+		if errMonth != nil || errYear != nil {
+			http.Error(w, "Invalid month or year provided", http.StatusBadRequest)
+			return
+		}
+
+		// Use the error message directly from your domain logic
+		if err := plan.ChangeCoreDetails(companyName, startMonth, startYear); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if err := app.Store.Save(plan); err != nil {
+			http.Error(w, "Failed to save plan", http.StatusInternalServerError)
+			return
+		}
+
+		// Redirect to the exact same URL, forcing a GET request
+		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+	}
+}
+
 // GET /plan/{id}/setup (Loads an existing plan into the form)
 func (app *App) GetSetup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.PathValue("id")
 		planID, err := uuid.Parse(idStr)
 		if err != nil {
-			http.Error(w, "Invalid Plan ID", http.StatusBadRequest)
+			app.renderErrorPage(w, r, http.StatusBadRequest, "The Plan ID in the URL is malformed or invalid.")
 			return
 		}
 
 		plan, err := app.Store.Get(planID)
 		if err != nil {
-			http.Error(w, "Plan not found", http.StatusNotFound)
+			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that business plan. It may have been deleted, or you might be using an old link.")
 			return
 		}
 
@@ -111,13 +190,13 @@ func (app *App) GetStartingPoint() http.HandlerFunc {
 		idStr := r.PathValue("id")
 		planID, err := uuid.Parse(idStr)
 		if err != nil {
-			http.Error(w, "Invalid Plan ID", http.StatusBadRequest)
+			app.renderErrorPage(w, r, http.StatusBadRequest, "The Plan ID in the URL is malformed or invalid.")
 			return
 		}
 
 		plan, err := app.Store.Get(planID)
 		if err != nil {
-			http.Error(w, "Plan not found", http.StatusNotFound)
+			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that business plan. It may have been deleted, or you might be using an old link.")
 			return
 		}
 
@@ -129,7 +208,151 @@ func (app *App) GetStartingPoint() http.HandlerFunc {
 	}
 }
 
-// Exported Middleware
+// POST /plan/{id}/starting-point
+func (app *App) PostStartingPoint() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// System-level errors (Malformed requests)
+		if err := r.ParseForm(); err != nil {
+			log.Printf("ParseForm Error: %v", err)
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		id, err := uuid.Parse(r.PathValue("id"))
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
+			return
+		}
+
+		plan, err := app.Store.Get(id)
+		if err != nil {
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
+			return
+		}
+
+		// --- USER-FACING VALIDATION LOGIC ---
+
+		// Helper function: Renders the starting-point page with an error message
+		renderError := func(errMsg string, statusCode int) {
+			w.WriteHeader(statusCode)
+			app.renderPage(w, "starting-point.html", "base", map[string]interface{}{
+				"Title":        "Starting Point | Business Planning Tool",
+				"Path":         r.URL.Path,
+				"Plan":         plan,
+				"ErrorMessage": errMsg, // Pass the error to the frontend!
+			})
+		}
+
+		// 1. Clear existing data so we cleanly overwrite it
+		plan.ClearStartingPoint()
+
+		// 2. Parse Fixed Assets
+		faTypes := r.PostForm["fa_type[]"]
+		faAmounts := r.PostForm["fa_amount[]"]
+		faDeprs := r.PostForm["fa_depreciation[]"]
+		faMethods := r.PostForm["fa_depr_method[]"] // Grab the new dropdown data
+
+		for i, assetName := range faTypes {
+			// Protect against mismatched DOM arrays
+			if i >= len(faAmounts) || i >= len(faDeprs) || i >= len(faMethods) {
+				break
+			}
+
+			amt, _ := strconv.ParseFloat(faAmounts[i], 64)
+			deprYears, _ := strconv.Atoi(faDeprs[i])
+			methodStr := faMethods[i]
+
+			// Map the string from the HTML select to your Domain type
+			var deprMethod domain.DepreciationMethod
+			if methodStr == string(domain.DoubleDeclining) {
+				deprMethod = domain.DoubleDeclining
+			} else if methodStr == string(domain.None) {
+				deprMethod = domain.None
+				deprYears = 0 // Land doesn't depreciate
+			} else {
+				deprMethod = domain.StraightLine
+			}
+
+			// Strategy 2: Smart Default (If they left it blank and it IS depreciable)
+			if deprMethod != domain.None && deprYears <= 0 {
+				deprYears = 5
+			}
+
+			if amt > 0 && strings.TrimSpace(assetName) != "" {
+				err := plan.AddCapitalPurchase(domain.CapitalAsset{
+					Name:               assetName,
+					PurchaseCost:       domain.Money(amt),
+					UsefulLifeMonths:   deprYears * 12, // Domain expects months
+					DepreciationMethod: deprMethod,
+				})
+				// Strategy 4: Bubble up domain errors to the UI
+				if err != nil {
+					renderError(fmt.Sprintf("Error saving asset '%s': %v", assetName, err), http.StatusBadRequest)
+					return
+				}
+			}
+		}
+
+		// 3. Parse Operating Capital
+		ocTypes := r.PostForm["oc_type[]"]
+		ocAmounts := r.PostForm["oc_amount[]"]
+
+		for i, capName := range ocTypes {
+			if i >= len(ocAmounts) {
+				break
+			}
+			amt, _ := strconv.ParseFloat(ocAmounts[i], 64)
+			if amt > 0 && strings.TrimSpace(capName) != "" {
+				plan.AddStartupCost(capName, domain.Money(amt))
+			}
+		}
+
+		// 4. Parse Funding Sources
+		fundTypes := r.PostForm["fund_type[]"]
+		fundAmounts := r.PostForm["fund_amount[]"]
+		fundRates := r.PostForm["fund_rate[]"]
+		fundTerms := r.PostForm["fund_term[]"]
+
+		for i, fundName := range fundTypes {
+			if i >= len(fundAmounts) || i >= len(fundRates) || i >= len(fundTerms) {
+				break
+			}
+			amt, _ := strconv.ParseFloat(fundAmounts[i], 64)
+			rate, _ := strconv.ParseFloat(fundRates[i], 64)
+			term, _ := strconv.Atoi(fundTerms[i])
+
+			if amt > 0 && strings.TrimSpace(fundName) != "" {
+				plan.AddFundingSource(fundName, domain.Money(amt), rate/100.0, term)
+			}
+		}
+
+		// 5. Parse Starting Balances (Static Fields)
+		parseMoney := func(key string) domain.Money {
+			val, _ := strconv.ParseFloat(r.PostForm.Get(key), 64)
+			return domain.Money(val)
+		}
+
+		plan.SetStartingBalances(
+			parseMoney("coh_cash_amount"),
+			parseMoney("coh_ar_amount"),
+			parseMoney("coh_pe_amount"),
+			parseMoney("coh_ap_amount"),
+			parseMoney("coh_ae_amount"),
+		)
+
+		// 6. Save the aggregate
+		if err := app.Store.Save(plan); err != nil {
+			log.Printf("Store Save Error: %v", err)
+			renderError("An internal database error occurred. Please try again.", http.StatusInternalServerError)
+			return
+		}
+
+		// Redirect on success
+		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+	}
+}
+
+// Middleware
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

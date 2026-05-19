@@ -1,4 +1,6 @@
-{{ template "base" . }} {{ define "content" }}
+{{ template "base" . }} 
+
+{{ define "content" }}
 <div class="container-fluid container mx-auto">
   <!-- Data Lists for Suggestions -->
   <datalist id="fixedAssetsList">
@@ -37,46 +39,95 @@
   <div class="card shadow-sm border-0 rounded-3">
     <!-- Step Header -->
     <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4 px-md-5">
-      <span class="badge bg-primary bg-opacity-10 text-primary mb-2"
-        >Step 1 of 9</span
-      >
+      <span class="badge bg-primary bg-opacity-10 text-primary mb-2">Step 1 of 9</span>
       <h2 class="card-title fw-bold mb-3">Starting Point</h2>
       <p class="lead text-secondary" style="font-size: 1.1rem">
         Let's establish your baseline. We'll look at your fixed assets,
-        operating capital, and funding sources to set the foundation for your
-        projections.
+        operating capital, and funding sources to set the foundation for your projections.
       </p>
       <hr class="mt-4 mb-0 text-muted" />
     </div>
 
     <!-- Form Body -->
     <div class="card-body p-4 p-md-5">
-      <form action="/starting-point" id="startingPointForm" method="POST">
+      
+      <!-- SERVER ERROR DISPLAY -->
+      {{ if .ErrorMessage }}
+      <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <div>
+          <strong>Validation Error:</strong> {{ .ErrorMessage }}
+        </div>
+      </div>
+      {{ end }}
+
+      <form action="/plan/{{ .Plan.ID }}/starting-point" id="startingPointForm" method="POST">
+        
         <!-- ============================== -->
         <!-- SECTION 1: FIXED ASSETS        -->
         <!-- ============================== -->
         <div class="mb-5 section-container" id="fixedAssetsSection">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="text-primary mb-0">
+            <h5 class="text-primary mb-0 d-flex align-items-center">
               <i class="bi bi-building me-2"></i>Fixed Assets
+              <a href="https://www.irs.gov/publications/p946" target="_blank" 
+                 class="ms-2 text-secondary fs-6" 
+                 data-bs-toggle="tooltip" data-bs-placement="right" 
+                 title="View IRS MACRS Depreciation Schedules (Pub 946)">
+                <i class="bi bi-info-circle"></i>
+              </a>
             </h5>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-primary add-row-btn"
-              data-target="fixedAssetTemplate"
-              data-container="fixedAssetsContainer"
-            >
+            <button type="button" class="btn btn-sm btn-outline-primary add-row-btn" data-target="fixedAssetTemplate" data-container="fixedAssetsContainer">
               <i class="bi bi-plus-lg"></i> Add Asset
             </button>
           </div>
 
           <div id="fixedAssetsContainer" class="d-flex flex-column gap-3 mb-3">
-            <!-- Dynamic rows will be injected here -->
+            
+            <!-- EMPTY STATE -->
+            <div class="empty-state text-center p-4 bg-light border rounded text-muted" style="border-style: dashed !important;">
+              <i class="bi bi-building-add opacity-50" style="font-size: 2rem;"></i>
+              <p class="mt-2 mb-0">No fixed assets yet. Click <strong>Add Asset</strong> to get started.</p>
+            </div>
+
+            <!-- POPULATE EXISTING DATA -->
+            {{ if .Plan }}
+              {{ range .Plan.FuturePurchases }}
+              <div class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row">
+                <div class="col-md-2">
+                  <input type="text" list="fixedAssetsList" class="form-control form-control-sm" name="fa_type[]" value="{{ .Name }}" required />
+                </div>
+                <div class="col-md-2">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control amount-calc" name="fa_amount[]" value="{{ .PurchaseCost }}" required />
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <select class="form-select form-select-sm depr-method-select" name="fa_depr_method[]">
+                    <option value="StraightLine" {{ if eq .DepreciationMethod "StraightLine" }}selected{{ end }}>Straight Line</option>
+                    <option value="DoubleDeclining" {{ if eq .DepreciationMethod "DoubleDeclining" }}selected{{ end }}>Double Declining</option>
+                    <option value="None" {{ if eq .DepreciationMethod "None" }}selected{{ end }}>None (e.g., Land)</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <input type="number" class="form-control form-control-sm depr-years-input" name="fa_depreciation[]" 
+                         value="{{ if ne .UsefulLifeYears 0 }}{{ .UsefulLifeYears }}{{ end }}" 
+                         placeholder="Depr. Years" min="1" 
+                         {{ if eq .DepreciationMethod "None" }}readonly{{ else }}required{{ end }} />
+                </div>
+                <div class="col-md-2">
+                  <input type="text" class="form-control form-control-sm" name="fa_notes[]" placeholder="Notes" />
+                </div>
+                <div class="col-md-1 text-end">
+                  <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" title="Remove row"><i class="bi bi-trash"></i></button>
+                </div>
+              </div>
+              {{ end }}
+            {{ end }}
           </div>
 
-          <div
-            class="d-flex justify-content-end align-items-center border-top pt-3"
-          >
+          <div class="d-flex justify-content-end align-items-center border-top pt-3">
             <h6 class="mb-0 fw-bold me-3">Total Fixed Assets:</h6>
             <h5 class="mb-0 text-success fw-bold sum-display">$0.00</h5>
           </div>
@@ -90,23 +141,44 @@
             <h5 class="text-primary mb-0">
               <i class="bi bi-cash-coin me-2"></i>Operating Capital
             </h5>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-primary add-row-btn"
-              data-target="opCapitalTemplate"
-              data-container="opCapitalContainer"
-            >
+            <button type="button" class="btn btn-sm btn-outline-primary add-row-btn" data-target="opCapitalTemplate" data-container="opCapitalContainer">
               <i class="bi bi-plus-lg"></i> Add Capital
             </button>
           </div>
 
           <div id="opCapitalContainer" class="d-flex flex-column gap-3 mb-3">
-            <!-- Dynamic rows will be injected here -->
+            
+            <!-- EMPTY STATE -->
+            <div class="empty-state text-center p-4 bg-light border rounded text-muted" style="border-style: dashed !important;">
+              <i class="bi bi-cash-stack opacity-50" style="font-size: 2rem;"></i>
+              <p class="mt-2 mb-0">No operating capital yet. Click <strong>Add Capital</strong> to get started.</p>
+            </div>
+
+            <!-- POPULATE EXISTING DATA -->
+            {{ if .Plan }}
+              {{ range .Plan.StartupCosts }}
+              <div class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row">
+                <div class="col-md-4">
+                  <input type="text" list="opCapitalList" class="form-control form-control-sm" name="oc_type[]" value="{{ .Name }}" required />
+                </div>
+                <div class="col-md-3">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control amount-calc" name="oc_amount[]" value="{{ .Amount }}" required />
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <input type="text" class="form-control form-control-sm" name="oc_notes[]" placeholder="Notes" />
+                </div>
+                <div class="col-md-1 text-end">
+                  <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn"><i class="bi bi-trash"></i></button>
+                </div>
+              </div>
+              {{ end }}
+            {{ end }}
           </div>
 
-          <div
-            class="d-flex justify-content-end align-items-center border-top pt-3"
-          >
+          <div class="d-flex justify-content-end align-items-center border-top pt-3">
             <h6 class="mb-0 fw-bold me-3">Total Operating Capital:</h6>
             <h5 class="mb-0 text-success fw-bold sum-display">$0.00</h5>
           </div>
@@ -120,23 +192,59 @@
             <h5 class="text-primary mb-0">
               <i class="bi bi-piggy-bank me-2"></i>Sources of Funding
             </h5>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-primary add-row-btn"
-              data-target="fundingTemplate"
-              data-container="fundingContainer"
-            >
+            <button type="button" class="btn btn-sm btn-outline-primary add-row-btn" data-target="fundingTemplate" data-container="fundingContainer">
               <i class="bi bi-plus-lg"></i> Add Funding
             </button>
           </div>
 
           <div id="fundingContainer" class="d-flex flex-column gap-3 mb-3">
-            <!-- Dynamic rows will be injected here -->
+            
+            <!-- EMPTY STATE -->
+            <div class="empty-state text-center p-4 bg-light border rounded text-muted" style="border-style: dashed !important;">
+              <i class="bi bi-bank opacity-50" style="font-size: 2rem;"></i>
+              <p class="mt-2 mb-0">No funding sources yet. Click <strong>Add Funding</strong> to get started.</p>
+            </div>
+
+            <!-- POPULATE EXISTING DATA -->
+            {{ if .Plan }}
+              {{ range .Plan.FundingSources }}
+              <div class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row">
+                <div class="col-md-2">
+                  <input type="text" list="fundingList" class="form-control form-control-sm" name="fund_type[]" value="{{ .Name }}" required />
+                </div>
+                <div class="col-md-2">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control amount-calc loan-calc loan-principal" name="fund_amount[]" value="{{ .Amount }}" required />
+                  </div>
+                </div>
+                <div class="col-md-1">
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.01" class="form-control loan-calc loan-rate" name="fund_rate[]" value="{{ .InterestRatePercent }}" />
+                    <span class="input-group-text">%</span>
+                  </div>
+                </div>
+                <div class="col-md-1">
+                  <input type="number" class="form-control form-control-sm loan-calc loan-term" name="fund_term[]" value="{{ .TermMonths }}" />
+                </div>
+                <div class="col-md-2">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white">PMT</span>
+                    <input type="text" class="form-control bg-white text-muted loan-payment" name="fund_pmt[]" readonly />
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <input type="text" class="form-control form-control-sm" name="fund_notes[]" placeholder="Notes" />
+                </div>
+                <div class="col-md-1 text-end">
+                  <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn"><i class="bi bi-trash"></i></button>
+                </div>
+              </div>
+              {{ end }}
+            {{ end }}
           </div>
 
-          <div
-            class="d-flex justify-content-end align-items-center border-top pt-3"
-          >
+          <div class="d-flex justify-content-end align-items-center border-top pt-3">
             <h6 class="mb-0 fw-bold me-3">Total Funding:</h6>
             <h5 class="mb-0 text-success fw-bold sum-display">$0.00</h5>
           </div>
@@ -154,27 +262,17 @@
           </div>
 
           <div class="d-flex flex-column gap-2 mb-3">
-            <!-- Static Rows -->
             <div class="row g-2 align-items-center">
               <div class="col-md-3"><span class="fw-bold fs-6">Cash</span></div>
               <div class="col-md-3">
                 <div class="input-group input-group-sm">
                   <span class="input-group-text">$</span>
-                  <input
-                    type="number"
-                    class="form-control amount-calc"
-                    name="coh_cash_amount"
-                    placeholder="0.00"
-                  />
+                  <input type="number" class="form-control amount-calc" name="coh_cash_amount" placeholder="0.00"
+                         value="{{ if .Plan }}{{ if ne .Plan.StartingBalances.Cash 0 }}{{ .Plan.StartingBalances.Cash }}{{ end }}{{ end }}" />
                 </div>
               </div>
               <div class="col-md-6">
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  name="coh_cash_notes"
-                  placeholder="Notes"
-                />
+                <input type="text" class="form-control form-control-sm" name="coh_cash_notes" placeholder="Notes" />
               </div>
             </div>
 
@@ -185,21 +283,12 @@
               <div class="col-md-3">
                 <div class="input-group input-group-sm">
                   <span class="input-group-text">$</span>
-                  <input
-                    type="number"
-                    class="form-control amount-calc"
-                    name="coh_ar_amount"
-                    placeholder="0.00"
-                  />
+                  <input type="number" class="form-control amount-calc" name="coh_ar_amount" placeholder="0.00"
+                         value="{{ if .Plan }}{{ if ne .Plan.StartingBalances.AccountsReceivable 0 }}{{ .Plan.StartingBalances.AccountsReceivable }}{{ end }}{{ end }}" />
                 </div>
               </div>
               <div class="col-md-6">
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  name="coh_ar_notes"
-                  placeholder="Notes"
-                />
+                <input type="text" class="form-control form-control-sm" name="coh_ar_notes" placeholder="Notes" />
               </div>
             </div>
 
@@ -210,21 +299,12 @@
               <div class="col-md-3">
                 <div class="input-group input-group-sm">
                   <span class="input-group-text">$</span>
-                  <input
-                    type="number"
-                    class="form-control amount-calc"
-                    name="coh_pe_amount"
-                    placeholder="0.00"
-                  />
+                  <input type="number" class="form-control amount-calc" name="coh_pe_amount" placeholder="0.00"
+                         value="{{ if .Plan }}{{ if ne .Plan.StartingBalances.PrepaidExpenses 0 }}{{ .Plan.StartingBalances.PrepaidExpenses }}{{ end }}{{ end }}" />
                 </div>
               </div>
               <div class="col-md-6">
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  name="coh_pe_notes"
-                  placeholder="Notes"
-                />
+                <input type="text" class="form-control form-control-sm" name="coh_pe_notes" placeholder="Notes" />
               </div>
             </div>
 
@@ -235,21 +315,12 @@
               <div class="col-md-3">
                 <div class="input-group input-group-sm">
                   <span class="input-group-text">$</span>
-                  <input
-                    type="number"
-                    class="form-control amount-calc"
-                    name="coh_ap_amount"
-                    placeholder="0.00"
-                  />
+                  <input type="number" class="form-control amount-calc" name="coh_ap_amount" placeholder="0.00"
+                         value="{{ if .Plan }}{{ if ne .Plan.StartingBalances.AccountsPayable 0 }}{{ .Plan.StartingBalances.AccountsPayable }}{{ end }}{{ end }}" />
                 </div>
               </div>
               <div class="col-md-6">
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  name="coh_ap_notes"
-                  placeholder="Notes"
-                />
+                <input type="text" class="form-control form-control-sm" name="coh_ap_notes" placeholder="Notes" />
               </div>
             </div>
 
@@ -260,28 +331,17 @@
               <div class="col-md-3">
                 <div class="input-group input-group-sm">
                   <span class="input-group-text">$</span>
-                  <input
-                    type="number"
-                    class="form-control amount-calc"
-                    name="coh_ae_amount"
-                    placeholder="0.00"
-                  />
+                  <input type="number" class="form-control amount-calc" name="coh_ae_amount" placeholder="0.00"
+                         value="{{ if .Plan }}{{ if ne .Plan.StartingBalances.AccruedExpenses 0 }}{{ .Plan.StartingBalances.AccruedExpenses }}{{ end }}{{ end }}" />
                 </div>
               </div>
               <div class="col-md-6">
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  name="coh_ae_notes"
-                  placeholder="Notes"
-                />
+                <input type="text" class="form-control form-control-sm" name="coh_ae_notes" placeholder="Notes" />
               </div>
             </div>
           </div>
 
-          <div
-            class="d-flex justify-content-end align-items-center border-top pt-3"
-          >
+          <div class="d-flex justify-content-end align-items-center border-top pt-3">
             <h6 class="mb-0 fw-bold me-3">Total Cash on Hand:</h6>
             <h5 class="mb-0 text-success fw-bold sum-display">$0.00</h5>
           </div>
@@ -290,23 +350,11 @@
     </div>
 
     <!-- Footer Navigation (Back / Next) -->
-    <div
-      class="card-footer bg-light border-top p-4 px-md-5 d-flex justify-content-between align-items-center rounded-bottom-3"
-    >
-      <!-- Changed href to javascript function to handle dirty check -->
-      <button
-        onclick="handleBackNavigation('/setup')"
-        class="btn btn-outline-secondary px-4 py-2 text-uppercase fw-bold"
-        style="font-size: 0.85rem"
-      >
+    <div class="card-footer bg-light border-top p-4 px-md-5 d-flex justify-content-between align-items-center rounded-bottom-3">
+      <button onclick="handleBackNavigation('/plan/{{ .Plan.ID }}/setup')" class="btn btn-outline-secondary px-4 py-2 text-uppercase fw-bold" style="font-size: 0.85rem">
         <i class="bi bi-arrow-left me-1"></i> Back
       </button>
-      <button
-        class="btn btn-primary px-5 py-2 text-uppercase fw-bold shadow-sm"
-        style="font-size: 0.85rem"
-        type="submit"
-        form="startingPointForm"
-      >
+      <button class="btn btn-primary px-5 py-2 text-uppercase fw-bold shadow-sm" style="font-size: 0.85rem" type="submit" form="startingPointForm">
         Save & Continue <i class="bi bi-arrow-right ms-1"></i>
       </button>
     </div>
@@ -319,53 +367,31 @@
 
 <!-- Template: Fixed Asset -->
 <template id="fixedAssetTemplate">
-  <div
-    class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row"
-  >
-    <div class="col-md-3">
-      <input
-        type="text"
-        list="fixedAssetsList"
-        class="form-control form-control-sm"
-        name="fa_type[]"
-        placeholder="Asset Type"
-        required
-      />
+  <div class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row">
+    <div class="col-md-2">
+      <input type="text" list="fixedAssetsList" class="form-control form-control-sm" name="fa_type[]" placeholder="Asset Type" required />
     </div>
     <div class="col-md-2">
       <div class="input-group input-group-sm">
         <span class="input-group-text">$</span>
-        <input
-          type="number"
-          class="form-control amount-calc"
-          name="fa_amount[]"
-          placeholder="0.00"
-          required
-        />
+        <input type="number" class="form-control amount-calc" name="fa_amount[]" placeholder="0.00" required />
       </div>
     </div>
-    <div class="col-md-2">
-      <input
-        type="number"
-        class="form-control form-control-sm"
-        name="fa_depreciation[]"
-        placeholder="Depr. Years"
-      />
+    <div class="col-md-3">
+      <select class="form-select form-select-sm depr-method-select" name="fa_depr_method[]">
+        <option value="StraightLine" selected>Straight Line</option>
+        <option value="DoubleDeclining">Double Declining</option>
+        <option value="None">None (e.g., Land)</option>
+      </select>
     </div>
-    <div class="col-md-4">
-      <input
-        type="text"
-        class="form-control form-control-sm"
-        name="fa_notes[]"
-        placeholder="Notes"
-      />
+    <div class="col-md-2">
+      <input type="number" class="form-control form-control-sm depr-years-input" name="fa_depreciation[]" placeholder="Depr. Years" min="1" required />
+    </div>
+    <div class="col-md-2">
+      <input type="text" class="form-control form-control-sm" name="fa_notes[]" placeholder="Notes" />
     </div>
     <div class="col-md-1 text-end">
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-danger remove-row-btn"
-        title="Remove row"
-      >
+      <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" title="Remove row">
         <i class="bi bi-trash"></i>
       </button>
     </div>
@@ -374,44 +400,21 @@
 
 <!-- Template: Operating Capital -->
 <template id="opCapitalTemplate">
-  <div
-    class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row"
-  >
+  <div class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row">
     <div class="col-md-4">
-      <input
-        type="text"
-        list="opCapitalList"
-        class="form-control form-control-sm"
-        name="oc_type[]"
-        placeholder="Capital Category"
-        required
-      />
+      <input type="text" list="opCapitalList" class="form-control form-control-sm" name="oc_type[]" placeholder="Capital Category" required />
     </div>
     <div class="col-md-3">
       <div class="input-group input-group-sm">
         <span class="input-group-text">$</span>
-        <input
-          type="number"
-          class="form-control amount-calc"
-          name="oc_amount[]"
-          placeholder="0.00"
-          required
-        />
+        <input type="number" class="form-control amount-calc" name="oc_amount[]" placeholder="0.00" required />
       </div>
     </div>
     <div class="col-md-4">
-      <input
-        type="text"
-        class="form-control form-control-sm"
-        name="oc_notes[]"
-        placeholder="Notes"
-      />
+      <input type="text" class="form-control form-control-sm" name="oc_notes[]" placeholder="Notes" />
     </div>
     <div class="col-md-1 text-end">
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-danger remove-row-btn"
-      >
+      <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn">
         <i class="bi bi-trash"></i>
       </button>
     </div>
@@ -420,77 +423,36 @@
 
 <!-- Template: Funding -->
 <template id="fundingTemplate">
-  <div
-    class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row"
-  >
+  <div class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row">
     <div class="col-md-2">
-      <input
-        type="text"
-        list="fundingList"
-        class="form-control form-control-sm"
-        name="fund_type[]"
-        placeholder="Source"
-        required
-      />
+      <input type="text" list="fundingList" class="form-control form-control-sm" name="fund_type[]" placeholder="Source" required />
     </div>
     <div class="col-md-2">
       <div class="input-group input-group-sm">
         <span class="input-group-text">$</span>
-        <!-- Added loan-calc class to trigger PMT calculations -->
-        <input
-          type="number"
-          class="form-control amount-calc loan-calc loan-principal"
-          name="fund_amount[]"
-          placeholder="Amt"
-          required
-        />
+        <input type="number" class="form-control amount-calc loan-calc loan-principal" name="fund_amount[]" placeholder="Amt" required />
       </div>
     </div>
     <div class="col-md-1">
       <div class="input-group input-group-sm">
-        <input
-          type="number"
-          step="0.01"
-          class="form-control loan-calc loan-rate"
-          name="fund_rate[]"
-          placeholder="Rate"
-        />
+        <input type="number" step="0.01" class="form-control loan-calc loan-rate" name="fund_rate[]" placeholder="Rate" />
         <span class="input-group-text">%</span>
       </div>
     </div>
     <div class="col-md-1">
-      <input
-        type="number"
-        class="form-control form-control-sm loan-calc loan-term"
-        name="fund_term[]"
-        placeholder="Mos"
-      />
+      <input type="number" class="form-control form-control-sm loan-calc loan-term" name="fund_term[]" placeholder="Mos" />
     </div>
     <div class="col-md-2">
       <div class="input-group input-group-sm">
         <span class="input-group-text bg-white">PMT</span>
-        <input
-          type="text"
-          class="form-control bg-white text-muted loan-payment"
-          name="fund_pmt[]"
-          placeholder="$0.00"
-          readonly
-        />
+        <input type="text" class="form-control bg-white text-muted loan-payment" name="fund_pmt[]" placeholder="$0.00" readonly />
       </div>
     </div>
     <div class="col-md-3">
-      <input
-        type="text"
-        class="form-control form-control-sm"
-        name="fund_notes[]"
-        placeholder="Notes"
-      />
+      <input type="text" class="form-control form-control-sm" name="fund_notes[]" placeholder="Notes" />
     </div>
     <div class="col-md-1 text-end">
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-danger remove-row-btn"
-      >
+      <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn">
         <i class="bi bi-trash"></i>
       </button>
     </div>
@@ -500,6 +462,12 @@
 <!-- Page Specific Scripts -->
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    // --- INITIALIZE BOOTSTRAP TOOLTIPS ---
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
     // --- DIRTY FORM TRACKING ---
     let formIsDirty = false;
     const form = document.getElementById("startingPointForm");
@@ -508,12 +476,9 @@
       formIsDirty = true;
     });
 
-    // Make the handler available globally for the Back button
     window.handleBackNavigation = function (targetUrl) {
       if (formIsDirty) {
-        const confirmLeave = confirm(
-          "You have unsaved changes. Are you sure you want to go back? All current edits will be lost.",
-        );
+        const confirmLeave = confirm("You have unsaved changes. Are you sure you want to go back? All current edits will be lost.");
         if (confirmLeave) {
           window.location.href = targetUrl;
         }
@@ -521,6 +486,21 @@
         window.location.href = targetUrl;
       }
     };
+
+    // --- EMPTY STATE MANAGEMENT ---
+    function toggleEmptyStates() {
+      ['fixedAssetsContainer', 'opCapitalContainer', 'fundingContainer'].forEach(id => {
+        const container = document.getElementById(id);
+        const emptyState = container.querySelector('.empty-state');
+        const rows = container.querySelectorAll('.dynamic-row');
+        
+        if (rows.length === 0) {
+          emptyState.classList.remove('d-none');
+        } else {
+          emptyState.classList.add('d-none');
+        }
+      });
+    }
 
     // --- DYNAMIC ROWS ADDITION ---
     document.querySelectorAll(".add-row-btn").forEach((btn) => {
@@ -531,43 +511,56 @@
         const template = document.getElementById(templateId);
         const container = document.getElementById(containerId);
 
-        // Clone the content of the template
         const clone = template.content.cloneNode(true);
         container.appendChild(clone);
+        
+        toggleEmptyStates();
       });
     });
 
-    // --- DYNAMIC ROWS REMOVAL (Event Delegation) ---
+    // --- DYNAMIC ROWS EVENT DELEGATION (Remove & Change) ---
     form.addEventListener("click", function (e) {
-      // Find the closest button that has the remove class
       const removeBtn = e.target.closest(".remove-row-btn");
       if (removeBtn) {
         const row = removeBtn.closest(".dynamic-row");
         const section = row.closest(".section-container");
         row.remove();
 
-        // Recalculate totals for this section since a row was removed
         updateSectionTotal(section);
+        toggleEmptyStates();
         formIsDirty = true;
       }
     });
 
-    // --- CALCULATIONS (Totals & Loans) ---
+    // Handle Depreciation Method changes
+    form.addEventListener("change", function (e) {
+      if (e.target.classList.contains("depr-method-select")) {
+        const row = e.target.closest(".dynamic-row");
+        const yearsInput = row.querySelector(".depr-years-input");
+        
+        if (e.target.value === "None") {
+          yearsInput.value = "";
+          yearsInput.readOnly = true; 
+          yearsInput.removeAttribute("required");
+        } else {
+          yearsInput.readOnly = false;
+          yearsInput.setAttribute("required", "required");
+        }
+      }
+    });
+
+    // --- CALCULATIONS ---
     form.addEventListener("input", function (e) {
-      // 1. Calculate section sum if an amount was changed
       if (e.target.classList.contains("amount-calc")) {
         const section = e.target.closest(".section-container");
         updateSectionTotal(section);
       }
-
-      // 2. Calculate Loan PMT if a loan variable was changed
       if (e.target.classList.contains("loan-calc")) {
         const row = e.target.closest(".dynamic-row");
         updateLoanPayment(row);
       }
     });
 
-    // Helper: Sum inputs in a section
     function updateSectionTotal(section) {
       let sum = 0;
       const amounts = section.querySelectorAll(".amount-calc");
@@ -578,7 +571,6 @@
 
       const display = section.querySelector(".sum-display");
       if (display) {
-        // Format as currency
         display.textContent = new Intl.NumberFormat("en-US", {
           style: "currency",
           currency: "USD",
@@ -586,7 +578,6 @@
       }
     }
 
-    // Helper: Calculate Standard Amortizing Loan Payment
     function updateLoanPayment(row) {
       const pInput = row.querySelector(".loan-principal");
       const rInput = row.querySelector(".loan-rate");
@@ -597,17 +588,8 @@
       const annualRate = parseFloat(rInput.value);
       const N = parseInt(nInput.value);
 
-      // Only calculate if we have all valid numbers
-      if (
-        !isNaN(P) &&
-        P > 0 &&
-        !isNaN(annualRate) &&
-        annualRate >= 0 &&
-        !isNaN(N) &&
-        N > 0
-      ) {
+      if (!isNaN(P) && P > 0 && !isNaN(annualRate) && annualRate >= 0 && !isNaN(N) && N > 0) {
         if (annualRate === 0) {
-          // 0% interest edge case
           pmtInput.value = new Intl.NumberFormat("en-US", {
             style: "currency",
             currency: "USD",
@@ -615,8 +597,7 @@
           return;
         }
 
-        const r = annualRate / 100 / 12; // Monthly interest rate
-        // Standard PMT formula
+        const r = annualRate / 100 / 12;
         const pmt = (P * (r * Math.pow(1 + r, N))) / (Math.pow(1 + r, N) - 1);
 
         pmtInput.value = new Intl.NumberFormat("en-US", {
@@ -628,10 +609,17 @@
       }
     }
 
-    // Initialize the form with one empty row for the dynamic sections so the user knows what to do
-    document.querySelector('[data-target="fixedAssetTemplate"]').click();
-    document.querySelector('[data-target="opCapitalTemplate"]').click();
-    document.querySelector('[data-target="fundingTemplate"]').click();
+    // --- INITIALIZATION ---
+    // Ensure the empty states are correctly shown or hidden on first load
+    toggleEmptyStates();
+
+    // Force calculations to run on page load to update the $0.00 totals based on saved data
+    document.querySelectorAll('.section-container').forEach(section => updateSectionTotal(section));
+    document.querySelectorAll('.dynamic-row').forEach(row => {
+        if (row.querySelector('.loan-principal')) {
+            updateLoanPayment(row);
+        }
+    });
 
     // Reset dirty flag to false since those initial clicks trigger the 'input' observer
     setTimeout(() => {

@@ -20,6 +20,7 @@ type (
 const (
 	StraightLine    DepreciationMethod = "StraightLine"
 	DoubleDeclining DepreciationMethod = "DoubleDeclining"
+	None            DepreciationMethod = "None"
 
 	FlatGrowth        GrowthType = "Flat"
 	AnnualStepPercent GrowthType = "AnnualStepPercent"
@@ -34,6 +35,7 @@ var (
 	ErrInvalidUsefulLife                = errors.New("invalid useful life")
 	ErrPurchaseCostLessThanSalvageValue = errors.New("purchase cost cannot be less than salvage value")
 	ErrInvalidGrowthType                = errors.New("invalid growth type")
+	ErrInvalidStartingYear              = errors.New("plan starting year must be between 1900 and 2100")
 )
 
 type FinancingTerm struct {
@@ -50,6 +52,26 @@ type CapitalAsset struct {
 	PurchaseMonthIndex MonthIndex
 	DepreciationMethod DepreciationMethod
 	AssociatedLoan     *FinancingTerm
+}
+
+type StartupCost struct {
+	Name   string
+	Amount Money
+}
+
+type FundingSource struct {
+	Name         string
+	Amount       Money
+	InterestRate float64
+	TermMonths   int
+}
+
+type StartingBalances struct {
+	Cash               Money
+	AccountsReceivable Money
+	PrepaidExpenses    Money
+	AccountsPayable    Money
+	AccruedExpenses    Money
 }
 
 // DepreciationForMonth calculates the exact depreciation expense for a specific normalized month.
@@ -148,28 +170,46 @@ func (r RevenueStream) ProjectedAmount(month MonthIndex) Money {
 }
 
 type Plan struct {
-	id              uuid.UUID
-	name            string
-	startingMonth   int
-	startingYear    int
-	revenues        []RevenueStream
-	opEx            []Cost
-	cogs            []Cost
-	futurePurchases []CapitalAsset
+	id               uuid.UUID
+	name             string
+	startingMonth    int
+	startingYear     int
+	revenues         []RevenueStream
+	opEx             []Cost
+	cogs             []Cost
+	futurePurchases  []CapitalAsset
+	startupCosts     []StartupCost
+	fundingSources   []FundingSource
+	startingBalances StartingBalances
+}
+
+func validateCoreProperties(name string, month, year int) (string, error) {
+	cleanName := strings.TrimSpace(name)
+	if cleanName == "" {
+		return "", ErrInvalidName
+	}
+
+	if month < 1 || month > 12 {
+		return "", ErrInvalidStartingMonth
+	}
+
+	// Add a sensible constraint for your business logic
+	if year < 1900 || year > 2100 {
+		return "", ErrInvalidStartingYear
+	}
+
+	return cleanName, nil
 }
 
 func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int) (*Plan, error) {
-	if strings.TrimSpace(name) == "" {
-		return nil, ErrInvalidName
-	}
-
-	if startingMonth < 1 || startingMonth > 12 {
-		return nil, ErrInvalidStartingMonth
+	cleanName, err := validateCoreProperties(name, startingMonth, startingYear)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Plan{
 		id:            id,
-		name:          name,
+		name:          cleanName,
 		startingMonth: startingMonth,
 		startingYear:  startingYear,
 		// Always initialize slices so they aren't nil
@@ -177,13 +217,76 @@ func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int) (*Plan,
 		opEx:            make([]Cost, 0),
 		cogs:            make([]Cost, 0),
 		futurePurchases: make([]CapitalAsset, 0),
+		startupCosts:    make([]StartupCost, 0),
+		fundingSources:  make([]FundingSource, 0),
 	}, nil
 }
 
-func (p *Plan) ID() uuid.UUID      { return p.id }
-func (p *Plan) Name() string       { return p.name }
-func (p *Plan) StartingMonth() int { return p.startingMonth }
-func (p *Plan) StartingYear() int  { return p.startingYear }
+// ClearStartingPoint wipes the existing starting point data.
+// This is critical for dynamic forms so we don't duplicate data when editing.
+func (p *Plan) ClearStartingPoint() {
+	p.futurePurchases = make([]CapitalAsset, 0)
+	p.startupCosts = make([]StartupCost, 0)
+	p.fundingSources = make([]FundingSource, 0)
+	p.startingBalances = StartingBalances{}
+}
+
+func (p *Plan) AddStartupCost(name string, amount Money) {
+	if strings.TrimSpace(name) != "" && amount > 0 {
+		p.startupCosts = append(p.startupCosts, StartupCost{Name: name, Amount: amount})
+	}
+}
+
+func (p *Plan) AddFundingSource(name string, amount Money, rate float64, term int) {
+	if strings.TrimSpace(name) != "" && amount > 0 {
+		p.fundingSources = append(p.fundingSources, FundingSource{
+			Name: name, Amount: amount, InterestRate: rate, TermMonths: term,
+		})
+	}
+}
+
+func (p *Plan) SetStartingBalances(cash, ar, pe, ap, ae Money) {
+	p.startingBalances = StartingBalances{
+		Cash:               cash,
+		AccountsReceivable: ar,
+		PrepaidExpenses:    pe,
+		AccountsPayable:    ap,
+		AccruedExpenses:    ae,
+	}
+}
+
+func (p *Plan) ChangeCoreDetails(name string, startingMonth, startingYear int) error {
+	cleanName, err := validateCoreProperties(name, startingMonth, startingYear)
+	if err != nil {
+		return err // Reject the update entirely
+	}
+
+	// Only mutate state after all validations have passed
+	p.name = cleanName
+	p.startingMonth = startingMonth
+	p.startingYear = startingYear
+
+	return nil
+}
+
+func (p *Plan) ID() uuid.UUID                      { return p.id }
+func (p *Plan) Name() string                       { return p.name }
+func (p *Plan) StartingMonth() int                 { return p.startingMonth }
+func (p *Plan) StartingYear() int                  { return p.startingYear }
+func (p *Plan) StartupCosts() []StartupCost        { return p.startupCosts }
+func (p *Plan) FundingSources() []FundingSource    { return p.fundingSources }
+func (p *Plan) StartingBalances() StartingBalances { return p.startingBalances }
+
+// UsefulLifeYears formatting Helpers for the HTML Templates ---
+// The form takes Years, but the domain stores Months. This converts it back for the form.
+func (c CapitalAsset) UsefulLifeYears() int {
+	return c.UsefulLifeMonths / 12
+}
+
+// The form takes 5.5%, but the domain stores 0.055. This converts it back for the form.
+func (f FundingSource) InterestRatePercent() float64 {
+	return f.InterestRate * 100
+}
 
 func (p *Plan) Revenues() []RevenueStream {
 	res := make([]RevenueStream, len(p.revenues))
@@ -209,7 +312,7 @@ func (p *Plan) MonthlyRevenue(month MonthIndex) Money {
 // TotalRevenues now loops through the timeline to sum the continuous curves.
 func (p *Plan) TotalRevenues(duration int) Money {
 	var total Money
-	for i := 0; i < duration; i++ {
+	for i := range duration {
 		total += p.MonthlyRevenue(MonthIndex(i))
 	}
 	return total
@@ -251,7 +354,7 @@ func (p *Plan) MonthlyNetCashFlow(month MonthIndex, duration int) Money {
 // TotalOpEx calculates the lifetime operating expenses over the plan's duration.
 func (p *Plan) TotalOpEx(duration int) Money {
 	var total Money
-	for i := 0; i < duration; i++ {
+	for i := range duration {
 		total += p.MonthlyOpEx(MonthIndex(i))
 	}
 	return total
@@ -260,7 +363,7 @@ func (p *Plan) TotalOpEx(duration int) Money {
 // TotalCOGS calculates the lifetime COGS over the plan's duration.
 func (p *Plan) TotalCOGS(duration int) Money {
 	var total Money
-	for i := 0; i < duration; i++ {
+	for i := range duration {
 		total += p.MonthlyCOGS(MonthIndex(i))
 	}
 	return total
@@ -325,18 +428,16 @@ func (p *Plan) AddCapitalPurchase(asset CapitalAsset) error {
 	if asset.PurchaseCost < 0 || asset.SalvageValue < 0 {
 		return ErrNegativeAmount
 	}
-	if asset.UsefulLifeMonths < 1 {
+	if asset.DepreciationMethod != None && asset.UsefulLifeMonths < 1 {
 		return ErrInvalidUsefulLife
 	}
 	if asset.PurchaseCost < asset.SalvageValue {
 		return ErrPurchaseCostLessThanSalvageValue
 	}
-	if asset.DepreciationMethod != StraightLine && asset.DepreciationMethod != DoubleDeclining {
+
+	if asset.DepreciationMethod != StraightLine && asset.DepreciationMethod != DoubleDeclining && asset.DepreciationMethod != None {
 		return ErrInvalidDepreciationMethod
 	}
-
-	// Note: We do NOT check if PurchaseMonthIndex > p.duration.
-	// As requested, future assets outside the current projection are valid.
 
 	p.futurePurchases = append(p.futurePurchases, asset)
 	return nil

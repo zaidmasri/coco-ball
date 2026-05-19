@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -11,23 +12,63 @@
       <div class="row justify-content-center">
         <div class="col-lg-9">
           <!-- Intro Card -->
-          <div class="card shadow-sm mb-4">
-            <div class="card-body p-4">
-              <h3 class="card-title mb-3">
+          <div class="card shadow-sm mb-4 border-0 rounded-3">
+            <div class="card-body p-4 p-md-5">
+              <h3 class="card-title mb-3 fw-bold">
                 Welcome to the Financial Projections Builder
               </h3>
-              <p class="lead mb-3">
+              <p class="lead mb-3 text-secondary">
                 This guided tool helps you assess the financial viability of
                 your business idea—no spreadsheets or accounting experience
                 required.
               </p>
-              <p class="mb-4">
+              <p class="mb-4 text-muted">
                 Work at your own pace. Your progress saves automatically,
                 allowing you to return anytime and complete things gradually.
               </p>
-              <button type="button" class="btn btn-primary btn-sm px-4 py-2" data-bs-toggle="modal" data-bs-target="#setupModal">
-                Get Started
+              <button type="button" class="btn btn-primary px-4 py-2 text-uppercase fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#setupModal">
+                <i class="bi bi-plus-lg me-1"></i> Start a New Plan
               </button>
+            </div>
+          </div>
+
+          <!-- ============================== -->
+          <!-- YOUR PLANS SECTION             -->
+          <!-- ============================== -->
+          <div class="card shadow-sm mb-4 border-0 rounded-3">
+            <div class="card-header bg-white border-bottom pt-4 pb-3 px-4">
+              <h5 class="fw-bold mb-0 text-primary">
+                <i class="bi bi-folder2-open me-2"></i>Your Business Plans
+              </h5>
+            </div>
+            <div class="card-body p-0">
+              {{ if .Plans }}
+                <!-- Populated State: List of Plans -->
+                <div class="list-group list-group-flush rounded-bottom-3">
+                  {{ range .Plans }}
+                    <a href="/plan/{{ .ID }}/setup" class="list-group-item list-group-item-action p-4 d-flex justify-content-between align-items-center">
+                      <div>
+                        <h5 class="mb-1 fw-bold text-dark">{{ .Name }}</h5>
+                        <small class="text-muted">
+                          <i class="bi bi-calendar3 me-1"></i> Starts: Month {{ .StartingMonth }}, {{ .StartingYear }}
+                        </small>
+                      </div>
+                      <div class="d-flex align-items-center text-primary">
+                        <span class="me-2 small fw-bold text-uppercase">Resume</span>
+                        <i class="bi bi-chevron-right"></i>
+                      </div>
+                    </a>
+                  {{ end }}
+                </div>
+              {{ else }}
+                <!-- Empty State -->
+                <div class="text-center p-5 text-muted">
+                  <i class="bi bi-journal-x opacity-25 mb-3 d-block" style="font-size: 3rem;"></i>
+                  <h6 class="fw-bold text-dark">No plans found</h6>
+                  <p class="mb-0 small">You haven't created any business plans yet.</p>
+                  <p class="small">Click "Start a New Plan" above to launch your first one.</p>
+                </div>
+              {{ end }}
             </div>
           </div>
 
@@ -37,7 +78,7 @@
             <div class="accordion-item mb-3 border rounded shadow-sm">
               <h2 class="accordion-header">
                 <button
-                  class="accordion-button bg-primary text-white collapsed"
+                  class="accordion-button bg-primary text-white collapsed rounded"
                   type="button"
                   data-bs-toggle="collapse"
                   data-bs-target="#collapseOne"
@@ -74,7 +115,7 @@
             <div class="accordion-item mb-3 border rounded shadow-sm">
               <h2 class="accordion-header">
                 <button
-                  class="accordion-button bg-primary text-white collapsed"
+                  class="accordion-button bg-primary text-white collapsed rounded"
                   type="button"
                   data-bs-toggle="collapse"
                   data-bs-target="#collapseTwo"
@@ -116,7 +157,7 @@
             <div class="accordion-item mb-3 border rounded shadow-sm">
               <h2 class="accordion-header">
                 <button
-                  class="accordion-button bg-primary text-white collapsed"
+                  class="accordion-button bg-primary text-white collapsed rounded"
                   type="button"
                   data-bs-toggle="collapse"
                   data-bs-target="#collapseThree"
@@ -152,6 +193,7 @@
           <!-- /accordion -->
         </div>
       </div>
+      
       <!-- ========================================== -->
       <!-- SETUP MODAL                                -->
       <!-- ========================================== -->
@@ -211,7 +253,6 @@
             
             <div class="modal-footer bg-light border-top-0 px-4 pb-4 pt-3">
               <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <!-- Form attribute targets the form above so native validation still works -->
               <button type="submit" form="landingSetupForm" class="btn btn-primary px-4">Create Plan <i class="bi bi-arrow-right ms-1"></i></button>
             </div>
 
