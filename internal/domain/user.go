@@ -32,6 +32,7 @@ func NewUser(email string) (*User, error) {
 
 func (u *User) ID() uuid.UUID { return u.id }
 func (u *User) Email() string { return u.email }
+func (u *User) SetID(id uuid.UUID) { u.id = id }
 
 // AccessLevel defines what a user can do with a plan
 type AccessLevel string

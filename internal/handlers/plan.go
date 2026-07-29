@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
 	"github.com/zaidmasri/business-planning-tool/internal/store"
+	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
 // App holds the dependencies for all handlers
@@ -29,35 +30,10 @@ func NewApp(s store.PlanStore, tc map[string]*template.Template) *App {
 	}
 }
 
-// renderPage is now a method on App so it can access the TemplateCache
-func (app *App) renderPage(w http.ResponseWriter, cacheKey string, templateName string, data any) {
-	ts, ok := app.TemplateCache[cacheKey]
-	if !ok {
-		http.Error(w, "Template not found", http.StatusInternalServerError)
-		return
-	}
-
-	err := ts.ExecuteTemplate(w, templateName, data)
-	if err != nil {
-		log.Printf("❌ Template Execution Error (%s): %v", cacheKey, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-// Helper to cleanly render the full-page error UI
+// renderErrorPage is a helper to render error pages
 func (app *App) renderErrorPage(w http.ResponseWriter, r *http.Request, statusCode int, message string) {
-	w.WriteHeader(statusCode)
-
-	// http.StatusText converts "404" to "Not Found", or "500" to "Internal Server Error"
-	statusText := http.StatusText(statusCode)
-
-	app.renderPage(w, "error.html", "error.html", map[string]any{
-		"ErrorTitle":       statusText,
-		"ErrorStatusCode":  statusCode,
-		"ErrorDescription": statusText,
-		"Message":          message,
-		"Path":             r.URL.Path, // Keeps your sidebar navigation clean
-	})
+	page := views.BuildErrorPage(r, statusCode, message)
+	views.RenderErrorPageWithStatus(w, app.TemplateCache, page, statusCode)
 }
 
 // NotFound is user for GET requests (Custom 404 Catch-All for bad URLs)
@@ -72,12 +48,15 @@ func (app *App) GetRoot() http.HandlerFunc {
 		user := GetUserFromContext(r)
 		if user == nil {
 			// Unauthenticated access
-			app.renderPage(w, "index.html", "index.html", map[string]any{
-				"Title": "Business Planning Tool",
-				"Path":  r.URL.Path,
-				"Plans": []*domain.Plan{},
-				"User":  nil,
-			})
+			page := views.IndexPage{
+				BasePage: views.BasePage{
+					Title: "Business Planning Tool",
+					Path:  r.URL.Path,
+					User:  nil,
+				},
+				Plans: []*domain.Plan{},
+			}
+			views.RenderIndexPage(w, app.TemplateCache, page)
 			return
 		}
 
@@ -87,12 +66,8 @@ func (app *App) GetRoot() http.HandlerFunc {
 			plans = []*domain.Plan{}
 		}
 
-		app.renderPage(w, "index.html", "index.html", map[string]any{
-			"Title": "Business Planning Tool",
-			"Path":  r.URL.Path,
-			"Plans": plans,
-			"User":  user,
-		})
+		page := views.BuildIndexPage(r, user, plans)
+		views.RenderIndexPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -190,8 +165,7 @@ func (app *App) PostUpdateSetup() http.HandlerFunc {
 func (app *App) GetSetup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := GetUserFromContext(r)
-		idStr := r.PathValue("id")
-		planID, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "The Plan ID in the URL is malformed or invalid.")
 			return
@@ -203,12 +177,8 @@ func (app *App) GetSetup() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "setup.html", "base", map[string]any{
-			"Title": "Edit Setup | Business Planning Tool",
-			"Path":  r.URL.Path,
-			"Plan":  plan,
-			"User":  user,
-		})
+		page := views.BuildSetupPage(r, user, plan)
+		views.RenderSetupPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -216,8 +186,7 @@ func (app *App) GetSetup() http.HandlerFunc {
 func (app *App) GetStartingPoint() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := GetUserFromContext(r)
-		idStr := r.PathValue("id")
-		planID, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "The Plan ID in the URL is malformed or invalid.")
 			return
@@ -229,12 +198,8 @@ func (app *App) GetStartingPoint() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "starting-point.html", "base", map[string]any{
-			"Title": "Starting Point | Business Planning Tool",
-			"Path":  r.URL.Path,
-			"Plan":  plan,
-			"User":  user,
-		})
+		page := views.BuildStartingPointPage(r, user, plan)
+		views.RenderStartingPointPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -260,17 +225,15 @@ func (app *App) PostStartingPoint() http.HandlerFunc {
 			return
 		}
 
+		user := GetUserFromContext(r)
+
 		// --- USER-FACING VALIDATION LOGIC ---
 
 		// Helper function: Renders the starting-point page with an error message
 		renderError := func(errMsg string, statusCode int) {
 			w.WriteHeader(statusCode)
-			app.renderPage(w, "starting-point.html", "base", map[string]any{
-				"Title":        "Starting Point | Business Planning Tool",
-				"Path":         r.URL.Path,
-				"Plan":         plan,
-				"ErrorMessage": errMsg, // Pass the error to the frontend!
-			})
+			page := views.BuildStartingPointPageWithError(r, user, plan, errMsg)
+			views.RenderStartingPointPage(w, app.TemplateCache, page)
 		}
 
 		// 1. Clear existing data so we cleanly overwrite it
@@ -384,164 +347,134 @@ func (app *App) PostStartingPoint() http.HandlerFunc {
 
 func (app *App) GetPayroll() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
 			return
 		}
 
-		plan, err := app.Store.Get(id)
+		plan, err := app.Store.Get(planID)
 		if err != nil {
-
-			app.renderErrorPage(w, r, http.StatusBadRequest, "Plan not found")
+			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		// For now, we pass nil for the Plan to force the empty state.
-		app.renderPage(w, "payroll.html", "base", map[string]any{
-			"Title": "Payroll | Business Planning Tool",
-			"Path":  r.URL.Path,
-			"Plan":  plan,
-			"User":  GetUserFromContext(r),
-		})
+		page := views.BuildPayrollPage(r, GetUserFromContext(r), plan)
+		views.RenderPayrollPage(w, app.TemplateCache, page)
 	}
 }
 
 func (app *App) GetSalesForecast() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
 			return
 		}
 
-		plan, err := app.Store.Get(id)
+		plan, err := app.Store.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		app.renderPage(w, "sales-forecast.html", "base", map[string]any{
-			"Plan": plan,
-			"Path": r.URL.Path,
-			"User": GetUserFromContext(r),
-		})
+		page := views.BuildSalesForecastPage(r, GetUserFromContext(r), plan)
+		views.RenderSalesForecastPage(w, app.TemplateCache, page)
 	}
 }
 
 func (app *App) GetOpExpenses() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
 			return
 		}
 
-		plan, err := app.Store.Get(id)
+		plan, err := app.Store.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		app.renderPage(w, "op-expenses.html", "base", map[string]any{
-			"Plan": plan,
-			"Path": r.URL.Path,
-			"User": GetUserFromContext(r),
-		})
+		page := views.BuildOpExpensesPage(r, GetUserFromContext(r), plan)
+		views.RenderOpExpensesPage(w, app.TemplateCache, page)
 	}
 }
 
 func (app *App) GetCashFlow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
 			return
 		}
 
-		plan, err := app.Store.Get(id)
+		plan, err := app.Store.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		app.renderPage(w, "cash-flow.html", "base", map[string]any{
-			"Plan": plan,
-			"Path": r.URL.Path,
-			"User": GetUserFromContext(r),
-		})
+		page := views.BuildCashFlowPage(r, GetUserFromContext(r), plan)
+		views.RenderCashFlowPage(w, app.TemplateCache, page)
 	}
 }
 
 func (app *App) GetIncomeStatement() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
 			return
 		}
 
-		plan, err := app.Store.Get(id)
+		plan, err := app.Store.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		app.renderPage(w, "income-statement.html", "base", map[string]any{
-			"Plan": plan,
-			"Path": r.URL.Path,
-			"User": GetUserFromContext(r),
-		})
+		page := views.BuildIncomeStatementPage(r, GetUserFromContext(r), plan)
+		views.RenderIncomeStatementPage(w, app.TemplateCache, page)
 	}
 }
 
 func (app *App) GetBalanceSheet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
 			return
 		}
 
-		plan, err := app.Store.Get(id)
+		plan, err := app.Store.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		app.renderPage(w, "balance-sheet.html", "base", map[string]any{
-			"Plan": plan,
-			"Path": r.URL.Path,
-			"User": GetUserFromContext(r),
-		})
+		page := views.BuildBalanceSheetPage(r, GetUserFromContext(r), plan)
+		views.RenderBalanceSheetPage(w, app.TemplateCache, page)
 	}
 }
 
 func (app *App) GetAnalytics() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
+		planID, err := parsePlanID(r)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid Plan ID")
 			return
 		}
 
-		plan, err := app.Store.Get(id)
+		plan, err := app.Store.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
-		app.renderPage(w, "analytics.html", "base", map[string]any{
-			"Plan": plan,
-			"Path": r.URL.Path,
-			"User": GetUserFromContext(r),
-		})
+
+		page := views.BuildAnalyticsPage(r, GetUserFromContext(r), plan)
+		views.RenderAnalyticsPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -554,11 +487,14 @@ func (app *App) GetProfile() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "profile.html", "profile.html", map[string]any{
-			"Title": "Profile | Business Planning Tool",
-			"User":  user,
-		})
+		page := views.BuildProfilePage(user)
+		views.RenderProfilePage(w, app.TemplateCache, page)
 	}
+}
+
+// parsePlanID extracts and parses the plan ID from the request path
+func parsePlanID(r *http.Request) (uuid.UUID, error) {
+	return uuid.Parse(r.PathValue("id"))
 }
 
 // Logger func is used as Middleware

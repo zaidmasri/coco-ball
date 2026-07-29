@@ -80,4 +80,10 @@ tags
 
 # End of https://www.toptal.com/developers/gitignore/api/go,macos,vim
 
-web
+# Binaries
+/web
+/northbasis-cli
+
+# Database files
+northbasis.db
+northbasis.db-*

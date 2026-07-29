@@ -2,6 +2,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"strings"
@@ -443,5 +444,74 @@ func (p *Plan) AddCapitalPurchase(asset CapitalAsset) error {
 	}
 
 	p.futurePurchases = append(p.futurePurchases, asset)
+	return nil
+}
+
+// planJSON is an intermediate struct for JSON marshalling
+type planJSON struct {
+	ID               string               `json:"id"`
+	Name             string               `json:"name"`
+	StartingMonth    int                  `json:"startingMonth"`
+	StartingYear     int                  `json:"startingYear"`
+	OwnerID          string               `json:"ownerID"`
+	Revenues         []RevenueStream      `json:"revenues"`
+	OpEx             []Cost               `json:"opEx"`
+	COGS             []Cost               `json:"cogs"`
+	FuturePurchases  []CapitalAsset       `json:"futurePurchases"`
+	StartupCosts     []StartupCost        `json:"startupCosts"`
+	FundingSources   []FundingSource      `json:"fundingSources"`
+	StartingBalances StartingBalances     `json:"startingBalances"`
+}
+
+// MarshalJSON implements json.Marshaler for Plan
+func (p *Plan) MarshalJSON() ([]byte, error) {
+	pj := planJSON{
+		ID:               p.id.String(),
+		Name:             p.name,
+		StartingMonth:    p.startingMonth,
+		StartingYear:     p.startingYear,
+		OwnerID:          p.ownerID.String(),
+		Revenues:         p.revenues,
+		OpEx:             p.opEx,
+		COGS:             p.cogs,
+		FuturePurchases:  p.futurePurchases,
+		StartupCosts:     p.startupCosts,
+		FundingSources:   p.fundingSources,
+		StartingBalances: p.startingBalances,
+	}
+
+	return json.Marshal(pj)
+}
+
+// UnmarshalJSON implements json.Unmarshaler for Plan
+func (p *Plan) UnmarshalJSON(data []byte) error {
+	var pj planJSON
+	if err := json.Unmarshal(data, &pj); err != nil {
+		return err
+	}
+
+	id, err := uuid.Parse(pj.ID)
+	if err != nil {
+		return err
+	}
+
+	ownerID, err := uuid.Parse(pj.OwnerID)
+	if err != nil {
+		return err
+	}
+
+	p.id = id
+	p.name = pj.Name
+	p.startingMonth = pj.StartingMonth
+	p.startingYear = pj.StartingYear
+	p.ownerID = ownerID
+	p.revenues = pj.Revenues
+	p.opEx = pj.OpEx
+	p.cogs = pj.COGS
+	p.futurePurchases = pj.FuturePurchases
+	p.startupCosts = pj.StartupCosts
+	p.fundingSources = pj.FundingSources
+	p.startingBalances = pj.StartingBalances
+
 	return nil
 }

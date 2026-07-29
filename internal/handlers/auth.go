@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
 type contextKey string
@@ -94,7 +95,8 @@ func (app *App) RequireAccess(requiredLevel domain.AccessLevel) func(http.Handle
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := GetUserFromContext(r)
 			if user == nil {
-				app.renderErrorPage(w, r, http.StatusUnauthorized, "You must be logged in to access this resource.")
+				page := views.BuildErrorPage(r, http.StatusUnauthorized, "You must be logged in to access this resource.")
+				views.RenderErrorPageWithStatus(w, app.TemplateCache, page, http.StatusUnauthorized)
 				return
 			}
 
@@ -107,24 +109,28 @@ func (app *App) RequireAccess(requiredLevel domain.AccessLevel) func(http.Handle
 
 			planID, err := uuid.Parse(planIDStr)
 			if err != nil {
-				app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID.")
+				page := views.BuildErrorPage(r, http.StatusBadRequest, "Invalid plan ID.")
+				views.RenderErrorPageWithStatus(w, app.TemplateCache, page, http.StatusBadRequest)
 				return
 			}
 
 			// Check if user has access to the plan
 			access, err := app.Store.GetAccess(planID, user.ID())
 			if err != nil {
-				app.renderErrorPage(w, r, http.StatusForbidden, "You don't have access to this plan.")
+				page := views.BuildErrorPage(r, http.StatusForbidden, "You don't have access to this plan.")
+				views.RenderErrorPageWithStatus(w, app.TemplateCache, page, http.StatusForbidden)
 				return
 			}
 
 			// Check if user has the required access level
 			if requiredLevel == domain.Editor && !access.CanEdit() {
-				app.renderErrorPage(w, r, http.StatusForbidden, "You don't have permission to edit this plan.")
+				page := views.BuildErrorPage(r, http.StatusForbidden, "You don't have permission to edit this plan.")
+				views.RenderErrorPageWithStatus(w, app.TemplateCache, page, http.StatusForbidden)
 				return
 			}
 			if requiredLevel == domain.Viewer && !access.CanView() {
-				app.renderErrorPage(w, r, http.StatusForbidden, "You don't have permission to view this plan.")
+				page := views.BuildErrorPage(r, http.StatusForbidden, "You don't have permission to view this plan.")
+				views.RenderErrorPageWithStatus(w, app.TemplateCache, page, http.StatusForbidden)
 				return
 			}
 
@@ -143,9 +149,8 @@ func (app *App) GetLogin() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "login.html", "login.html", map[string]any{
-			"Title": "Login | Business Planning Tool",
-		})
+		page := views.BuildLoginPage()
+		views.RenderLoginPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -164,21 +169,15 @@ func (app *App) PostLogin() http.HandlerFunc {
 		userCreds, err := app.Store.GetUserWithPassword(email)
 		if err != nil {
 			// User not found or password error
-			app.renderPage(w, "login.html", "login.html", map[string]any{
-				"Title":       "Login | Business Planning Tool",
-				"ErrorMsg":    "Invalid email or password",
-				"Email":       email,
-			})
+			page := views.BuildLoginPageWithError(email, "Invalid email or password")
+			views.RenderLoginPage(w, app.TemplateCache, page)
 			return
 		}
 
 		// Verify password
 		if !userCreds.VerifyPassword(password) {
-			app.renderPage(w, "login.html", "login.html", map[string]any{
-				"Title":       "Login | Business Planning Tool",
-				"ErrorMsg":    "Invalid email or password",
-				"Email":       email,
-			})
+			page := views.BuildLoginPageWithError(email, "Invalid email or password")
+			views.RenderLoginPage(w, app.TemplateCache, page)
 			return
 		}
 
@@ -212,9 +211,8 @@ func (app *App) GetSignup() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "signup.html", "signup.html", map[string]any{
-			"Title": "Sign Up | Business Planning Tool",
-		})
+		page := views.BuildSignupPage()
+		views.RenderSignupPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -232,11 +230,8 @@ func (app *App) PostSignup() http.HandlerFunc {
 
 		// Validate form
 		if password != confirmPassword {
-			app.renderPage(w, "signup.html", "signup.html", map[string]any{
-				"Title":    "Sign Up | Business Planning Tool",
-				"ErrorMsg": "Passwords do not match",
-				"Email":    email,
-			})
+			page := views.BuildSignupPageWithError(email, "Passwords do not match")
+			views.RenderSignupPage(w, app.TemplateCache, page)
 			return
 		}
 
@@ -244,22 +239,16 @@ func (app *App) PostSignup() http.HandlerFunc {
 		_, err := app.Store.GetUserWithPassword(email)
 		if err == nil {
 			// User exists
-			app.renderPage(w, "signup.html", "signup.html", map[string]any{
-				"Title":    "Sign Up | Business Planning Tool",
-				"ErrorMsg": "Email already registered",
-				"Email":    email,
-			})
+			page := views.BuildSignupPageWithError(email, "Email already registered")
+			views.RenderSignupPage(w, app.TemplateCache, page)
 			return
 		}
 
 		// Create user with password
 		userCreds, err := domain.NewUserWithPassword(email, password)
 		if err != nil {
-			app.renderPage(w, "signup.html", "signup.html", map[string]any{
-				"Title":    "Sign Up | Business Planning Tool",
-				"ErrorMsg": err.Error(),
-				"Email":    email,
-			})
+			page := views.BuildSignupPageWithError(email, err.Error())
+			views.RenderSignupPage(w, app.TemplateCache, page)
 			return
 		}
 

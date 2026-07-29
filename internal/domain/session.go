@@ -11,11 +11,11 @@ import (
 )
 
 var (
-	ErrInvalidPassword    = errors.New("invalid password")
-	ErrSessionNotFound    = errors.New("session not found")
-	ErrSessionExpired     = errors.New("session expired")
-	ErrUserAlreadyExists  = errors.New("user with this email already exists")
-	ErrWeakPassword       = errors.New("password must be at least 8 characters")
+	ErrInvalidPassword   = errors.New("invalid password")
+	ErrSessionNotFound   = errors.New("session not found")
+	ErrSessionExpired    = errors.New("session expired")
+	ErrUserAlreadyExists = errors.New("user with this email already exists")
+	ErrWeakPassword      = errors.New("password must be at least 8 characters")
 )
 
 // Session represents an authenticated user session
@@ -53,7 +53,7 @@ type UserCredentials struct {
 	Password string
 }
 
-// ValidateCredentials ensures credentials meet minimum requirements
+// Validate ensures credentials meet minimum requirements
 func (c *UserCredentials) Validate() error {
 	if c.Email == "" {
 		return ErrInvalidEmail

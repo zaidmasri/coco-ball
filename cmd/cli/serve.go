@@ -14,43 +14,19 @@ import (
 	"github.com/zaidmasri/business-planning-tool/internal/templates"
 )
 
-var templateCache map[string]*template.Template
-
-func init() {
-	templateCache = make(map[string]*template.Template)
-
-	pages, err := fs.Glob(templates.FS, "pages/*.html")
+func serve(dbPath, port string) {
+	// Initialize the database store
+	sqliteStore, err := store.NewSQLiteStore(dbPath)
 	if err != nil {
-		log.Fatal("error globbing templates:", err)
+		log.Fatalf("failed to initialize database: %v", err)
 	}
+	defer sqliteStore.Close()
 
-	for _, page := range pages {
-		name := filepath.Base(page)
-
-		var ts *template.Template
-		var parseErr error
-
-		// Standalone pages that don't use base layout
-		if name == "index.html" || name == "login.html" || name == "signup.html" || name == "profile.html" {
-			ts, parseErr = template.ParseFS(templates.FS, page)
-		} else {
-			ts, parseErr = template.ParseFS(templates.FS, "base.html", "components/*.html", page)
-		}
-
-		if parseErr != nil {
-			log.Fatalf("error parsing template %s: %v", name, parseErr)
-		}
-
-		templateCache[name] = ts
-	}
-}
-
-func main() {
-	// Initialize the store
-	memoryStore := store.NewMemoryStore()
+	// Load templates
+	templateCache := loadTemplates()
 
 	// Initialize the handlers application struct with our dependencies
-	app := handlers.NewApp(memoryStore, templateCache)
+	app := handlers.NewApp(sqliteStore, templateCache)
 
 	mux := http.NewServeMux()
 
@@ -114,13 +90,44 @@ func main() {
 
 	// Configure a robust http server
 	srv := &http.Server{
-		Addr:         ":8080",
+		Addr:         port,
 		Handler:      httpHandler,
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
-	log.Println("Server starting on :8080")
+	log.Printf("Server starting on %s", port)
 	log.Fatal(srv.ListenAndServe())
+}
+
+func loadTemplates() map[string]*template.Template {
+	templateCache := make(map[string]*template.Template)
+
+	pages, err := fs.Glob(templates.FS, "pages/*.html")
+	if err != nil {
+		log.Fatal("error globbing templates:", err)
+	}
+
+	for _, page := range pages {
+		name := filepath.Base(page)
+
+		var ts *template.Template
+		var parseErr error
+
+		// Standalone pages that don't use base layout
+		if name == "index.html" || name == "login.html" || name == "signup.html" || name == "profile.html" {
+			ts, parseErr = template.ParseFS(templates.FS, page)
+		} else {
+			ts, parseErr = template.ParseFS(templates.FS, "base.html", "components/*.html", page)
+		}
+
+		if parseErr != nil {
+			log.Fatalf("error parsing template %s: %v", name, parseErr)
+		}
+
+		templateCache[name] = ts
+	}
+
+	return templateCache
 }
