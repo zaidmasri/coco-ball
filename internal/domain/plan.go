@@ -174,6 +174,7 @@ type Plan struct {
 	name             string
 	startingMonth    int
 	startingYear     int
+	ownerID          uuid.UUID
 	revenues         []RevenueStream
 	opEx             []Cost
 	cogs             []Cost
@@ -201,7 +202,7 @@ func validateCoreProperties(name string, month, year int) (string, error) {
 	return cleanName, nil
 }
 
-func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int) (*Plan, error) {
+func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int, ownerID uuid.UUID) (*Plan, error) {
 	cleanName, err := validateCoreProperties(name, startingMonth, startingYear)
 	if err != nil {
 		return nil, err
@@ -212,6 +213,7 @@ func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int) (*Plan,
 		name:          cleanName,
 		startingMonth: startingMonth,
 		startingYear:  startingYear,
+		ownerID:       ownerID,
 		// Always initialize slices so they aren't nil
 		revenues:        make([]RevenueStream, 0),
 		opEx:            make([]Cost, 0),
@@ -273,6 +275,7 @@ func (p *Plan) ID() uuid.UUID                      { return p.id }
 func (p *Plan) Name() string                       { return p.name }
 func (p *Plan) StartingMonth() int                 { return p.startingMonth }
 func (p *Plan) StartingYear() int                  { return p.startingYear }
+func (p *Plan) OwnerID() uuid.UUID                 { return p.ownerID }
 func (p *Plan) StartupCosts() []StartupCost        { return p.startupCosts }
 func (p *Plan) FundingSources() []FundingSource    { return p.fundingSources }
 func (p *Plan) StartingBalances() StartingBalances { return p.startingBalances }

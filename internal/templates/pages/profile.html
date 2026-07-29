@@ -1,0 +1,47 @@
+{{define "content"}}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-lg-8">
+      <h2 class="fw-bold mb-4">
+        <i class="bi bi-person-circle me-2"></i>Profile
+      </h2>
+
+      <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-body p-5">
+          <h4 class="card-title fw-bold mb-4">Profile Information</h4>
+
+          <div class="mb-4">
+            <label class="form-label text-muted text-uppercase fw-bold" style="font-size: 0.85rem;">
+              Email Address
+            </label>
+            <div class="fs-5">{{ .User.Email }}</div>
+          </div>
+
+          <hr class="my-4" />
+
+          <p class="text-muted small mb-0">
+            <i class="bi bi-info-circle me-2"></i>
+            Additional profile settings coming soon.
+          </p>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 rounded-3 border-danger">
+        <div class="card-body p-5">
+          <h4 class="card-title fw-bold text-danger mb-4">
+            <i class="bi bi-exclamation-triangle me-2"></i>Danger Zone
+          </h4>
+
+          <p class="text-muted mb-4">
+            These actions are irreversible. Please proceed with caution.
+          </p>
+
+          <button type="button" class="btn btn-outline-danger" disabled title="Coming soon">
+            <i class="bi bi-trash me-2"></i>Delete Account
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

@@ -1,0 +1,85 @@
+{{define "signup.html"}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css" />
+  </head>
+  <body class="bg-light">
+    <div class="container">
+      <div class="row justify-content-center align-items-center min-vh-100">
+        <div class="col-md-5">
+          <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-body p-5">
+              <h2 class="card-title text-center mb-4 fw-bold">Create Account</h2>
+
+              {{if .ErrorMsg}}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                  {{.ErrorMsg}}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+              {{end}}
+
+              <form method="POST" action="/signup">
+                <div class="mb-3">
+                  <label for="email" class="form-label">Email Address</label>
+                  <input
+                    type="email"
+                    class="form-control"
+                    id="email"
+                    name="email"
+                    placeholder="you@example.com"
+                    value="{{.Email}}"
+                    required
+                  />
+                  <small class="form-text text-muted">We'll never share your email.</small>
+                </div>
+
+                <div class="mb-3">
+                  <label for="password" class="form-label">Password</label>
+                  <input
+                    type="password"
+                    class="form-control"
+                    id="password"
+                    name="password"
+                    placeholder="Minimum 8 characters"
+                    required
+                  />
+                  <small class="form-text text-muted">Must be at least 8 characters long.</small>
+                </div>
+
+                <div class="mb-4">
+                  <label for="confirmPassword" class="form-label">Confirm Password</label>
+                  <input
+                    type="password"
+                    class="form-control"
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    placeholder="Re-enter your password"
+                    required
+                  />
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
+                  Create Account
+                </button>
+              </form>
+
+              <div class="mt-4 text-center">
+                <p class="text-muted mb-0">
+                  Already have an account?
+                  <a href="/login" class="text-primary fw-bold text-decoration-none">Login here</a>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
+{{end}}

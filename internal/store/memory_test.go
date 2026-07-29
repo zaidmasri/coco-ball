@@ -11,7 +11,7 @@ import (
 func TestMemoryStore_SaveAndGet(t *testing.T) {
 	store := NewMemoryStore()
 	id := uuid.New()
-	plan, _ := domain.NewPlan(id, "Test Business", 1, 2026)
+	plan, _ := domain.NewPlan(id, "Test Business", 1, 2026, uuid.New())
 
 	// 1. Test Get on an empty store
 	_, err := store.Get(id)
@@ -48,8 +48,8 @@ func TestMemoryStore_GetAll(t *testing.T) {
 	}
 
 	// 2. Populate store
-	plan1, _ := domain.NewPlan(uuid.New(), "Plan One", 12, 2025)
-	plan2, _ := domain.NewPlan(uuid.New(), "Plan Two", 6, 2026)
+	plan1, _ := domain.NewPlan(uuid.New(), "Plan One", 12, 2025, uuid.New())
+	plan2, _ := domain.NewPlan(uuid.New(), "Plan Two", 6, 2026, uuid.New())
 	_ = store.Save(plan1)
 	_ = store.Save(plan2)
 
@@ -76,7 +76,7 @@ func TestMemoryStore_Concurrency(t *testing.T) {
 		wg.Add(1)
 		go func(id uuid.UUID) {
 			defer wg.Done()
-			plan, _ := domain.NewPlan(id, "Concurrent Plan", 2, 2024)
+			plan, _ := domain.NewPlan(id, "Concurrent Plan", 2, 2024, uuid.New())
 			_ = store.Save(plan)
 		}(uuid.New())
 	}
@@ -101,7 +101,7 @@ func TestMemoryStore_Concurrency(t *testing.T) {
 		// Routine B: Write brand new plans concurrently to test Lock contention
 		go func(id uuid.UUID) {
 			defer wg.Done()
-			newPlan, _ := domain.NewPlan(id, "Another Concurrent Plan", 3, 2025)
+			newPlan, _ := domain.NewPlan(id, "Another Concurrent Plan", 3, 2025, uuid.New())
 			_ = store.Save(newPlan)
 		}(uuid.New())
 	}

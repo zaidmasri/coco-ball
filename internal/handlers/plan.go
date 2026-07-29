@@ -30,7 +30,7 @@ func NewApp(s store.PlanStore, tc map[string]*template.Template) *App {
 }
 
 // renderPage is now a method on App so it can access the TemplateCache
-func (app *App) renderPage(w http.ResponseWriter, cacheKey string, templateName string, data interface{}) {
+func (app *App) renderPage(w http.ResponseWriter, cacheKey string, templateName string, data any) {
 	ts, ok := app.TemplateCache[cacheKey]
 	if !ok {
 		http.Error(w, "Template not found", http.StatusInternalServerError)
@@ -51,7 +51,7 @@ func (app *App) renderErrorPage(w http.ResponseWriter, r *http.Request, statusCo
 	// http.StatusText converts "404" to "Not Found", or "500" to "Internal Server Error"
 	statusText := http.StatusText(statusCode)
 
-	app.renderPage(w, "error.html", "error.html", map[string]interface{}{
+	app.renderPage(w, "error.html", "error.html", map[string]any{
 		"ErrorTitle":       statusText,
 		"ErrorStatusCode":  statusCode,
 		"ErrorDescription": statusText,
@@ -60,7 +60,7 @@ func (app *App) renderErrorPage(w http.ResponseWriter, r *http.Request, statusCo
 	})
 }
 
-// GET /* (Custom 404 Catch-All for bad URLs)
+// NotFound is user for GET requests (Custom 404 Catch-All for bad URLs)
 func (app *App) NotFound() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		app.renderErrorPage(w, r, http.StatusNotFound, "The URL you entered does not exist. Please check the address and try again.")
@@ -69,24 +69,42 @@ func (app *App) NotFound() http.HandlerFunc {
 
 func (app *App) GetRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Fetch all plans from your database/store
-		plans, err := app.Store.GetAll() // Ensure this method exists on your store interface
+		user := GetUserFromContext(r)
+		if user == nil {
+			// Unauthenticated access
+			app.renderPage(w, "index.html", "index.html", map[string]any{
+				"Title": "Business Planning Tool",
+				"Path":  r.URL.Path,
+				"Plans": []*domain.Plan{},
+				"User":  nil,
+			})
+			return
+		}
+
+		// Fetch plans the user has access to
+		plans, err := app.Store.GetUserPlans(user.ID())
 		if err != nil {
-			// If it fails, just pass an empty slice so the page still loads the empty state
 			plans = []*domain.Plan{}
 		}
 
-		app.renderPage(w, "index.html", "index.html", map[string]interface{}{
+		app.renderPage(w, "index.html", "index.html", map[string]any{
 			"Title": "Business Planning Tool",
 			"Path":  r.URL.Path,
-			"Plans": plans, // Inject the plans into the HTML
+			"Plans": plans,
+			"User":  user,
 		})
 	}
 }
 
-// POST /plan/setup (Saves a brand new plan)
+// PostSetup POST /plan/setup (Saves a brand new plan)
 func (app *App) PostSetup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetUserFromContext(r)
+		if user == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		err := r.ParseForm()
 		if err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -98,7 +116,7 @@ func (app *App) PostSetup() http.HandlerFunc {
 		startYear, _ := strconv.Atoi(r.PostForm.Get("startYear"))
 
 		newID := uuid.New()
-		plan, err := domain.NewPlan(newID, companyName, startMonth, startYear)
+		plan, err := domain.NewPlan(newID, companyName, startMonth, startYear, user.ID())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -110,11 +128,18 @@ func (app *App) PostSetup() http.HandlerFunc {
 			return
 		}
 
+		// Grant owner access to the creator
+		if err := app.Store.GrantAccess(newID, user.ID(), domain.Owner); err != nil {
+			log.Printf("Failed to grant owner access: %v", err)
+			http.Error(w, "Failed to setup plan access", http.StatusInternalServerError)
+			return
+		}
+
 		http.Redirect(w, r, "/plan/"+newID.String()+"/starting-point", http.StatusSeeOther)
 	}
 }
 
-// POST /plan/{id}/setup (Updates an existing plan)
+// PostUpdateSetup POST /plan/{id}/setup (Updates an existing plan)
 func (app *App) PostUpdateSetup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -161,9 +186,10 @@ func (app *App) PostUpdateSetup() http.HandlerFunc {
 	}
 }
 
-// GET /plan/{id}/setup (Loads an existing plan into the form)
+// GetSetup GET /plan/{id}/setup (Loads an existing plan into the form)
 func (app *App) GetSetup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetUserFromContext(r)
 		idStr := r.PathValue("id")
 		planID, err := uuid.Parse(idStr)
 		if err != nil {
@@ -177,17 +203,19 @@ func (app *App) GetSetup() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "setup.html", "base", map[string]interface{}{
+		app.renderPage(w, "setup.html", "base", map[string]any{
 			"Title": "Edit Setup | Business Planning Tool",
 			"Path":  r.URL.Path,
 			"Plan":  plan,
+			"User":  user,
 		})
 	}
 }
 
-// GET /plan/{id}/starting-point
+// GetStartingPoint GET /plan/{id}/starting-point
 func (app *App) GetStartingPoint() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetUserFromContext(r)
 		idStr := r.PathValue("id")
 		planID, err := uuid.Parse(idStr)
 		if err != nil {
@@ -201,15 +229,16 @@ func (app *App) GetStartingPoint() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "starting-point.html", "base", map[string]interface{}{
+		app.renderPage(w, "starting-point.html", "base", map[string]any{
 			"Title": "Starting Point | Business Planning Tool",
 			"Path":  r.URL.Path,
 			"Plan":  plan,
+			"User":  user,
 		})
 	}
 }
 
-// POST /plan/{id}/starting-point
+// PostStartingPoint POST /plan/{id}/starting-point
 func (app *App) PostStartingPoint() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// System-level errors (Malformed requests)
@@ -236,7 +265,7 @@ func (app *App) PostStartingPoint() http.HandlerFunc {
 		// Helper function: Renders the starting-point page with an error message
 		renderError := func(errMsg string, statusCode int) {
 			w.WriteHeader(statusCode)
-			app.renderPage(w, "starting-point.html", "base", map[string]interface{}{
+			app.renderPage(w, "starting-point.html", "base", map[string]any{
 				"Title":        "Starting Point | Business Planning Tool",
 				"Path":         r.URL.Path,
 				"Plan":         plan,
@@ -370,10 +399,11 @@ func (app *App) GetPayroll() http.HandlerFunc {
 		}
 
 		// For now, we pass nil for the Plan to force the empty state.
-		app.renderPage(w, "payroll.html", "base", map[string]interface{}{
+		app.renderPage(w, "payroll.html", "base", map[string]any{
 			"Title": "Payroll | Business Planning Tool",
 			"Path":  r.URL.Path,
-			"Plan":  plan, // This forces the empty state!
+			"Plan":  plan,
+			"User":  GetUserFromContext(r),
 		})
 	}
 }
@@ -393,9 +423,10 @@ func (app *App) GetSalesForecast() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "sales-forecast.html", "base", map[string]interface{}{
+		app.renderPage(w, "sales-forecast.html", "base", map[string]any{
 			"Plan": plan,
 			"Path": r.URL.Path,
+			"User": GetUserFromContext(r),
 		})
 	}
 }
@@ -415,9 +446,10 @@ func (app *App) GetOpExpenses() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "op-expenses.html", "base", map[string]interface{}{
+		app.renderPage(w, "op-expenses.html", "base", map[string]any{
 			"Plan": plan,
 			"Path": r.URL.Path,
+			"User": GetUserFromContext(r),
 		})
 	}
 }
@@ -437,9 +469,10 @@ func (app *App) GetCashFlow() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "cash-flow.html", "base", map[string]interface{}{
+		app.renderPage(w, "cash-flow.html", "base", map[string]any{
 			"Plan": plan,
 			"Path": r.URL.Path,
+			"User": GetUserFromContext(r),
 		})
 	}
 }
@@ -459,9 +492,10 @@ func (app *App) GetIncomeStatement() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "income-statement.html", "base", map[string]interface{}{
+		app.renderPage(w, "income-statement.html", "base", map[string]any{
 			"Plan": plan,
 			"Path": r.URL.Path,
+			"User": GetUserFromContext(r),
 		})
 	}
 }
@@ -481,9 +515,10 @@ func (app *App) GetBalanceSheet() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "balance-sheet.html", "base", map[string]interface{}{
+		app.renderPage(w, "balance-sheet.html", "base", map[string]any{
 			"Plan": plan,
 			"Path": r.URL.Path,
+			"User": GetUserFromContext(r),
 		})
 	}
 }
@@ -502,14 +537,32 @@ func (app *App) GetAnalytics() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
-		app.renderPage(w, "analytics.html", "base", map[string]interface{}{
+		app.renderPage(w, "analytics.html", "base", map[string]any{
 			"Plan": plan,
 			"Path": r.URL.Path,
+			"User": GetUserFromContext(r),
 		})
 	}
 }
 
-// Middleware
+// GetProfile displays the user's profile page
+func (app *App) GetProfile() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetUserFromContext(r)
+		if user == nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		app.renderPage(w, "profile.html", "base", map[string]any{
+			"Title": "Profile | Business Planning Tool",
+			"Path":  r.URL.Path,
+			"User":  user,
+		})
+	}
+}
+
+// Logger func is used as Middleware
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

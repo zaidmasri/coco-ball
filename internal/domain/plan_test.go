@@ -11,8 +11,7 @@ import (
 
 func newValidPlan(t *testing.T) *Plan {
 	t.Helper()
-	// FIX: Use uuid.New(), startingMonth, and startingYear instead of int and duration
-	plan, err := NewPlan(uuid.New(), "Simple Startup", 1, 2024)
+	plan, err := NewPlan(uuid.New(), "Simple Startup", 1, 2024, uuid.New())
 	if err != nil {
 		t.Fatalf("failed to create valid plan: %v", err)
 	}
@@ -68,7 +67,7 @@ func TestNewPlan(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
-			plan, err := NewPlan(tc.id, tc.planName, tc.startingMonth, tc.startingYear)
+			plan, err := NewPlan(tc.id, tc.planName, tc.startingMonth, tc.startingYear, uuid.New())
 
 			if !errors.Is(err, tc.expectedErr) {
 				t.Errorf("expected error %v, got %v", tc.expectedErr, err)

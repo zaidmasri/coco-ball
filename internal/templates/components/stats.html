@@ -68,6 +68,37 @@
         <small class="text-muted ms-2">Updated just now</small>
       </div>
     </div>
+
+    <!-- User Menu (Right aligned) -->
+    {{if .User}}
+    <div class="col-md-auto ms-auto ps-md-4 border-start">
+      <div class="dropdown">
+        <button
+          class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-2"
+          type="button"
+          id="userDropdown"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+          <i class="bi bi-person-circle"></i>
+          <span class="d-none d-md-inline text-truncate" style="max-width: 150px;">{{ .User.Email }}</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+          <li>
+            <a class="dropdown-item" href="/profile">
+              <i class="bi bi-person me-2"></i>Profile
+            </a>
+          </li>
+          <li><hr class="dropdown-divider" /></li>
+          <li>
+            <a class="dropdown-item text-danger" href="/logout">
+              <i class="bi bi-box-arrow-right me-2"></i>Logout
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+    {{end}}
   </div>
 </header>
 

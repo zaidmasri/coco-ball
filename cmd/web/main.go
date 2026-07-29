@@ -30,7 +30,8 @@ func init() {
 		var ts *template.Template
 		var parseErr error
 
-		if name == "index.html" {
+		// Standalone pages that don't use base layout
+		if name == "index.html" || name == "login.html" || name == "signup.html" {
 			ts, parseErr = template.ParseFS(templates.FS, page)
 		} else {
 			ts, parseErr = template.ParseFS(templates.FS, "base.html", "components/*.html", page)
@@ -58,6 +59,16 @@ func main() {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", staticFileServer))
 
 	// Routes
+	// Auth
+	mux.HandleFunc("GET /login", app.GetLogin())
+	mux.HandleFunc("POST /login", app.PostLogin())
+	mux.HandleFunc("GET /signup", app.GetSignup())
+	mux.HandleFunc("POST /signup", app.PostSignup())
+	mux.HandleFunc("GET /logout", app.GetLogout())
+
+	// Profile
+	mux.HandleFunc("GET /profile", app.GetProfile())
+
 	// Root Page
 	mux.HandleFunc("GET /{$}", app.GetRoot())
 
@@ -95,10 +106,16 @@ func main() {
 
 	// Catch-all fallback route for any unmatched URLs
 	mux.HandleFunc("/", app.NotFound())
+
+	// Wrap mux with middlewares
+	var httpHandler http.Handler = mux
+	httpHandler = app.AuthMiddleware(httpHandler)
+	httpHandler = handlers.Logger(httpHandler)
+
 	// Configure a robust http server
 	srv := &http.Server{
 		Addr:         ":8080",
-		Handler:      handlers.Logger(mux),
+		Handler:      httpHandler,
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,

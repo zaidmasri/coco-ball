@@ -26,9 +26,15 @@
                 Work at your own pace. Your progress saves automatically,
                 allowing you to return anytime and complete things gradually.
               </p>
-              <button type="button" class="btn btn-primary px-4 py-2 text-uppercase fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#setupModal">
-                <i class="bi bi-plus-lg me-1"></i> Start a New Plan
-              </button>
+              {{if .User}}
+                <button type="button" class="btn btn-primary px-4 py-2 text-uppercase fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#setupModal">
+                  <i class="bi bi-plus-lg me-1"></i> Start a New Plan
+                </button>
+              {{else}}
+                <a href="/login" class="btn btn-primary px-4 py-2 text-uppercase fw-bold shadow-sm">
+                  <i class="bi bi-lock me-1"></i> Login to Get Started
+                </a>
+              {{end}}
             </div>
           </div>
 
