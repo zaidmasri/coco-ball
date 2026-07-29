@@ -554,9 +554,8 @@ func (app *App) GetProfile() http.HandlerFunc {
 			return
 		}
 
-		app.renderPage(w, "profile.html", "base", map[string]any{
+		app.renderPage(w, "profile.html", "profile.html", map[string]any{
 			"Title": "Profile | Business Planning Tool",
-			"Path":  r.URL.Path,
 			"User":  user,
 		})
 	}

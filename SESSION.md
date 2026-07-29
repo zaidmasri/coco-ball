@@ -1,5 +1,44 @@
 # Session Management & Authentication
 
+<!--toc:start-->
+
+- [Session Management & Authentication](#session-management-authentication)
+  - [Overview](#overview)
+  - [Architecture](#architecture)
+    - [Session Models](#session-models)
+      - [UserWithPassword](#userwithpassword)
+      - [Session](#session)
+    - [Password Management](#password-management)
+      - [Hashing](#hashing)
+      - [Verification](#verification)
+      - [Validation Rules](#validation-rules)
+  - [Authentication Flow](#authentication-flow)
+    - [Signup](#signup)
+    - [Login](#login)
+    - [Logout](#logout)
+    - [Session Persistence](#session-persistence)
+  - [Session Storage](#session-storage)
+    - [MemoryStore Implementation](#memorystore-implementation)
+      - [Key Operations](#key-operations)
+  - [Routes](#routes)
+    - [Authentication Routes](#authentication-routes)
+    - [Cookies](#cookies)
+  - [Security Considerations](#security-considerations)
+    - [Current Implementation (Development)](#current-implementation-development)
+    - [Production Recommendations](#production-recommendations)
+  - [Usage Examples](#usage-examples)
+    - [Creating an Account](#creating-an-account)
+    - [Logging In](#logging-in)
+    - [Getting Current User](#getting-current-user)
+  - [Testing](#testing)
+    - [Manual Testing](#manual-testing)
+    - [Automated Testing](#automated-testing)
+  - [Debugging](#debugging)
+    - [Common Issues](#common-issues)
+  - [Future Enhancements](#future-enhancements)
+
+<!--toc:end-->
+
 ## Overview
 
 The Business Planning Tool now includes a complete session management system with login/signup functionality. Users can create accounts and maintain persistent sessions across browser sessions.
@@ -9,7 +48,9 @@ The Business Planning Tool now includes a complete session management system wit
 ### Session Models
 
 #### UserWithPassword
+
 Located in `internal/domain/session.go`, extends the basic `User` model with password hashing:
+
 - **ID**: UUID identifier (inherited from User)
 - **Email**: User's email (inherited from User)
 - **PasswordHash**: Bcrypt hashed password
@@ -19,7 +60,9 @@ user, _ := domain.NewUserWithPassword("alice@example.com", "secure_password_123"
 ```
 
 #### Session
+
 Represents an authenticated session:
+
 - **ID**: Random 64-character hex token (256 bits)
 - **UserID**: The user this session belongs to
 - **CreatedAt**: When the session was created
@@ -32,19 +75,24 @@ session, _ := domain.NewSession(userID, 7*24*time.Hour)
 ### Password Management
 
 #### Hashing
+
 Uses bcrypt with default cost factor (12):
+
 ```go
 hash, err := domain.HashPassword("mypassword")
 ```
 
 #### Verification
+
 Safely compares password against hash:
+
 ```go
 valid := domain.VerifyPassword(hash, "mypassword") // true
 valid := domain.VerifyPassword(hash, "wrong")      // false
 ```
 
 #### Validation Rules
+
 - Minimum 8 characters
 - Email must be valid
 - Cannot be empty
@@ -52,6 +100,7 @@ valid := domain.VerifyPassword(hash, "wrong")      // false
 ## Authentication Flow
 
 ### Signup
+
 1. User navigates to `/signup`
 2. Enters email, password, and confirms password
 3. Form validates:
@@ -63,6 +112,7 @@ valid := domain.VerifyPassword(hash, "wrong")      // false
 6. User is logged in and redirected to home
 
 ### Login
+
 1. User navigates to `/login`
 2. Enters email and password
 3. System retrieves user credentials by email
@@ -72,6 +122,7 @@ valid := domain.VerifyPassword(hash, "wrong")      // false
 7. User is redirected to home
 
 ### Logout
+
 1. User navigates to `/logout`
 2. System retrieves session from cookie
 3. Session is deleted from store
@@ -79,6 +130,7 @@ valid := domain.VerifyPassword(hash, "wrong")      // false
 5. User is redirected to home
 
 ### Session Persistence
+
 1. On every request, `AuthMiddleware` checks for session cookie
 2. If found, validates session hasn't expired
 3. Retrieves user and attaches to request context
@@ -101,11 +153,13 @@ type MemoryStore struct {
 #### Key Operations
 
 **SaveUserWithPassword**: Stores user with hashed password
+
 ```go
 err := store.SaveUserWithPassword(user)
 ```
 
 **GetUserWithPassword**: Retrieves user for login
+
 ```go
 user, err := store.GetUserWithPassword("alice@example.com")
 if err == nil && user.VerifyPassword(password) {
@@ -114,11 +168,13 @@ if err == nil && user.VerifyPassword(password) {
 ```
 
 **SaveSession**: Creates new session
+
 ```go
 err := store.SaveSession(session)
 ```
 
 **GetSession**: Validates session
+
 ```go
 session, err := store.GetSession(sessionID)
 if err == nil && session.IsValid() {
@@ -127,6 +183,7 @@ if err == nil && session.IsValid() {
 ```
 
 **DeleteSession**: Logs user out
+
 ```go
 err := store.DeleteSession(sessionID)
 ```
@@ -135,17 +192,18 @@ err := store.DeleteSession(sessionID)
 
 ### Authentication Routes
 
-| Method | Path | Handler | Notes |
-|--------|------|---------|-------|
-| GET | `/signup` | GetSignup | Display signup form |
-| POST | `/signup` | PostSignup | Process signup |
-| GET | `/login` | GetLogin | Display login form |
-| POST | `/login` | PostLogin | Process login |
-| GET | `/logout` | GetLogout | Log out user |
+| Method | Path      | Handler    | Notes               |
+| ------ | --------- | ---------- | ------------------- |
+| GET    | `/signup` | GetSignup  | Display signup form |
+| POST   | `/signup` | PostSignup | Process signup      |
+| GET    | `/login`  | GetLogin   | Display login form  |
+| POST   | `/login`  | PostLogin  | Process login       |
+| GET    | `/logout` | GetLogout  | Log out user        |
 
 ### Cookies
 
 **Session Cookie**
+
 - Name: `session_id`
 - Value: Random 64-char hex token
 - Path: `/` (all routes)
@@ -159,6 +217,7 @@ err := store.DeleteSession(sessionID)
 ### Current Implementation (Development)
 
 The current setup is suitable for development:
+
 - ✅ Passwords hashed with bcrypt (industry standard)
 - ✅ Sessions stored server-side in memory
 - ✅ HttpOnly cookies prevent XSS theft
@@ -258,7 +317,7 @@ func (app *App) SomeHandler() http.HandlerFunc {
             http.Redirect(w, r, "/login", http.StatusSeeOther)
             return
         }
-        
+
         // User is logged in
         fmt.Printf("Welcome %s\n", user.Email())
     }
@@ -298,7 +357,7 @@ func (app *App) SomeHandler() http.HandlerFunc {
 func TestSessionExpiry(t *testing.T) {
     session, _ := domain.NewSession(uuid.New(), 1*time.Millisecond)
     time.Sleep(10 * time.Millisecond)
-    
+
     if session.IsValid() {
         t.Fatal("expired session should be invalid")
     }
@@ -310,16 +369,19 @@ func TestSessionExpiry(t *testing.T) {
 ### Common Issues
 
 **Issue: "Invalid email or password" on correct credentials**
+
 - Verify user exists: `store.GetUserWithPassword(email)`
 - Check password matches: `user.VerifyPassword(password)`
 - Ensure email is lowercase normalized
 
 **Issue: User logged out unexpectedly**
+
 - Check session expiry: `session.ExpiresAt`
 - Verify session exists: `store.GetSession(sessionID)`
 - Check cookie settings
 
 **Issue: Cookie not persisting**
+
 - Verify HttpOnly is set (should not be accessible from JS)
 - Check SameSite mode
 - Ensure Path is `/`

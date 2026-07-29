@@ -31,7 +31,7 @@ func init() {
 		var parseErr error
 
 		// Standalone pages that don't use base layout
-		if name == "index.html" || name == "login.html" || name == "signup.html" {
+		if name == "index.html" || name == "login.html" || name == "signup.html" || name == "profile.html" {
 			ts, parseErr = template.ParseFS(templates.FS, page)
 		} else {
 			ts, parseErr = template.ParseFS(templates.FS, "base.html", "components/*.html", page)
