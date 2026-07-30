@@ -98,6 +98,64 @@
                 <strong>Add Expense</strong> to get started.
               </p>
             </div>
+
+            {{ range .Plan.OpEx }}
+            <div
+              class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row"
+            >
+              <div class="col-md-5">
+                <input
+                  type="text"
+                  list="opExCategories"
+                  class="form-control form-control-sm"
+                  name="opex_name[]"
+                  value="{{ .Name }}"
+                  required
+                />
+              </div>
+              <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-white">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    class="form-control amount-calc"
+                    name="opex_amount[]"
+                    value="{{ .BaseAmountPerMonth }}"
+                    required
+                  />
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div
+                  class="input-group input-group-sm"
+                  title="Estimated annual inflation or growth for this expense"
+                >
+                  <span class="input-group-text text-muted bg-white"
+                    ><i class="bi bi-graph-up"></i
+                  ></span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    class="form-control text-end"
+                    name="opex_growth[]"
+                    value="{{ if eq .Growth.Type "AnnualStepPercent" }}{{ .Growth.AnnualRatePercent }}{{ else }}0.0{{ end }}"
+                    required
+                  />
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-1 text-end">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-danger remove-row-btn"
+                  title="Remove Expense"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+            {{ end }}
           </div>
 
           <div

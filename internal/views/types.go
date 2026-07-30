@@ -63,6 +63,10 @@ type IncomeStatementPage struct {
 	BasePage
 	Plan         *domain.Plan
 	ErrorMessage string
+
+	Years     []domain.AnnualFinancials
+	Products  []domain.ProductFinancials
+	OpExLines []domain.OpExLine
 }
 
 // BalanceSheetPage is the data for the balance sheet page
@@ -70,6 +74,9 @@ type BalanceSheetPage struct {
 	BasePage
 	Plan         *domain.Plan
 	ErrorMessage string
+
+	Years    []domain.BalanceSheetSnapshot
+	Balances bool // whether Assets == Liabilities+Equity within rounding tolerance
 }
 
 // AnalyticsPage is the data for the analytics page
@@ -77,6 +84,18 @@ type AnalyticsPage struct {
 	BasePage
 	Plan         *domain.Plan
 	ErrorMessage string
+
+	Breakeven domain.BreakevenAnalysis
+	Ratios    []domain.FinancialRatios
+	Years     []domain.BalanceSheetSnapshot
+	Annuals   []domain.AnnualFinancials
+
+	AssetDepreciation []domain.AssetDepreciation
+	LoanAmortization  []domain.LoanYearSummary
+
+	OwnerInjectionPercent  float64
+	AverageLoanRatePercent float64
+	BalanceSheetBalances   bool
 }
 
 // ProfilePage is the data for the profile page

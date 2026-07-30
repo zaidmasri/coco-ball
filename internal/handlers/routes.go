@@ -41,24 +41,36 @@ func (app *App) RegisterRoutes(mux *http.ServeMux) {
 		app.PostStartingPoint()(w, r)
 	})))
 
-	// Payroll - requires viewer access
+	// Payroll - requires viewer access for GET, editor for POST
 	mux.Handle("GET /plan/{id}/payroll", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		app.GetPayroll()(w, r)
 	})))
+	mux.Handle("POST /plan/{id}/payroll", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostPayroll()(w, r)
+	})))
 
-	// Sales Forecast - requires viewer access
+	// Sales Forecast - requires viewer access for GET, editor for POST
 	mux.Handle("GET /plan/{id}/sales-forecast", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		app.GetSalesForecast()(w, r)
 	})))
+	mux.Handle("POST /plan/{id}/sales-forecast", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostSalesForecast()(w, r)
+	})))
 
-	// Operating Expenses - requires viewer access
+	// Operating Expenses - requires viewer access for GET, editor for POST
 	mux.Handle("GET /plan/{id}/operating-expenses", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		app.GetOpExpenses()(w, r)
 	})))
+	mux.Handle("POST /plan/{id}/operating-expenses", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostOpExpenses()(w, r)
+	})))
 
-	// Cash Flow - requires viewer access
+	// Cash Flow - requires viewer access for GET, editor for POST
 	mux.Handle("GET /plan/{id}/cash-flow", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		app.GetCashFlow()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostCashFlow()(w, r)
 	})))
 
 	// Income Statement - requires viewer access
@@ -74,6 +86,11 @@ func (app *App) RegisterRoutes(mux *http.ServeMux) {
 	// Analytics - requires viewer access
 	mux.Handle("GET /plan/{id}/analytics", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		app.GetAnalytics()(w, r)
+	})))
+
+	// Delete plan - requires owner access
+	mux.Handle("POST /plan/{id}/delete", app.RequireAccess(domain.Owner)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostDeletePlan()(w, r)
 	})))
 
 	// Catch-all fallback route for any unmatched URLs

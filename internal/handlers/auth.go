@@ -123,6 +123,11 @@ func (app *App) RequireAccess(requiredLevel domain.AccessLevel) func(http.Handle
 			}
 
 			// Check if user has the required access level
+			if requiredLevel == domain.Owner && access.AccessLevel != domain.Owner {
+				page := views.BuildErrorPage(r, http.StatusForbidden, "Only the plan owner can perform this action.")
+				views.RenderErrorPageWithStatus(w, app.TemplateCache, page, http.StatusForbidden)
+				return
+			}
 			if requiredLevel == domain.Editor && !access.CanEdit() {
 				page := views.BuildErrorPage(r, http.StatusForbidden, "You don't have permission to edit this plan.")
 				views.RenderErrorPageWithStatus(w, app.TemplateCache, page, http.StatusForbidden)

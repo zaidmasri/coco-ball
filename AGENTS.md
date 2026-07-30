@@ -84,6 +84,23 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [x] Balance Sheet page (GET `/plan/{id}/balance-sheet`) - Balance sheet projections
 - [x] Analytics/Home page (GET `/plan/{id}/analytics`) - Key metrics and dashboards
 
+### Form Handlers (POST Endpoints)
+- [x] POST `/plan/{id}/payroll` - Save payroll data (salary roles, benefits, employer tax rates)
+- [x] POST `/plan/{id}/sales-forecast` - Save sales data (products + global unit-growth curve)
+- [x] POST `/plan/{id}/operating-expenses` - Save OpEx data
+- [x] POST `/plan/{id}/cash-flow` - Save discretionary cash flow (additional inventory, distributions)
+- [x] POST `/plan/{id}/delete` - Delete a plan (requires Owner access)
+
+### Financial Calculations & Reporting
+- [x] Payroll tax calculations (employer SS/Medicare/FUTA/SUTA on W-2 wages, contractors exempt)
+- [x] Product-based COGS calculations (per-unit cost × projected units sold)
+- [x] Depreciation calculations (pre-existing: Straight-Line, Double-Declining)
+- [x] Cash flow projections (monthly, with running cash balance)
+- [x] Income statement generation (Income Statement page now shows real per-product/per-category numbers for 3 years)
+- [x] Balance sheet generation (Balance Sheet page now shows real numbers; balances within rounding — see Tech Decisions Log)
+- [x] Financial ratios calculations (current, quick, debt-to-equity, DSCR, sales growth, gross/net margin, ROE)
+- [x] Breakeven analysis (Year 1 gross-margin-based breakeven, annual + monthly)
+
 ### UI Components
 - [x] Base layout template with navigation sidebar
 - [x] Form components and styling
@@ -129,26 +146,19 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [ ] Save funding sources and startup costs
 - [ ] Plan update/edit persistence
 
-### Financial Calculations & Reporting
-- [ ] Implement payroll tax calculations
-- [ ] Implement COGS calculations
-- [ ] Implement depreciation calculations
-- [ ] Implement cash flow projections (monthly)
-- [ ] Implement income statement generation
-- [ ] Implement balance sheet generation
-- [ ] Implement financial ratios calculations
-- [ ] Implement breakeven analysis
-- [ ] Export functionality (PDF, Excel)
+### Financial Calculations & Reporting (remaining)
+- [ ] Income tax modeling (currently deliberately unmodeled — see Tech Decisions Log)
+- [ ] Export functionality (PDF, Excel) — the report pages have a browser "Print / Save PDF" button but no server-side export
+- [ ] "Diagnostic Tool" tab's editable Industry Norms column is still client-side-only (not saved to the plan)
+- [ ] COGS Calculator tab on Analytics remains an intentional client-side scratchpad (doesn't save to plan — by design)
 
-### Form Handlers (POST Endpoints)
-- [ ] POST `/plan/{id}/payroll` - Save payroll data
-- [ ] POST `/plan/{id}/sales-forecast` - Save sales data
-- [ ] POST `/plan/{id}/operating-expenses` - Save OpEx data
-- [ ] POST `/plan/{id}/cogs` - Save COGS data
-- [ ] POST `/plan/{id}/cash-flow` - Save cash flow assumptions
-- [ ] POST `/plan/{id}/income-statement` - Generate/save income statement
-- [ ] POST `/plan/{id}/balance-sheet` - Generate/save balance sheet
-- [ ] POST `/plan/{id}/delete` - Delete a plan (with authorization)
+### Remaining Generated-Report Endpoints
+- [ ] POST `/plan/{id}/income-statement` - Generate/save income statement (blocked on Financial Calculations below)
+- [ ] POST `/plan/{id}/balance-sheet` - Generate/save balance sheet (blocked on Financial Calculations below)
+
+Note: there is no dedicated `/cogs` route — per-product COGS is captured per-unit
+directly on the Sales Forecast form (`prod_cogs[]`) and saved via
+`POST /plan/{id}/sales-forecast`.
 
 ### Input Validation & Error Handling
 - [ ] Form validation on server-side (currently minimal)
@@ -209,11 +219,12 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 ## High-Priority Items (Do First)
 
 1. ~~**User Authorization**~~ ✅ **COMPLETED** - Users can only access plans they own or have access to via Owner/Editor/Viewer roles
-2. **Form POST handlers** - Implement POST endpoints for all plan data input (payroll, sales, expenses, etc.)
-3. **Financial calculations** - Implement core projection calculations (cash flow, income statement, balance sheet)
-4. **Testing** - Add test coverage for handlers and business logic
+2. ~~**Form POST handlers**~~ ✅ **COMPLETED** - Payroll, Sales Forecast, Operating Expenses, Cash Flow, and Delete Plan all persist via POST
+3. ~~**Financial calculations**~~ ✅ **COMPLETED** - Income Statement, Balance Sheet, and Analytics (breakeven/ratios/amortization) now show real computed 3-year projections
+4. **Testing** - Add handler-level tests for the new report pages (GetIncomeStatement/GetBalanceSheet/GetAnalytics); domain-level projection engine already has test coverage in projection_test.go
 5. **Form Validation** - Client and server-side validation for all inputs
 6. **Error handling** - Comprehensive error messages and recovery flows
+7. **Income tax modeling** - No tax-rate input exists anywhere in the app; Net Income is currently pre-tax
 
 ## Project Structure Reference
 
@@ -286,13 +297,27 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - **Session-Based Auth (2026-07-29)**: Implemented cookie-based session management instead of JWT for simpler server-side state management in early stages.
 - **POST for Logout (2026-07-29)**: Changed logout from GET to POST to follow HTTP semantics (state-modifying operations should use POST).
 - **Authorization Middleware (2026-07-29)**: Applied RequireAccess middleware to plan-specific routes in RegisterRoutes() to enforce Owner/Editor/Viewer access control at the HTTP route level rather than within handlers.
+- **Domain Model Extended for Form Handlers (2026-07-29)**: Added SalaryRole/Benefit/PayrollTaxRates (payroll), Product/SalesGrowthCurve (sales forecast — a single global unit-growth curve with Y1 quarterly rates + one rate per future year, applied across all product lines), and InventoryPurchase/Distribution (cash flow) to the Plan aggregate, each with Clear/Add methods following the existing StartingPoint pattern (clear-then-rebuild on every save so edits don't duplicate rows).
+- **RequireAccess Owner Level Fixed (2026-07-29)**: `RequireAccess(domain.Owner)` previously had no matching branch and let any access level through; added an explicit Owner check so the new Delete Plan endpoint is actually owner-gated.
+- **PlanStore.Delete Added (2026-07-29)**: Added `Delete(id)` to the PlanStore interface and SQLiteStore, transactionally removing the plan row and its plan_access rows.
+- **Financial Projection Engine (2026-07-29)**: Added `internal/domain/projection.go`, a month-by-month projection engine (`ProjectMonths`) that produces Income Statement, Balance Sheet, ratio, and breakeven data. Key modeling decisions, all documented in the file's top comment and enforced by `TestBalanceSheetSnapshots_Balance`:
+  - **No income tax modeled.** There's no tax-rate input anywhere in the app; NetIncome is pre-tax. Showing a fabricated rate would be worse than clearly showing $0.
+  - **Debt vs. equity funding sources**: a FundingSource is an amortizing loan only if it has both `InterestRate > 0` and `TermMonths > 0`; otherwise its full Amount is treated as a one-time equity contribution with no debt service.
+  - **AR/Prepaid/AP/AccruedExpenses held static** at their Starting Point values for the whole projection (no revenue-driven AR/AP growth).
+  - **"Additional Inventory" cash-flow purchases** are an asset-for-asset swap (cash → inventory) with no depletion modeled — they never hit the Income Statement.
+  - **Starting Point balances (Cash/AR/Prepaid/AP/AccruedExpenses) represent an existing business's pre-existing balance sheet.** Their net value is folded into the opening Retained Earnings baseline as implied pre-existing equity — this was a real bug caught by the balance-sheet identity test (initially off by exactly that net amount) before the fix.
+  - **Sales growth curve is global** across all product lines: Year 1 uses quarterly monthly-compounding rates, subsequent years use one monthly-compounding rate per year (per the form's own "Monthly Growth" label).
+  - The balance sheet is guaranteed to balance (Assets = Liabilities + Equity) by construction, up to a few dollars of whole-dollar (`Money` is `int64`) rounding drift across a 36-month projection.
+- **Template Currency/Math Helpers Added (2026-07-29)**: Go's `html/template` has no built-in arithmetic or currency formatting. Added `internal/views/funcs.go` (`formatMoney`, `addMoney`, `formatPercent`, `formatRatio`) registered via `template.Funcs()` in `cmd/cli/serve.go`'s `loadTemplates()`.
+- **Balance Sheet Categories Simplified (2026-07-29)**: The original balance-sheet.html mockup had separate "Line of Credit," "Commercial Loans & Mortgages," and "Other Bank & Credit Card Debt" rows, and separate "Real Estate/Vehicles/Equipment" vs "Other Fixed Assets" rows — but the domain model doesn't categorize funding sources or capital assets that finely (just one pool of amortizing loans, one pool of capital assets). Rewrote those sections to a single "Loans Payable" and "Fixed Assets (at cost)" line each rather than fabricating a category split the data doesn't support.
 
 ### Known Limitations
 
-- **No Multi-User Support Yet** - All plans are in a shared store; needs authentication and per-user isolation
-- **No Calculations Generated** - Pages exist but don't perform actual financial projections
-- **No Data Persistence** - Everything is lost when server restarts
-- **No Export Functionality** - Can't export plans as Excel or PDF yet
+- **No Income Tax Modeling** - Net Income throughout the Income Statement, Balance Sheet, and Analytics pages is pre-tax; the "Income Tax Expense" line always shows $0
+- **No Export Functionality** - Can't export plans as Excel or PDF yet (browser print-to-PDF only)
+- **Money Truncates Cents** - `domain.Money` is `int64`; form amounts are parsed as float64 then truncated, so fractional cents are dropped (pre-existing pattern from Starting Point, kept for consistency). Over a 36-month projection this can drift the balance sheet by a few dollars — `BuildBalanceSheetPage`/`BuildAnalyticsPage` tolerate up to $25 before flagging "does not balance"
+- **Current/Quick Ratio show 0.00 when undefined** - if a plan has no Accounts Payable/Accrued Expenses, current liabilities are $0 and these ratios are mathematically undefined; the UI currently can't distinguish that from an actually-computed 0.0
+- **Loan/Fixed-Asset categories are not sub-typed** - the Balance Sheet and Amortization tab show one combined "Loans Payable" and "Fixed Assets" figure rather than breaking out Line-of-Credit vs. Commercial Loan vs. Equipment vs. Real Estate, since the domain model doesn't track those distinctions
 
 ### Questions to Ask If Stuck
 
@@ -304,9 +329,9 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 ---
 
 **Last Updated**: 2026-07-29  
-**Session Focus**: User Authorization enforcement, middleware application to routes, comprehensive testing  
-**Total Remaining Items**: ~45+ (across all categories)  
-**Critical Path**: ~~User Authorization~~ ✅ → Form POST Handlers → Financial Calculations → Testing
+**Session Focus**: Financial projection engine (Income Statement, Balance Sheet, Analytics — breakeven/ratios/amortization) built on top of the Payroll/Sales/OpEx/CashFlow data captured in the prior session  
+**Total Remaining Items**: ~35 (across all categories)  
+**Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → Testing → Form Validation
 
 ## Session Summary (2026-07-29)
 
@@ -340,3 +365,83 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - Comprehensive test coverage for authorization flows
 - Clean CLI entry point (cmd/cli/serve.go focused and minimal)
 - All tests passing (handlers and store)
+
+## Session Summary (2026-07-29, later): Form POST Handlers
+
+### What Shipped
+1. **Domain model extensions** (`internal/domain/plan.go`) - Added `SalaryRole`,
+   `Benefit`, `PayrollTaxRates` (payroll); `Product`, `SalesGrowthCurve`
+   (sales forecast); `InventoryPurchase`, `Distribution` (cash flow) — each
+   with `Add*`/`Clear*` methods and full JSON marshal/unmarshal support so
+   they persist through the existing SQLite JSON-blob store unchanged.
+2. **New POST handlers** (`internal/handlers/plan.go`) - `PostPayroll`,
+   `PostSalesForecast`, `PostOpExpenses`, `PostCashFlow`, `PostDeletePlan`,
+   all following the existing `PostStartingPoint` clear-then-rebuild pattern
+   (wipe existing rows, re-parse the submitted `name[]`/`amount[]` arrays,
+   save, redirect back to the same URL so the browser does a GET after POST).
+3. **Store & auth fixes** - Added `PlanStore.Delete(id)` (transactional:
+   removes `plan_access` rows then the `plans` row) and fixed a real gap in
+   `RequireAccess`: it previously had no branch for `domain.Owner`, so
+   `RequireAccess(domain.Owner)` silently let any access level through. Now
+   the new delete endpoint is properly owner-gated.
+4. **Templates** - Wired real `form action` URLs (payroll.html was still
+   posting to a placeholder `/test-submit`), added server-rendered prefill
+   rows for salaries/benefits/products/opex/inventory so editing a plan
+   round-trips saved data instead of always starting from an empty form.
+5. **Verified end-to-end in a real browser** (signup → create plan → submit
+   each of the four forms → confirm saved values reappear on reload → delete
+   plan) against a scratch SQLite DB, not just `go build`/`go test`.
+
+### Deliberately Deferred
+- The Sales Forecast domain model captures exactly what the form submits
+  (quarterly Y1 growth + per-year future rates, applied globally across
+  product lines) but nothing yet *uses* that curve to project revenue —
+  `RevenueStream.ProjectedAmount` is unchanged. Wiring that up is part of
+  the still-open **Financial Calculations** work.
+- No dedicated `/cogs` route was added — the sales-forecast form already
+  captures per-unit COGS per product (`prod_cogs[]`); a separate COGS page
+  was never built alongside it, so `AGENTS.md`'s original checklist item
+  was stale.
+
+## Session Summary (2026-07-29, later still): Financial Calculations
+
+### What Shipped
+1. **Projection engine** (`internal/domain/projection.go`) - A month-by-month
+   engine (`ProjectMonths`) that turns Products+SalesGrowthCurve, Payroll,
+   OpEx, CapitalAssets, FundingSources, and discretionary CashFlow items into
+   full financial statements: `AnnualSummaries` (income statement),
+   `BalanceSheetSnapshots`, `FinancialRatiosSeries`, `Breakeven`, plus
+   `ProductFinancialsSeries`/`OpExAnnualBreakdown`/`AssetDepreciationBreakdown`/
+   `LoanAmortizationSummary` for the per-line-item report tables.
+2. **Report pages wired to real data** - `IncomeStatementPage`,
+   `BalanceSheetPage`, and `AnalyticsPage` (in `internal/views/types.go` /
+   `builders.go`) now carry computed projection data instead of nothing;
+   `income-statement.html`, `balance-sheet.html`, and `analytics.html`
+   (breakeven, ratios, diagnostic, and amortization tabs — COGS Calculator
+   tab intentionally left alone, it's a client-side scratchpad) render real
+   per-year and per-line-item numbers instead of static "$0.00" placeholders.
+3. **Template math/currency helpers** (`internal/views/funcs.go`) -
+   `formatMoney`, `addMoney`, `formatPercent`, `formatRatio`, since
+   `html/template` has none of this built in.
+4. **A real bug caught by testing, not eyeballing**: the balance sheet
+   didn't balance by ~$3,400–$5,400 in early test runs. Root cause: Starting
+   Point's Cash/AR/Prepaid/AP/AccruedExpenses balances (meant for an
+   already-operating business) reduced/increased assets and liabilities with
+   no offsetting equity entry. Fixed by folding their net value into the
+   opening Retained Earnings baseline as implied pre-existing equity —
+   verified by `TestBalanceSheetSnapshots_Balance`, which asserts Assets =
+   Liabilities + Equity within a small rounding tolerance.
+5. **Verified end-to-end in a real browser**: signed up, created a plan,
+   entered a capital asset + two funding sources (one loan, one equity) +
+   payroll + a product + an OpEx line, then confirmed the Income Statement,
+   Balance Sheet, and all four Analytics tabs render sane, cross-consistent
+   numbers (e.g. the loan's annual interest+principal summed to a constant
+   payment across all 3 years, confirming the amortization math).
+
+### Deliberately Deferred / Documented Simplifications
+See the Tech Decisions Log entry "Financial Projection Engine" above for the
+full list (no income tax, debt-vs-equity funding source rule, static
+AR/Prepaid/AP, inventory-as-asset-swap). These are simplifying assumptions
+appropriate for an MVP financial planning tool, not oversights — each is
+documented in `projection.go`'s file-level comment so future work can
+tighten them deliberately rather than rediscover them by surprise.

@@ -105,15 +105,15 @@
                 <tbody>
                   <tr>
                     <td>Gross Margin</td>
-                    <td class="text-end">$0.00</td>
+                    <td class="text-end">{{ formatMoney .Breakeven.GrossMargin }}</td>
                   </tr>
                   <tr>
                     <td>Total Sales</td>
-                    <td class="text-end">$0.00</td>
+                    <td class="text-end">{{ formatMoney .Breakeven.TotalSales }}</td>
                   </tr>
                   <tr class="fw-bold bg-light">
                     <td>Gross Margin / Total Sales</td>
-                    <td class="text-end">0.0%</td>
+                    <td class="text-end">{{ formatPercent .Breakeven.GrossMarginPercent }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -129,15 +129,15 @@
                 <tbody>
                   <tr>
                     <td>Payroll</td>
-                    <td class="text-end">$0.00</td>
+                    <td class="text-end">{{ formatMoney .Breakeven.PayrollFixedCost }}</td>
                   </tr>
                   <tr>
                     <td>Operating Expenses</td>
-                    <td class="text-end">$0.00</td>
+                    <td class="text-end">{{ formatMoney .Breakeven.OperatingExpenseFixedCost }}</td>
                   </tr>
                   <tr class="fw-bold bg-light">
                     <td>Operating + Payroll</td>
-                    <td class="text-end">$0.00</td>
+                    <td class="text-end">{{ formatMoney .Breakeven.TotalFixedExpenses }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -151,19 +151,19 @@
                 <tbody>
                   <tr>
                     <td>Gross Margin % of Sales</td>
-                    <td class="text-end">0.0%</td>
+                    <td class="text-end">{{ formatPercent .Breakeven.GrossMarginPercent }}</td>
                   </tr>
                   <tr>
                     <td>Total Fixed Expenses</td>
-                    <td class="text-end">$0.00</td>
+                    <td class="text-end">{{ formatMoney .Breakeven.TotalFixedExpenses }}</td>
                   </tr>
                   <tr class="fw-bold fs-5 text-success">
                     <td>Yearly Breakeven Amount</td>
-                    <td class="text-end">$0.00</td>
+                    <td class="text-end">{{ formatMoney .Breakeven.BreakevenAnnual }}</td>
                   </tr>
                   <tr class="fw-bold text-success">
                     <td>Monthly Breakeven Amount</td>
-                    <td class="text-end">$0.00</td>
+                    <td class="text-end">{{ formatMoney .Breakeven.BreakevenMonthly }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -214,9 +214,9 @@
                 </tr>
                 <tr>
                   <td>Current Ratio</td>
-                  <td class="text-end">0.0</td>
-                  <td class="text-end">0.0</td>
-                  <td class="text-end">0.0</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 0).CurrentRatio }}</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 1).CurrentRatio }}</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 2).CurrentRatio }}</td>
                   <td class="bg-warning bg-opacity-10">
                     <input
                       type="number"
@@ -227,9 +227,9 @@
                 </tr>
                 <tr>
                   <td>Quick Ratio</td>
-                  <td class="text-end">0.0</td>
-                  <td class="text-end">0.0</td>
-                  <td class="text-end">0.0</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 0).QuickRatio }}</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 1).QuickRatio }}</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 2).QuickRatio }}</td>
                   <td class="bg-warning bg-opacity-10">
                     <input
                       type="number"
@@ -244,9 +244,9 @@
                 </tr>
                 <tr>
                   <td>Debt to Equity Ratio</td>
-                  <td class="text-end">0.0</td>
-                  <td class="text-end">0.0</td>
-                  <td class="text-end">0.0</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 0).DebtToEquity }}</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 1).DebtToEquity }}</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 2).DebtToEquity }}</td>
                   <td class="bg-warning bg-opacity-10">
                     <input
                       type="number"
@@ -257,9 +257,9 @@
                 </tr>
                 <tr>
                   <td>Debt-Service Coverage Ratio (DSCR)</td>
-                  <td class="text-end">0.0</td>
-                  <td class="text-end">0.0</td>
-                  <td class="text-end">0.0</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 0).DSCR }}</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 1).DSCR }}</td>
+                  <td class="text-end">{{ formatRatio (index .Ratios 2).DSCR }}</td>
                   <td class="bg-warning bg-opacity-10">
                     <input
                       type="number"
@@ -274,9 +274,9 @@
                 </tr>
                 <tr>
                   <td>Sales Growth</td>
-                  <td class="text-end">0.0%</td>
-                  <td class="text-end">0.0%</td>
-                  <td class="text-end">0.0%</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 0).SalesGrowthPercent }}</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 1).SalesGrowthPercent }}</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 2).SalesGrowthPercent }}</td>
                   <td class="bg-warning bg-opacity-10">
                     <input
                       type="number"
@@ -287,9 +287,9 @@
                 </tr>
                 <tr>
                   <td>Gross Profit Margin</td>
-                  <td class="text-end">0.0%</td>
-                  <td class="text-end">0.0%</td>
-                  <td class="text-end">0.0%</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 0).GrossProfitMarginPercent }}</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 1).GrossProfitMarginPercent }}</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 2).GrossProfitMarginPercent }}</td>
                   <td class="bg-warning bg-opacity-10">
                     <input
                       type="number"
@@ -300,9 +300,9 @@
                 </tr>
                 <tr>
                   <td>Net Profit Margin</td>
-                  <td class="text-end">0.0%</td>
-                  <td class="text-end">0.0%</td>
-                  <td class="text-end">0.0%</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 0).NetProfitMarginPercent }}</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 1).NetProfitMarginPercent }}</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 2).NetProfitMarginPercent }}</td>
                   <td class="bg-warning bg-opacity-10">
                     <input
                       type="number"
@@ -313,9 +313,9 @@
                 </tr>
                 <tr>
                   <td>Return on Equity (ROE)</td>
-                  <td class="text-end">0.0%</td>
-                  <td class="text-end">0.0%</td>
-                  <td class="text-end">0.0%</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 0).ReturnOnEquityPercent }}</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 1).ReturnOnEquityPercent }}</td>
+                  <td class="text-end">{{ formatPercent (index .Ratios 2).ReturnOnEquityPercent }}</td>
                   <td class="bg-warning bg-opacity-10">
                     <input
                       type="number"
@@ -355,10 +355,15 @@
               </tr>
               <tr>
                 <td>Owner's Cash Injection</td>
-                <td class="text-end">0.0%</td>
-                <td class="text-muted small">
-                  Owner's injection might be low in relation to the amount
-                  needed.
+                <td class="text-end">{{ formatPercent .OwnerInjectionPercent }}</td>
+                <td
+                  class="small {{ if lt .OwnerInjectionPercent 20.0 }}text-danger{{ else if lt .OwnerInjectionPercent 33.0 }}text-warning{{ else }}text-success{{ end }}"
+                >
+                  {{ if lt .OwnerInjectionPercent 20.0 }}Owner's injection is
+                  low relative to total financing — lenders often expect
+                  20%+.{{ else if lt .OwnerInjectionPercent 33.0 }}Owner's
+                  injection is moderate.{{ else }}Owner's injection is a
+                  healthy share of total financing.{{ end }}
                 </td>
               </tr>
 
@@ -368,18 +373,26 @@
                 </td>
               </tr>
               <tr>
-                <td>Commercial Loan Interest Rate</td>
-                <td class="text-end">9.0%</td>
-                <td class="text-success small">
-                  Interest rate seems reasonable.
+                <td>Average Loan Interest Rate</td>
+                <td class="text-end">{{ formatPercent .AverageLoanRatePercent }}</td>
+                <td
+                  class="small {{ if gt .AverageLoanRatePercent 15.0 }}text-warning{{ else }}text-success{{ end }}"
+                >
+                  {{ if gt .AverageLoanRatePercent 15.0 }}Interest rate looks
+                  high — double check your loan terms.{{ else }}Interest rate
+                  seems reasonable.{{ end }}
                 </td>
               </tr>
               <tr>
-                <td>Debt-Service Coverage</td>
-                <td class="text-end">0.0%</td>
-                <td class="text-muted small">
-                  Calculated loan payments relative to operating profit need
-                  review.
+                <td>Debt-Service Coverage (Year 1)</td>
+                <td class="text-end">{{ formatRatio (index .Ratios 0).DSCR }}</td>
+                <td
+                  class="small {{ if lt (index .Ratios 0).DSCR 1.25 }}text-warning{{ else }}text-success{{ end }}"
+                >
+                  {{ if lt (index .Ratios 0).DSCR 1.25 }}DSCR below 1.25 may
+                  concern lenders; operating profit is tight relative to debt
+                  payments.{{ else }}Operating profit comfortably covers debt
+                  service.{{ end }}
                 </td>
               </tr>
 
@@ -389,17 +402,25 @@
                 </td>
               </tr>
               <tr>
-                <td>Gross Margin as a % of Sales</td>
-                <td class="text-end">0.0%</td>
-                <td class="text-danger small">
-                  Gross margin percentage is extremely low or missing.
+                <td>Gross Margin as a % of Sales (Year 1)</td>
+                <td class="text-end">{{ formatPercent .Breakeven.GrossMarginPercent }}</td>
+                <td
+                  class="small {{ if lt .Breakeven.GrossMarginPercent 20.0 }}text-danger{{ else }}text-success{{ end }}"
+                >
+                  {{ if lt .Breakeven.GrossMarginPercent 20.0 }}Gross margin
+                  percentage is low — check your pricing and unit
+                  costs.{{ else }}Gross margin looks healthy.{{ end }}
                 </td>
               </tr>
               <tr>
-                <td>Profitability Levels</td>
-                <td class="text-end">$0.00</td>
-                <td class="text-warning small">
-                  The business is not showing a profit in Year 1.
+                <td>Profitability (Year 1 Net Income)</td>
+                <td class="text-end">{{ formatMoney (index .Annuals 0).NetIncome }}</td>
+                <td
+                  class="small {{ if lt (index .Annuals 0).NetIncome 0 }}text-warning{{ else }}text-success{{ end }}"
+                >
+                  {{ if lt (index .Annuals 0).NetIncome 0 }}The business is not
+                  showing a profit in Year 1.{{ else }}The business is
+                  profitable in Year 1.{{ end }}
                 </td>
               </tr>
 
@@ -410,9 +431,13 @@
               </tr>
               <tr>
                 <td>Does the Balance Sheet Balance?</td>
-                <td class="text-end">$0.00</td>
-                <td class="text-success small">
-                  The balance sheet balances perfectly.
+                <td class="text-end">{{ if .BalanceSheetBalances }}Yes{{ else }}No{{ end }}</td>
+                <td
+                  class="small {{ if .BalanceSheetBalances }}text-success{{ else }}text-danger{{ end }}"
+                >
+                  {{ if .BalanceSheetBalances }}The balance sheet balances
+                  (within rounding).{{ else }}The balance sheet does not
+                  balance — please review your plan inputs.{{ end }}
                 </td>
               </tr>
             </tbody>
@@ -581,23 +606,26 @@
                   </tr>
                 </thead>
                 <tbody>
+                  {{ if .AssetDepreciation }} {{ range .AssetDepreciation }}
                   <tr>
-                    <td>Equipment</td>
-                    <td class="text-end">7</td>
-                    <td class="text-end">$0.00</td>
+                    <td>{{ .Name }}</td>
+                    <td class="text-end">{{ .UsefulLifeYears }}</td>
+                    <td class="text-end">{{ formatMoney .Year1Depreciation }}</td>
                   </tr>
+                  {{ end }} {{ else }}
                   <tr>
-                    <td>Furniture and Fixtures</td>
-                    <td class="text-end">5</td>
-                    <td class="text-end">$0.00</td>
+                    <td colspan="3" class="text-muted text-center">
+                      No fixed assets entered yet.
+                    </td>
                   </tr>
+                  {{ end }}
                 </tbody>
               </table>
             </div>
 
             <div class="col-lg-6 mb-4">
               <h6 class="fw-bold bg-light p-2 border rounded">
-                Loan Amortization (Commercial Loan)
+                Loan Amortization (All Loans Combined)
               </h6>
               <table class="table table-sm small">
                 <thead>
@@ -609,24 +637,14 @@
                   </tr>
                 </thead>
                 <tbody>
+                  {{ range .LoanAmortization }}
                   <tr>
-                    <td>Year 1</td>
-                    <td class="text-end">$0.00</td>
-                    <td class="text-end">$0.00</td>
-                    <td class="text-end">$0.00</td>
+                    <td>Year {{ .Year }}</td>
+                    <td class="text-end">{{ formatMoney .Interest }}</td>
+                    <td class="text-end">{{ formatMoney .Principal }}</td>
+                    <td class="text-end">{{ formatMoney .EndingBalance }}</td>
                   </tr>
-                  <tr>
-                    <td>Year 2</td>
-                    <td class="text-end">$0.00</td>
-                    <td class="text-end">$0.00</td>
-                    <td class="text-end">$0.00</td>
-                  </tr>
-                  <tr>
-                    <td>Year 3</td>
-                    <td class="text-end">$0.00</td>
-                    <td class="text-end">$0.00</td>
-                    <td class="text-end">$0.00</td>
-                  </tr>
+                  {{ end }}
                 </tbody>
               </table>
             </div>

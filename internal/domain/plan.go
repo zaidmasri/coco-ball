@@ -75,6 +75,86 @@ type StartingBalances struct {
 	AccruedExpenses    Money
 }
 
+// AnnualGrowth captures a Year 2 / Year 3 (etc.) growth rate schedule that
+// applies on top of a Year 1 base amount. Index 0 = Year 2, index 1 = Year 3.
+type AnnualGrowth struct {
+	RatesAfterYear1 []float64
+}
+
+// GrowthRatePercent returns the growth rate at the given index expressed as a
+// percentage (e.g. 0.03 -> 3.0), for use directly in HTML templates.
+func (g AnnualGrowth) GrowthRatePercent(index int) float64 {
+	if index < 0 || index >= len(g.RatesAfterYear1) {
+		return 0
+	}
+	return g.RatesAfterYear1[index] * 100
+}
+
+// SalaryRole is a single payroll line item (a role/title with headcount).
+type SalaryRole struct {
+	Role           string
+	IsContractor   bool
+	Headcount      int
+	MonthlyPay     Money
+	GrowthAfterYr1 AnnualGrowth
+}
+
+// Benefit is a single employee benefit line item.
+type Benefit struct {
+	Type           string
+	MonthlyAmount  Money
+	GrowthAfterYr1 AnnualGrowth
+}
+
+// PayrollTaxRates holds employer-side payroll tax rates.
+type PayrollTaxRates struct {
+	SocialSecurityRate float64
+	MedicareRate       float64
+	FUTARate           float64
+	SUTARate           float64
+}
+
+// Product is a single sales-forecast product/service line.
+type Product struct {
+	Name         string
+	Month1Units  int
+	PricePerUnit Money
+	CostPerUnit  Money
+}
+
+// SalesGrowthCurve is the global unit-sales growth schedule applied to every
+// product line: quarterly rates for Year 1, then one rate per subsequent year.
+type SalesGrowthCurve struct {
+	Year1QuarterlyRates [4]float64
+	FutureYearRates     []float64
+}
+
+// InventoryPurchase is a discretionary additional-inventory cash outflow.
+type InventoryPurchase struct {
+	Category       string
+	MonthlyAmount  Money
+	GrowthAfterYr1 AnnualGrowth
+}
+
+// Distribution is a discretionary owner distribution / repayment cash outflow.
+type Distribution struct {
+	Name           string
+	MonthlyAmount  Money
+	GrowthAfterYr1 AnnualGrowth
+}
+
+// GrowthRatePercent returns the growth rate at the given index as a
+// percentage, for use directly in HTML templates.
+func (i InventoryPurchase) GrowthRatePercent(index int) float64 {
+	return i.GrowthAfterYr1.GrowthRatePercent(index)
+}
+
+// GrowthRatePercent returns the growth rate at the given index as a
+// percentage, for use directly in HTML templates.
+func (d Distribution) GrowthRatePercent(index int) float64 {
+	return d.GrowthAfterYr1.GrowthRatePercent(index)
+}
+
 // DepreciationForMonth calculates the exact depreciation expense for a specific normalized month.
 func (c CapitalAsset) DepreciationForMonth(month MonthIndex) Money {
 	// Edge Case: Asset hasn't been purchased yet
@@ -134,6 +214,11 @@ type GrowthStrategy struct {
 	AnnualRate float64
 }
 
+// AnnualRatePercent returns the annual growth rate as a percentage (e.g. 0.03 -> 3.0).
+func (g GrowthStrategy) AnnualRatePercent() float64 {
+	return g.AnnualRate * 100
+}
+
 type Cost struct {
 	Name               string
 	BaseAmountPerMonth Money
@@ -183,6 +268,13 @@ type Plan struct {
 	startupCosts     []StartupCost
 	fundingSources   []FundingSource
 	startingBalances StartingBalances
+	salaryRoles      []SalaryRole
+	benefits         []Benefit
+	payrollTaxRates  PayrollTaxRates
+	products         []Product
+	salesGrowth      SalesGrowthCurve
+	inventoryPlan    []InventoryPurchase
+	distributions    []Distribution
 }
 
 func validateCoreProperties(name string, month, year int) (string, error) {
@@ -222,6 +314,11 @@ func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int, ownerID
 		futurePurchases: make([]CapitalAsset, 0),
 		startupCosts:    make([]StartupCost, 0),
 		fundingSources:  make([]FundingSource, 0),
+		salaryRoles:     make([]SalaryRole, 0),
+		benefits:        make([]Benefit, 0),
+		products:        make([]Product, 0),
+		inventoryPlan:   make([]InventoryPurchase, 0),
+		distributions:   make([]Distribution, 0),
 	}, nil
 }
 
@@ -257,6 +354,148 @@ func (p *Plan) SetStartingBalances(cash, ar, pe, ap, ae Money) {
 		AccruedExpenses:    ae,
 	}
 }
+
+// ClearPayroll wipes existing payroll data so forms can cleanly overwrite it.
+func (p *Plan) ClearPayroll() {
+	p.salaryRoles = make([]SalaryRole, 0)
+	p.benefits = make([]Benefit, 0)
+	p.payrollTaxRates = PayrollTaxRates{}
+}
+
+// AddSalaryRole appends a salary/wage line item.
+func (p *Plan) AddSalaryRole(role SalaryRole) error {
+	if strings.TrimSpace(role.Role) == "" {
+		return ErrInvalidName
+	}
+	if role.MonthlyPay < 0 {
+		return ErrNegativeAmount
+	}
+	p.salaryRoles = append(p.salaryRoles, role)
+	return nil
+}
+
+// AddBenefit appends an employee benefit line item.
+func (p *Plan) AddBenefit(benefit Benefit) error {
+	if strings.TrimSpace(benefit.Type) == "" {
+		return ErrInvalidName
+	}
+	if benefit.MonthlyAmount < 0 {
+		return ErrNegativeAmount
+	}
+	p.benefits = append(p.benefits, benefit)
+	return nil
+}
+
+// SetPayrollTaxRates sets the employer payroll tax rates.
+func (p *Plan) SetPayrollTaxRates(rates PayrollTaxRates) {
+	p.payrollTaxRates = rates
+}
+
+func (p *Plan) SalaryRoles() []SalaryRole { return p.salaryRoles }
+func (p *Plan) Benefits() []Benefit       { return p.benefits }
+func (p *Plan) PayrollTaxRates() PayrollTaxRates {
+	return p.payrollTaxRates
+}
+
+// HasPayrollTaxRates reports whether any payroll tax rate has been set,
+// used by templates to decide whether to show suggested defaults.
+func (r PayrollTaxRates) HasPayrollTaxRates() bool {
+	return r.SocialSecurityRate != 0 || r.MedicareRate != 0 || r.FUTARate != 0 || r.SUTARate != 0
+}
+
+func (r PayrollTaxRates) SocialSecurityRatePercent() float64 { return r.SocialSecurityRate * 100 }
+func (r PayrollTaxRates) MedicareRatePercent() float64       { return r.MedicareRate * 100 }
+func (r PayrollTaxRates) FUTARatePercent() float64           { return r.FUTARate * 100 }
+func (r PayrollTaxRates) SUTARatePercent() float64           { return r.SUTARate * 100 }
+
+// GrowthRatePercent returns the growth rate at the given index as a
+// percentage, for use directly in HTML templates.
+func (s SalaryRole) GrowthRatePercent(index int) float64 {
+	return s.GrowthAfterYr1.GrowthRatePercent(index)
+}
+
+// GrowthRatePercent returns the growth rate at the given index as a
+// percentage, for use directly in HTML templates.
+func (b Benefit) GrowthRatePercent(index int) float64 {
+	return b.GrowthAfterYr1.GrowthRatePercent(index)
+}
+
+// ClearSalesForecast wipes existing sales forecast data.
+func (p *Plan) ClearSalesForecast() {
+	p.products = make([]Product, 0)
+	p.salesGrowth = SalesGrowthCurve{}
+}
+
+// AddProduct appends a product/service sales line.
+func (p *Plan) AddProduct(product Product) error {
+	if strings.TrimSpace(product.Name) == "" {
+		return ErrInvalidName
+	}
+	if product.PricePerUnit < 0 || product.CostPerUnit < 0 {
+		return ErrNegativeAmount
+	}
+	p.products = append(p.products, product)
+	return nil
+}
+
+// SetSalesGrowth sets the global unit-sales growth curve.
+func (p *Plan) SetSalesGrowth(curve SalesGrowthCurve) {
+	p.salesGrowth = curve
+}
+
+func (p *Plan) Products() []Product           { return p.products }
+func (p *Plan) SalesGrowth() SalesGrowthCurve { return p.salesGrowth }
+
+// Year1QuarterlyPercent returns the Year 1 quarterly growth rate at the given
+// index (0-3) as a percentage, for use directly in HTML templates.
+func (s SalesGrowthCurve) Year1QuarterlyPercent(index int) float64 {
+	if index < 0 || index >= len(s.Year1QuarterlyRates) {
+		return 0
+	}
+	return s.Year1QuarterlyRates[index] * 100
+}
+
+// FutureYearPercent returns the future-year growth rate at the given index as
+// a percentage, for use directly in HTML templates.
+func (s SalesGrowthCurve) FutureYearPercent(index int) float64 {
+	if index < 0 || index >= len(s.FutureYearRates) {
+		return 0
+	}
+	return s.FutureYearRates[index] * 100
+}
+
+// ClearCashFlow wipes existing discretionary cash flow data.
+func (p *Plan) ClearCashFlow() {
+	p.inventoryPlan = make([]InventoryPurchase, 0)
+	p.distributions = make([]Distribution, 0)
+}
+
+// AddInventoryPurchase appends an additional-inventory cash outflow line.
+func (p *Plan) AddInventoryPurchase(inv InventoryPurchase) error {
+	if strings.TrimSpace(inv.Category) == "" {
+		return ErrInvalidName
+	}
+	if inv.MonthlyAmount < 0 {
+		return ErrNegativeAmount
+	}
+	p.inventoryPlan = append(p.inventoryPlan, inv)
+	return nil
+}
+
+// AddDistribution appends an owner distribution / repayment cash outflow line.
+func (p *Plan) AddDistribution(dist Distribution) error {
+	if strings.TrimSpace(dist.Name) == "" {
+		return ErrInvalidName
+	}
+	if dist.MonthlyAmount < 0 {
+		return ErrNegativeAmount
+	}
+	p.distributions = append(p.distributions, dist)
+	return nil
+}
+
+func (p *Plan) AdditionalInventory() []InventoryPurchase { return p.inventoryPlan }
+func (p *Plan) Distributions() []Distribution            { return p.distributions }
 
 func (p *Plan) ChangeCoreDetails(name string, startingMonth, startingYear int) error {
 	cleanName, err := validateCoreProperties(name, startingMonth, startingYear)
@@ -397,6 +636,17 @@ func (p *Plan) AddRevenue(name string, baseAmount Money, growth GrowthStrategy) 
 	return nil
 }
 
+// ClearOpEx wipes existing operating expense data so forms can cleanly overwrite it.
+func (p *Plan) ClearOpEx() {
+	p.opEx = make([]Cost, 0)
+}
+
+func (p *Plan) OpEx() []Cost {
+	res := make([]Cost, len(p.opEx))
+	copy(res, p.opEx)
+	return res
+}
+
 func (p *Plan) AddOpEx(name string, baseAmount Money, growth GrowthStrategy) error {
 	if strings.TrimSpace(name) == "" {
 		return ErrInvalidName
@@ -449,35 +699,49 @@ func (p *Plan) AddCapitalPurchase(asset CapitalAsset) error {
 
 // planJSON is an intermediate struct for JSON marshalling
 type planJSON struct {
-	ID               string               `json:"id"`
-	Name             string               `json:"name"`
-	StartingMonth    int                  `json:"startingMonth"`
-	StartingYear     int                  `json:"startingYear"`
-	OwnerID          string               `json:"ownerID"`
-	Revenues         []RevenueStream      `json:"revenues"`
-	OpEx             []Cost               `json:"opEx"`
-	COGS             []Cost               `json:"cogs"`
-	FuturePurchases  []CapitalAsset       `json:"futurePurchases"`
-	StartupCosts     []StartupCost        `json:"startupCosts"`
-	FundingSources   []FundingSource      `json:"fundingSources"`
-	StartingBalances StartingBalances     `json:"startingBalances"`
+	ID                  string              `json:"id"`
+	Name                string              `json:"name"`
+	StartingMonth       int                 `json:"startingMonth"`
+	StartingYear        int                 `json:"startingYear"`
+	OwnerID             string              `json:"ownerID"`
+	Revenues            []RevenueStream     `json:"revenues"`
+	OpEx                []Cost              `json:"opEx"`
+	COGS                []Cost              `json:"cogs"`
+	FuturePurchases     []CapitalAsset      `json:"futurePurchases"`
+	StartupCosts        []StartupCost       `json:"startupCosts"`
+	FundingSources      []FundingSource     `json:"fundingSources"`
+	StartingBalances    StartingBalances    `json:"startingBalances"`
+	SalaryRoles         []SalaryRole        `json:"salaryRoles"`
+	Benefits            []Benefit           `json:"benefits"`
+	PayrollTaxRates     PayrollTaxRates     `json:"payrollTaxRates"`
+	Products            []Product           `json:"products"`
+	SalesGrowth         SalesGrowthCurve    `json:"salesGrowth"`
+	AdditionalInventory []InventoryPurchase `json:"additionalInventory"`
+	Distributions       []Distribution      `json:"distributions"`
 }
 
 // MarshalJSON implements json.Marshaler for Plan
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	pj := planJSON{
-		ID:               p.id.String(),
-		Name:             p.name,
-		StartingMonth:    p.startingMonth,
-		StartingYear:     p.startingYear,
-		OwnerID:          p.ownerID.String(),
-		Revenues:         p.revenues,
-		OpEx:             p.opEx,
-		COGS:             p.cogs,
-		FuturePurchases:  p.futurePurchases,
-		StartupCosts:     p.startupCosts,
-		FundingSources:   p.fundingSources,
-		StartingBalances: p.startingBalances,
+		ID:                  p.id.String(),
+		Name:                p.name,
+		StartingMonth:       p.startingMonth,
+		StartingYear:        p.startingYear,
+		OwnerID:             p.ownerID.String(),
+		Revenues:            p.revenues,
+		OpEx:                p.opEx,
+		COGS:                p.cogs,
+		FuturePurchases:     p.futurePurchases,
+		StartupCosts:        p.startupCosts,
+		FundingSources:      p.fundingSources,
+		StartingBalances:    p.startingBalances,
+		SalaryRoles:         p.salaryRoles,
+		Benefits:            p.benefits,
+		PayrollTaxRates:     p.payrollTaxRates,
+		Products:            p.products,
+		SalesGrowth:         p.salesGrowth,
+		AdditionalInventory: p.inventoryPlan,
+		Distributions:       p.distributions,
 	}
 
 	return json.Marshal(pj)
@@ -512,6 +776,13 @@ func (p *Plan) UnmarshalJSON(data []byte) error {
 	p.startupCosts = pj.StartupCosts
 	p.fundingSources = pj.FundingSources
 	p.startingBalances = pj.StartingBalances
+	p.salaryRoles = pj.SalaryRoles
+	p.benefits = pj.Benefits
+	p.payrollTaxRates = pj.PayrollTaxRates
+	p.products = pj.Products
+	p.salesGrowth = pj.SalesGrowth
+	p.inventoryPlan = pj.AdditionalInventory
+	p.distributions = pj.Distributions
 
 	return nil
 }

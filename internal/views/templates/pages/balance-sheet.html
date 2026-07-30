@@ -71,33 +71,33 @@
             </tr>
             <tr>
               <td class="ps-4 text-muted">Cash</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .Cash }}</td>
+              {{ end }}
             </tr>
             <tr>
               <td class="ps-4 text-muted">Accounts Receivable</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .AccountsReceivable }}</td>
+              {{ end }}
             </tr>
             <tr>
               <td class="ps-4 text-muted">Inventory</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .Inventory }}</td>
+              {{ end }}
             </tr>
             <tr>
               <td class="ps-4 text-muted">Prepaid Expenses & Other</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .PrepaidExpenses }}</td>
+              {{ end }}
             </tr>
             <tr class="fw-bold bg-light">
               <td class="ps-4">Total Current Assets</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .CurrentAssets }}</td>
+              {{ end }}
             </tr>
 
             <tr>
@@ -106,37 +106,33 @@
               </td>
             </tr>
             <tr>
-              <td class="ps-4 text-muted">Real Estate, Vehicles & Equipment</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-            </tr>
-            <tr>
-              <td class="ps-4 text-muted">Other Fixed Assets</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-            </tr>
-            <tr class="fw-bold bg-light">
-              <td class="ps-4">Total Fixed Assets</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              <td class="ps-4 text-muted">Fixed Assets (at cost)</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .FixedAssetsGross }}</td>
+              {{ end }}
             </tr>
             <tr>
               <td class="ps-4 text-danger">(Less Accumulated Depreciation)</td>
-              <td class="text-end text-danger">($0.00)</td>
-              <td class="text-end text-danger">($0.00)</td>
-              <td class="text-end text-danger">($0.00)</td>
+              {{ range .Years }}
+              <td class="text-end text-danger">
+                ({{ formatMoney .AccumulatedDepreciation }})
+              </td>
+              {{ end }}
+            </tr>
+            <tr class="fw-bold bg-light">
+              <td class="ps-4">Total Fixed Assets, net</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .FixedAssetsNet }}</td>
+              {{ end }}
             </tr>
 
             <tr
               class="fw-bold bg-primary bg-opacity-10 text-primary border-top border-bottom border-primary border-2"
             >
               <td class="py-3 fs-6">Total Assets</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end py-3 fs-6">{{ formatMoney .TotalAssets }}</td>
+              {{ end }}
             </tr>
 
             <tr>
@@ -155,77 +151,72 @@
             </tr>
             <tr>
               <td class="ps-4 text-muted">Accounts Payable</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .AccountsPayable }}</td>
+              {{ end }}
             </tr>
             <tr>
-              <td class="ps-4 text-muted">Line of Credit Balance</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              <td class="ps-4 text-muted">Accrued Expenses</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .AccruedExpenses }}</td>
+              {{ end }}
             </tr>
             <tr>
-              <td class="ps-4 text-muted">Commercial Loans & Mortgages</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-            </tr>
-            <tr>
-              <td class="ps-4 text-muted">Other Bank & Credit Card Debt</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              <td class="ps-4 text-muted">Loans Payable</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .LoansPayable }}</td>
+              {{ end }}
             </tr>
             <tr class="fw-bold bg-light">
               <td class="ps-4">Total Liabilities</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .TotalLiabilities }}</td>
+              {{ end }}
             </tr>
 
             <tr>
               <td colspan="4" class="fw-bold pt-4 text-secondary">Equity</td>
             </tr>
             <tr>
-              <td class="ps-4 text-muted">Common Stock / Owner's Investment</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-            </tr>
-            <tr>
-              <td class="ps-4 text-muted">Retained Earnings</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              <td class="ps-4 text-muted">Owner's Investment</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .OwnersEquity }}</td>
+              {{ end }}
             </tr>
             <tr>
               <td class="ps-4 text-muted">
-                Dividends Dispersed / Owner's Draw
+                Retained Earnings
+                <i
+                  class="bi bi-info-circle"
+                  title="Cumulative net income minus distributions; for an existing business this also includes the net of your Starting Point cash/AR/prepaid/AP balances"
+                ></i>
               </td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .RetainedEarnings }}</td>
+              {{ end }}
             </tr>
             <tr class="fw-bold bg-light">
               <td class="ps-4">Total Equity</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .TotalEquity }}</td>
+              {{ end }}
             </tr>
 
             <tr
               class="fw-bold bg-primary bg-opacity-10 text-primary border-top border-bottom border-primary border-2"
             >
               <td class="py-3 fs-6">Total Liabilities and Equity</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end py-3 fs-6">
+                {{ formatMoney .TotalLiabilitiesAndEquity }}
+              </td>
+              {{ end }}
             </tr>
           </tbody>
         </table>
       </div>
 
+      {{ if .Balances }}
       <div
         class="alert alert-success d-flex align-items-center mt-5 border-0 shadow-sm"
         role="alert"
@@ -234,11 +225,26 @@
         <div>
           <h6 class="fw-bold mb-1">Balance Sheet Check</h6>
           <p class="mb-0 small">
-            Your Assets perfectly match your Liabilities + Equity. Your
-            financial statements are in balance!
+            Your Assets match your Liabilities + Equity. Your financial
+            statements are in balance!
           </p>
         </div>
       </div>
+      {{ else }}
+      <div
+        class="alert alert-warning d-flex align-items-center mt-5 border-0 shadow-sm"
+        role="alert"
+      >
+        <i class="bi bi-exclamation-triangle-fill fs-3 me-3"></i>
+        <div>
+          <h6 class="fw-bold mb-1">Balance Sheet Check</h6>
+          <p class="mb-0 small">
+            Assets do not match Liabilities + Equity — please review your plan
+            inputs.
+          </p>
+        </div>
+      </div>
+      {{ end }}
     </div>
 
     <div
@@ -252,11 +258,11 @@
         <i class="bi bi-arrow-left me-1"></i> Back
       </a>
       <a
-        href="/plan/{{ .Plan.ID }}/dashboard"
+        href="/plan/{{ .Plan.ID }}/analytics"
         class="btn btn-primary px-5 py-2 text-uppercase fw-bold shadow-sm"
         style="font-size: 0.85rem"
       >
-        Continue to Dashboard <i class="bi bi-arrow-right ms-1"></i>
+        Continue to Analytics <i class="bi bi-arrow-right ms-1"></i>
       </a>
     </div>
   </div>

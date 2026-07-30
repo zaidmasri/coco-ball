@@ -75,9 +75,9 @@ func loadTemplates() map[string]*template.Template {
 
 		// Standalone pages that don't use base layout
 		if name == "index.html" || name == "login.html" || name == "signup.html" || name == "profile.html" {
-			ts, parseErr = template.ParseFS(views.TemplatesFS, page)
+			ts, parseErr = template.New(name).Funcs(views.TemplateFuncs).ParseFS(views.TemplatesFS, page)
 		} else {
-			ts, parseErr = template.ParseFS(views.TemplatesFS, "templates/base.html", "templates/components/*.html", page)
+			ts, parseErr = template.New("base.html").Funcs(views.TemplateFuncs).ParseFS(views.TemplatesFS, "templates/base.html", "templates/components/*.html", page)
 		}
 
 		if parseErr != nil {

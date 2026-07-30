@@ -155,6 +155,34 @@ func (s *SQLiteStore) GetAll() ([]*domain.Plan, error) {
 	return plans, nil
 }
 
+// Delete removes a plan and its access records
+func (s *SQLiteStore) Delete(id uuid.UUID) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM plan_access WHERE plan_id = ?", id.String()); err != nil {
+		return fmt.Errorf("failed to delete plan access: %w", err)
+	}
+
+	res, err := tx.Exec("DELETE FROM plans WHERE id = ?", id.String())
+	if err != nil {
+		return fmt.Errorf("failed to delete plan: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check delete result: %w", err)
+	}
+	if rows == 0 {
+		return errors.New("plan not found")
+	}
+
+	return tx.Commit()
+}
+
 // SaveUser stores a user
 func (s *SQLiteStore) SaveUser(u *domain.User) error {
 	now := time.Now().Unix()

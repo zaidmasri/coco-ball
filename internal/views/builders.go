@@ -92,26 +92,69 @@ func BuildCashFlowPage(r *http.Request, user *domain.User, plan *domain.Plan) Ca
 func BuildIncomeStatementPage(r *http.Request, user *domain.User, plan *domain.Plan) IncomeStatementPage {
 	base := BuildBasePage(r, "Income Statement | Business Planning Tool", user)
 	return IncomeStatementPage{
-		BasePage: base,
-		Plan:     plan,
+		BasePage:  base,
+		Plan:      plan,
+		Years:     plan.AnnualSummaries(domain.ProjectionYears),
+		Products:  plan.ProductFinancialsSeries(domain.ProjectionYears),
+		OpExLines: plan.OpExAnnualBreakdown(domain.ProjectionYears),
 	}
 }
 
 // BuildBalanceSheetPage creates a BalanceSheetPage
 func BuildBalanceSheetPage(r *http.Request, user *domain.User, plan *domain.Plan) BalanceSheetPage {
 	base := BuildBasePage(r, "Balance Sheet | Business Planning Tool", user)
+	years := plan.BalanceSheetSnapshots(domain.ProjectionYears)
+
+	balances := true
+	for _, y := range years {
+		diff := y.TotalAssets - y.TotalLiabilitiesAndEquity
+		if diff < -25 || diff > 25 {
+			balances = false
+			break
+		}
+	}
+
 	return BalanceSheetPage{
 		BasePage: base,
 		Plan:     plan,
+		Years:    years,
+		Balances: balances,
 	}
 }
 
 // BuildAnalyticsPage creates an AnalyticsPage
 func BuildAnalyticsPage(r *http.Request, user *domain.User, plan *domain.Plan) AnalyticsPage {
 	base := BuildBasePage(r, "Analytics | Business Planning Tool", user)
+
+	years := plan.BalanceSheetSnapshots(domain.ProjectionYears)
+	balances := true
+	for _, y := range years {
+		diff := y.TotalAssets - y.TotalLiabilitiesAndEquity
+		if diff < -25 || diff > 25 {
+			balances = false
+			break
+		}
+	}
+
+	equity, debt := plan.FundingBreakdown()
+	var ownerInjectionPercent float64
+	if equity+debt != 0 {
+		ownerInjectionPercent = float64(equity) / float64(equity+debt) * 100
+	}
+
 	return AnalyticsPage{
-		BasePage: base,
-		Plan:     plan,
+		BasePage:          base,
+		Plan:              plan,
+		Breakeven:         plan.Breakeven(),
+		Ratios:            plan.FinancialRatiosSeries(domain.ProjectionYears),
+		Years:             years,
+		Annuals:           plan.AnnualSummaries(domain.ProjectionYears),
+		AssetDepreciation: plan.AssetDepreciationBreakdown(),
+		LoanAmortization:  plan.LoanAmortizationSummary(domain.ProjectionYears),
+
+		OwnerInjectionPercent:  ownerInjectionPercent,
+		AverageLoanRatePercent: plan.AverageLoanInterestRate() * 100,
+		BalanceSheetBalances:   balances,
 	}
 }
 

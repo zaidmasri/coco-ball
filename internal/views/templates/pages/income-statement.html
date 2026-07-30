@@ -61,17 +61,19 @@
                 Revenue
               </td>
             </tr>
+            {{ range .Products }}
             <tr>
-              <td class="ps-4 text-muted">Product 1</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              <td class="ps-4 text-muted">{{ .Name }}</td>
+              {{ range .RevenueByYear }}
+              <td class="text-end">{{ formatMoney . }}</td>
+              {{ end }}
             </tr>
+            {{ end }}
             <tr class="fw-bold bg-light">
               <td class="ps-4">Total Revenue</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range $.Years }}
+              <td class="text-end">{{ formatMoney .Revenue }}</td>
+              {{ end }}
             </tr>
 
             <tr>
@@ -82,26 +84,28 @@
                 Cost of Goods Sold
               </td>
             </tr>
+            {{ range .Products }}
             <tr>
-              <td class="ps-4 text-muted">Product 1 COGS</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              <td class="ps-4 text-muted">{{ .Name }} COGS</td>
+              {{ range .COGSByYear }}
+              <td class="text-end">{{ formatMoney . }}</td>
+              {{ end }}
             </tr>
+            {{ end }}
             <tr class="fw-bold bg-light">
               <td class="ps-4">Total COGS</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range $.Years }}
+              <td class="text-end">{{ formatMoney .COGS }}</td>
+              {{ end }}
             </tr>
 
             <tr
               class="fw-bold bg-primary bg-opacity-10 text-primary border-top border-bottom border-primary"
             >
               <td class="py-3 fs-6">Gross Margin</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
-              <td class="text-end py-3 fs-6">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end py-3 fs-6">{{ formatMoney .GrossProfit }}</td>
+              {{ end }}
             </tr>
 
             <tr>
@@ -114,30 +118,32 @@
             </tr>
             <tr>
               <td class="ps-4 text-muted">Total Payroll & Benefits</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney (addMoney .PayrollCost .PayrollTax) }}</td>
+              {{ end }}
             </tr>
+            {{ range .OpExLines }}
             <tr>
-              <td class="ps-4 text-muted">Rent or Lease</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              <td class="ps-4 text-muted">{{ .Name }}</td>
+              {{ range .AmountByYear }}
+              <td class="text-end">{{ formatMoney . }}</td>
+              {{ end }}
             </tr>
+            {{ end }}
             <tr class="fw-bold bg-light">
               <td class="ps-4">Total Operating Expenses</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney (addMoney (addMoney .PayrollCost .PayrollTax) .OpEx) }}</td>
+              {{ end }}
             </tr>
 
             <tr
               class="fw-bold bg-light border-top border-bottom border-secondary"
             >
               <td class="py-3">Income (Before Other Expenses)</td>
-              <td class="text-end py-3">$0.00</td>
-              <td class="text-end py-3">$0.00</td>
-              <td class="text-end py-3">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end py-3">{{ formatMoney .OperatingIncome }}</td>
+              {{ end }}
             </tr>
 
             <tr>
@@ -150,46 +156,52 @@
             </tr>
             <tr>
               <td class="ps-4 text-muted">Depreciation</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .Depreciation }}</td>
+              {{ end }}
             </tr>
             <tr>
               <td class="ps-4 text-muted">
                 Interest (Loans & Lines of Credit)
               </td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney .InterestExpense }}</td>
+              {{ end }}
             </tr>
             <tr class="fw-bold bg-light">
               <td class="ps-4">Total Other Expenses</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
-              <td class="text-end">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end">{{ formatMoney (addMoney .Depreciation .InterestExpense) }}</td>
+              {{ end }}
             </tr>
 
             <tr class="fw-bold bg-light border-top border-secondary mt-2">
               <td class="pt-3">Net Income Before Tax</td>
-              <td class="text-end pt-3">$0.00</td>
-              <td class="text-end pt-3">$0.00</td>
-              <td class="text-end pt-3">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end pt-3">{{ formatMoney .NetIncome }}</td>
+              {{ end }}
             </tr>
 
             <tr>
-              <td class="ps-4 text-muted pb-3">Income Tax Expense</td>
+              <td class="ps-4 text-muted pb-3">
+                Income Tax Expense
+                <i
+                  class="bi bi-info-circle"
+                  title="Not yet modeled — this tool does not estimate income tax. Consult your accountant."
+                ></i>
+              </td>
+              {{ range .Years }}
               <td class="text-end pb-3">$0.00</td>
-              <td class="text-end pb-3">$0.00</td>
-              <td class="text-end pb-3">$0.00</td>
+              {{ end }}
             </tr>
 
             <tr
               class="fw-bold bg-success bg-opacity-10 text-success border-top border-bottom border-success border-2"
             >
               <td class="py-3 fs-5">Net Profit / Loss</td>
-              <td class="text-end py-3 fs-5">$0.00</td>
-              <td class="text-end py-3 fs-5">$0.00</td>
-              <td class="text-end py-3 fs-5">$0.00</td>
+              {{ range .Years }}
+              <td class="text-end py-3 fs-5">{{ formatMoney .NetIncome }}</td>
+              {{ end }}
             </tr>
           </tbody>
         </table>

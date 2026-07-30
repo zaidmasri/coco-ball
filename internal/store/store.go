@@ -11,6 +11,7 @@ type PlanStore interface {
 	Save(p *domain.Plan) error
 	Get(id uuid.UUID) (*domain.Plan, error)
 	GetAll() ([]*domain.Plan, error)
+	Delete(id uuid.UUID) error
 
 	// User management (basic)
 	SaveUser(u *domain.User) error

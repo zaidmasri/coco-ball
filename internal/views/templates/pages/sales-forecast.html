@@ -58,7 +58,7 @@
                     step="0.1"
                     class="form-control text-end"
                     name="growth_y1_q1"
-                    value="10.0"
+                    value="{{ if .Plan.Products }}{{ .Plan.SalesGrowth.Year1QuarterlyPercent 0 }}{{ else }}10.0{{ end }}"
                     required
                   />
                   <span class="input-group-text">%</span>
@@ -74,7 +74,7 @@
                     step="0.1"
                     class="form-control text-end"
                     name="growth_y1_q2"
-                    value="6.0"
+                    value="{{ if .Plan.Products }}{{ .Plan.SalesGrowth.Year1QuarterlyPercent 1 }}{{ else }}6.0{{ end }}"
                     required
                   />
                   <span class="input-group-text">%</span>
@@ -90,7 +90,7 @@
                     step="0.1"
                     class="form-control text-end"
                     name="growth_y1_q3"
-                    value="4.0"
+                    value="{{ if .Plan.Products }}{{ .Plan.SalesGrowth.Year1QuarterlyPercent 2 }}{{ else }}4.0{{ end }}"
                     required
                   />
                   <span class="input-group-text">%</span>
@@ -106,7 +106,7 @@
                     step="0.1"
                     class="form-control text-end"
                     name="growth_y1_q4"
-                    value="3.0"
+                    value="{{ if .Plan.Products }}{{ .Plan.SalesGrowth.Year1QuarterlyPercent 3 }}{{ else }}3.0{{ end }}"
                     required
                   />
                   <span class="input-group-text">%</span>
@@ -130,6 +130,31 @@
             </div>
 
             <div class="row g-3" id="futureYearsContainer">
+              {{ if .Plan.SalesGrowth.FutureYearRates }} {{ range $i, $rate := .Plan.SalesGrowth.FutureYearRates }}
+              <div class="col-md-3 col-sm-6 future-year-item">
+                <label class="form-label small text-muted mb-1 year-label"
+                  >Year</label
+                >
+                <div class="input-group input-group-sm">
+                  <input
+                    type="number"
+                    step="0.1"
+                    class="form-control text-end"
+                    name="growth_future_years[]"
+                    value="{{ $.Plan.SalesGrowth.FutureYearPercent $i }}"
+                    required
+                  />
+                  <span class="input-group-text">%</span>
+                  <button
+                    type="button"
+                    class="btn btn-outline-danger remove-year-btn{{ if eq $i 0 }} d-none{{ end }}"
+                    tabindex="-1"
+                  >
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
+              </div>
+              {{ end }} {{ else }}
               <div class="col-md-3 col-sm-6 future-year-item">
                 <label class="form-label small text-muted mb-1 year-label"
                   >Year 2</label
@@ -176,6 +201,7 @@
                   </button>
                 </div>
               </div>
+              {{ end }}
             </div>
           </div>
         </div>
@@ -217,6 +243,73 @@
                 <strong>Add Product</strong> to get started.
               </p>
             </div>
+
+            {{ range .Plan.Products }}
+            <div
+              class="row g-2 align-items-center bg-light p-2 rounded border dynamic-row"
+            >
+              <div class="col-md-3">
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  name="prod_name[]"
+                  value="{{ .Name }}"
+                  required
+                />
+              </div>
+              <div class="col-md-2">
+                <input
+                  type="number"
+                  class="form-control form-control-sm"
+                  name="prod_units[]"
+                  min="0"
+                  value="{{ .Month1Units }}"
+                  required
+                />
+              </div>
+              <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-white">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    class="form-control margin-calc prod-price"
+                    name="prod_price[]"
+                    value="{{ .PricePerUnit }}"
+                    required
+                  />
+                </div>
+              </div>
+              <div class="col-md-2">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-white">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    class="form-control margin-calc prod-cogs"
+                    name="prod_cogs[]"
+                    value="{{ .CostPerUnit }}"
+                    required
+                  />
+                </div>
+              </div>
+              <div class="col-md-1 text-end">
+                <span
+                  class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 w-100 py-2 margin-display"
+                  >$0.00</span
+                >
+              </div>
+              <div class="col-md-1 text-end">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-danger remove-row-btn"
+                  title="Remove Product"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+            {{ end }}
           </div>
         </div>
       </form>
@@ -396,32 +489,36 @@
     });
 
     // --- AUTO MARGIN CALCULATION ---
+    function updateMargin(row) {
+      const priceInput = row.querySelector(".prod-price");
+      const cogsInput = row.querySelector(".prod-cogs");
+      const marginDisplay = row.querySelector(".margin-display");
+      if (!priceInput || !cogsInput || !marginDisplay) return;
+
+      const price = parseFloat(priceInput.value) || 0;
+      const cogs = parseFloat(cogsInput.value) || 0;
+      const margin = price - cogs;
+
+      marginDisplay.textContent = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(margin);
+
+      // Visual indicator if margin is negative
+      if (margin < 0) {
+        marginDisplay.classList.replace("bg-success", "bg-danger");
+        marginDisplay.classList.replace("text-success", "text-danger");
+        marginDisplay.classList.replace("border-success", "border-danger");
+      } else {
+        marginDisplay.classList.replace("bg-danger", "bg-success");
+        marginDisplay.classList.replace("text-danger", "text-success");
+        marginDisplay.classList.replace("border-danger", "border-success");
+      }
+    }
+
     form.addEventListener("input", function (e) {
       if (e.target.classList.contains("margin-calc")) {
-        const row = e.target.closest(".dynamic-row");
-        const priceInput = row.querySelector(".prod-price");
-        const cogsInput = row.querySelector(".prod-cogs");
-        const marginDisplay = row.querySelector(".margin-display");
-
-        const price = parseFloat(priceInput.value) || 0;
-        const cogs = parseFloat(cogsInput.value) || 0;
-        const margin = price - cogs;
-
-        marginDisplay.textContent = new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency: "USD",
-        }).format(margin);
-
-        // Visual indicator if margin is negative
-        if (margin < 0) {
-          marginDisplay.classList.replace("bg-success", "bg-danger");
-          marginDisplay.classList.replace("text-success", "text-danger");
-          marginDisplay.classList.replace("border-success", "border-danger");
-        } else {
-          marginDisplay.classList.replace("bg-danger", "bg-success");
-          marginDisplay.classList.replace("text-danger", "text-success");
-          marginDisplay.classList.replace("border-danger", "border-success");
-        }
+        updateMargin(e.target.closest(".dynamic-row"));
       }
     });
 
@@ -468,6 +565,9 @@
     // --- INITIALIZATION ---
     toggleEmptyStates();
     updateYearLabels();
+    document
+      .querySelectorAll("#productsContainer .dynamic-row")
+      .forEach(updateMargin);
     setTimeout(() => {
       formIsDirty = false;
     }, 50);
