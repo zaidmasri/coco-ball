@@ -1,7 +1,11 @@
 // Package handlers has the http endpoints the application uses
 package handlers
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/zaidmasri/business-planning-tool/internal/domain"
+)
 
 // RegisterRoutes registers all application routes on the provided mux
 func (app *App) RegisterRoutes(mux *http.ServeMux) {
@@ -21,34 +25,56 @@ func (app *App) RegisterRoutes(mux *http.ServeMux) {
 	// New plan
 	mux.HandleFunc("POST /plan/setup", app.PostSetup())
 
-	// Setup Page
-	mux.HandleFunc("GET /plan/{id}/setup", app.GetSetup())
-	mux.HandleFunc("POST /plan/{id}/setup", app.PostUpdateSetup())
+	// Setup Page - requires viewer access
+	mux.Handle("GET /plan/{id}/setup", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetSetup()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/setup", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostUpdateSetup()(w, r)
+	})))
 
-	// Starting Point
-	mux.HandleFunc("GET /plan/{id}/starting-point", app.GetStartingPoint())
-	mux.HandleFunc("POST /plan/{id}/starting-point", app.PostStartingPoint())
+	// Starting Point - requires viewer access for GET, editor for POST
+	mux.Handle("GET /plan/{id}/starting-point", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetStartingPoint()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostStartingPoint()(w, r)
+	})))
 
-	// Payroll
-	mux.HandleFunc("GET /plan/{id}/payroll", app.GetPayroll())
+	// Payroll - requires viewer access
+	mux.Handle("GET /plan/{id}/payroll", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetPayroll()(w, r)
+	})))
 
-	// Sales Forecast
-	mux.HandleFunc("GET /plan/{id}/sales-forecast", app.GetSalesForecast())
+	// Sales Forecast - requires viewer access
+	mux.Handle("GET /plan/{id}/sales-forecast", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetSalesForecast()(w, r)
+	})))
 
-	// Operating Expenses
-	mux.HandleFunc("GET /plan/{id}/operating-expenses", app.GetOpExpenses())
+	// Operating Expenses - requires viewer access
+	mux.Handle("GET /plan/{id}/operating-expenses", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetOpExpenses()(w, r)
+	})))
 
-	// Cash Flow
-	mux.HandleFunc("GET /plan/{id}/cash-flow", app.GetCashFlow())
+	// Cash Flow - requires viewer access
+	mux.Handle("GET /plan/{id}/cash-flow", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetCashFlow()(w, r)
+	})))
 
-	// Income Statement
-	mux.HandleFunc("GET /plan/{id}/income-statement", app.GetIncomeStatement())
+	// Income Statement - requires viewer access
+	mux.Handle("GET /plan/{id}/income-statement", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetIncomeStatement()(w, r)
+	})))
 
-	// Balance Sheet
-	mux.HandleFunc("GET /plan/{id}/balance-sheet", app.GetBalanceSheet())
+	// Balance Sheet - requires viewer access
+	mux.Handle("GET /plan/{id}/balance-sheet", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetBalanceSheet()(w, r)
+	})))
 
-	// Analytics
-	mux.HandleFunc("GET /plan/{id}/analytics", app.GetAnalytics())
+	// Analytics - requires viewer access
+	mux.Handle("GET /plan/{id}/analytics", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetAnalytics()(w, r)
+	})))
 
 	// Catch-all fallback route for any unmatched URLs
 	mux.HandleFunc("/", app.NotFound())

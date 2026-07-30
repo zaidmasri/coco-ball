@@ -55,6 +55,7 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 ### Data Storage
 - [x] In-memory plan store with GetAll(), GetByID(), Save() methods
 - [x] Plan store interface for future database implementation
+- [x] SQLite database implementation with persistent storage
 
 ### Authentication & Authorization
 - [x] User authentication system (login/logout/signup)
@@ -64,6 +65,7 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [x] Session-based auth with cookies
 - [x] User profile page (GET `/profile`)
 - [x] Logout as POST (proper state-modifying HTTP semantics)
+- [x] User Authorization - Ensure users can only access their own plans (access control middleware enforces Owner/Editor/Viewer roles)
 
 ### Routes & Pages
 - [x] Home page (root `/`) - List of existing plans
@@ -206,7 +208,7 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 
 ## High-Priority Items (Do First)
 
-1. **User Authorization** - Ensure users can only access their own plans (auth middleware exists, needs access control enforcement)
+1. ~~**User Authorization**~~ ✅ **COMPLETED** - Users can only access plans they own or have access to via Owner/Editor/Viewer roles
 2. **Form POST handlers** - Implement POST endpoints for all plan data input (payroll, sales, expenses, etc.)
 3. **Financial calculations** - Implement core projection calculations (cash flow, income statement, balance sheet)
 4. **Testing** - Add test coverage for handlers and business logic
@@ -283,6 +285,7 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - **Auth Handler Organization (2026-07-29)**: Consolidated authentication logic (login, signup, logout, profile) in handlers/auth.go rather than splitting across files.
 - **Session-Based Auth (2026-07-29)**: Implemented cookie-based session management instead of JWT for simpler server-side state management in early stages.
 - **POST for Logout (2026-07-29)**: Changed logout from GET to POST to follow HTTP semantics (state-modifying operations should use POST).
+- **Authorization Middleware (2026-07-29)**: Applied RequireAccess middleware to plan-specific routes in RegisterRoutes() to enforce Owner/Editor/Viewer access control at the HTTP route level rather than within handlers.
 
 ### Known Limitations
 
@@ -301,13 +304,26 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 ---
 
 **Last Updated**: 2026-07-29  
-**Session Focus**: Code organization and refactoring (routes, middleware, handlers), bug fixes (Bootstrap, templates)  
-**Total Remaining Items**: ~50+ (across all categories)  
-**Critical Path**: User Authorization → Form POST Handlers → Financial Calculations → Testing
+**Session Focus**: User Authorization enforcement, middleware application to routes, comprehensive testing  
+**Total Remaining Items**: ~45+ (across all categories)  
+**Critical Path**: ~~User Authorization~~ ✅ → Form POST Handlers → Financial Calculations → Testing
 
 ## Session Summary (2026-07-29)
 
-### Refactoring Completed
+### Authorization Implementation ✅
+1. **Access Control Middleware** - Applied RequireAccess middleware to all plan-specific routes
+   - GET endpoints require Viewer access
+   - POST endpoints require Editor access
+   - Owner, Editor, and Viewer roles properly enforced
+2. **Route Middleware Integration** - Updated RegisterRoutes() to wrap plan handlers with authorization checks
+3. **Comprehensive Testing** - Added auth_test.go with tests covering:
+   - User can access their own plans ✓
+   - Users cannot access other users' plans (returns 403) ✓
+   - Unauthenticated users cannot access plans (returns 401) ✓
+   - Users with Viewer access cannot edit (returns 403) ✓
+   - Users with Editor access can edit ✓
+
+### Previous Refactoring (from earlier session)
 1. **Route Registration** - Moved route definitions from cmd/cli/serve.go to internal/handlers/routes.go via RegisterRoutes() method
 2. **Middleware Organization** - Created internal/middleware package and moved Logger to internal/middleware/logger.go
 3. **Handler Organization** - Consolidated auth handlers (login, signup, logout, profile) in internal/handlers/auth.go
@@ -319,7 +335,8 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 3. **Template Error** - Fixed cash-flow.html template error by removing reference to non-existent .Plan.AdditionalInventory field
 
 ### Code Quality
-- Better separation of concerns (routes, middleware in dedicated modules)
-- Cleaner CLI entry point (cmd/cli/serve.go now minimal and focused)
-- Consistent auth logic organization
-- Removed sourcemap comments from minified assets for cleaner production builds
+- Better separation of concerns (routes, middleware, auth in dedicated modules)
+- Route-level authorization enforcement (defense in depth)
+- Comprehensive test coverage for authorization flows
+- Clean CLI entry point (cmd/cli/serve.go focused and minimal)
+- All tests passing (handlers and store)
