@@ -10,9 +10,8 @@ import (
 
 	"github.com/zaidmasri/business-planning-tool/internal/handlers"
 	"github.com/zaidmasri/business-planning-tool/internal/middleware"
-	"github.com/zaidmasri/business-planning-tool/internal/static"
 	"github.com/zaidmasri/business-planning-tool/internal/store"
-	"github.com/zaidmasri/business-planning-tool/internal/templates"
+	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
 func serve(dbPath, port string) {
@@ -32,7 +31,11 @@ func serve(dbPath, port string) {
 	mux := http.NewServeMux()
 
 	// Static files
-	staticFileServer := http.FileServer(http.FS(static.FS))
+	staticFS, err := fs.Sub(views.StaticFS, "static")
+	if err != nil {
+		log.Fatalf("failed to create static fs: %v", err)
+	}
+	staticFileServer := http.FileServer(http.FS(staticFS))
 	mux.Handle("GET /static/", http.StripPrefix("/static/", staticFileServer))
 
 	// Register all application routes
@@ -59,7 +62,7 @@ func serve(dbPath, port string) {
 func loadTemplates() map[string]*template.Template {
 	templateCache := make(map[string]*template.Template)
 
-	pages, err := fs.Glob(templates.FS, "pages/*.html")
+	pages, err := fs.Glob(views.TemplatesFS, "templates/pages/*.html")
 	if err != nil {
 		log.Fatal("error globbing templates:", err)
 	}
@@ -72,9 +75,9 @@ func loadTemplates() map[string]*template.Template {
 
 		// Standalone pages that don't use base layout
 		if name == "index.html" || name == "login.html" || name == "signup.html" || name == "profile.html" {
-			ts, parseErr = template.ParseFS(templates.FS, page)
+			ts, parseErr = template.ParseFS(views.TemplatesFS, page)
 		} else {
-			ts, parseErr = template.ParseFS(templates.FS, "base.html", "components/*.html", page)
+			ts, parseErr = template.ParseFS(views.TemplatesFS, "templates/base.html", "templates/components/*.html", page)
 		}
 
 		if parseErr != nil {

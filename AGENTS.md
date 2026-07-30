@@ -33,12 +33,13 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 ## Completed Features ✅
 
 ### Core Infrastructure
-- [x] Project structure (cmd/web, internal/{domain,handlers,store,templates,static})
+- [x] Project structure (cmd/cli, internal/{domain,handlers,middleware,store,templates,static})
 - [x] HTTP server with proper timeouts and middleware
 - [x] Static file serving with embedded filesystem
 - [x] Error page handling with 404 catch-all
 - [x] Template caching and rendering pipeline
-- [x] Logger middleware
+- [x] Logger middleware (moved to internal/middleware)
+- [x] Route registration encapsulation (internal/handlers/routes.go)
 
 ### Domain Model
 - [x] Plan aggregate root with immutable ID
@@ -55,8 +56,21 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [x] In-memory plan store with GetAll(), GetByID(), Save() methods
 - [x] Plan store interface for future database implementation
 
+### Authentication & Authorization
+- [x] User authentication system (login/logout/signup)
+- [x] Password hashing and verification
+- [x] Session management and middleware
+- [x] User registration/signup flow
+- [x] Session-based auth with cookies
+- [x] User profile page (GET `/profile`)
+- [x] Logout as POST (proper state-modifying HTTP semantics)
+
 ### Routes & Pages
 - [x] Home page (root `/`) - List of existing plans
+- [x] Login page (GET/POST `/login`) - User authentication
+- [x] Signup page (GET/POST `/signup`) - User registration
+- [x] Profile page (GET `/profile`) - User profile display
+- [x] Logout endpoint (POST `/logout`) - Session termination
 - [x] Plan setup form (POST `/plan/setup`) - Create new plan
 - [x] Setup page (GET/POST `/plan/{id}/setup`) - Edit plan core details (name, starting month/year)
 - [x] Starting Point page (GET/POST `/plan/{id}/starting-point`) - Startup costs, funding sources, initial balances, capital assets
@@ -78,13 +92,14 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 ## Remaining Work 🚧
 
 ### Authentication & Authorization ⭐ CRITICAL
-- [ ] User authentication system (login/logout)
-- [ ] Password hashing and verification
-- [ ] Session management and middleware
-- [ ] User registration/signup flow
-- [ ] JWT or session-based auth tokens
+- [x] User authentication system (login/logout)
+- [x] Password hashing and verification
+- [x] Session management and middleware
+- [x] User registration/signup flow
+- [x] Session-based auth tokens
 - [ ] Password reset functionality
 - [ ] Email verification
+- [ ] Two-factor authentication (optional)
 
 ### User Management
 - [ ] User model and database table
@@ -191,32 +206,48 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 
 ## High-Priority Items (Do First)
 
-1. **Database Implementation** - Switch from in-memory to persistent database
-2. **Authentication** - Implement user login/registration
-3. **User Authorization** - Ensure users can only access their own plans
-4. **Form POST handlers** - Implement POST endpoints for all plan data input
-5. **Financial calculations** - Implement core projection calculations
-6. **Testing** - Add test coverage for handlers and business logic
+1. **User Authorization** - Ensure users can only access their own plans (auth middleware exists, needs access control enforcement)
+2. **Form POST handlers** - Implement POST endpoints for all plan data input (payroll, sales, expenses, etc.)
+3. **Financial calculations** - Implement core projection calculations (cash flow, income statement, balance sheet)
+4. **Testing** - Add test coverage for handlers and business logic
+5. **Form Validation** - Client and server-side validation for all inputs
+6. **Error handling** - Comprehensive error messages and recovery flows
 
 ## Project Structure Reference
 
 ```
 .
-├── cmd/web/main.go              # Entry point, server setup
+├── cmd/cli/
+│   ├── main.go                  # CLI entry point
+│   ├── serve.go                 # Server setup and initialization
+│   ├── migrate.go               # Database migrations
+│   └── ...                      # Other CLI commands
 ├── internal/
 │   ├── domain/
 │   │   ├── plan.go              # Plan aggregate root, business logic
+│   │   ├── user.go              # User domain model
+│   │   ├── session.go           # Session domain model
 │   │   └── plan_test.go         # Domain tests
 │   ├── handlers/
-│   │   ├── plan.go              # HTTP handlers
-│   │   └── middleware.go        # Logger middleware
+│   │   ├── plan.go              # Plan HTTP handlers
+│   │   ├── auth.go              # Authentication handlers (login, signup, logout, profile)
+│   │   └── routes.go            # Route registration (RegisterRoutes method)
+│   ├── middleware/
+│   │   └── logger.go            # Request logging middleware
 │   ├── store/
-│   │   └── memory.go            # In-memory data store (replace with DB)
+│   │   ├── store.go             # Store interface
+│   │   ├── sqlite.go            # SQLite implementation
+│   │   ├── migrations.go        # Database migrations
+│   │   └── sqlite_test.go       # Store tests
 │   ├── templates/               # Go HTML templates
-│   │   ├── base.html
-│   │   ├── pages/
-│   │   ├── components/
+│   │   ├── base.html            # Base layout template
+│   │   ├── pages/               # Page templates
+│   │   ├── components/          # Reusable components
 │   │   └── embed.go             # Embedded FS
+│   ├── views/
+│   │   ├── builders.go          # Page view builders
+│   │   ├── types.go             # View data types
+│   │   └── embed.go             # Embedded template resources
 │   └── static/                  # CSS, JS, images
 │       └── embed.go             # Embedded FS
 ├── go.mod
@@ -244,9 +275,14 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 
 ### Tech Decisions Log
 
-- **In-Memory Storage (Initial)**: Started with in-memory store for rapid prototyping. Must be replaced with database for production.
+- **In-Memory Storage (Initial)**: Started with in-memory store for rapid prototyping. Switched to SQLite for persistent storage.
 - **Go SSR (Server-Side Rendering)**: Using Go templates instead of a frontend framework for simplicity and rapid MVP development. Can be refactored to API + frontend framework later.
 - **No Framework Overhead**: Intentionally using standard library to keep dependencies minimal during exploration phase.
+- **Route Registration Encapsulation (2026-07-29)**: Moved route registration from CLI into handlers/routes.go via RegisterRoutes() method for better separation of concerns.
+- **Middleware Package Separation (2026-07-29)**: Extracted Logger middleware to internal/middleware/logger.go to organize cross-cutting concerns separately.
+- **Auth Handler Organization (2026-07-29)**: Consolidated authentication logic (login, signup, logout, profile) in handlers/auth.go rather than splitting across files.
+- **Session-Based Auth (2026-07-29)**: Implemented cookie-based session management instead of JWT for simpler server-side state management in early stages.
+- **POST for Logout (2026-07-29)**: Changed logout from GET to POST to follow HTTP semantics (state-modifying operations should use POST).
 
 ### Known Limitations
 
@@ -265,5 +301,25 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 ---
 
 **Last Updated**: 2026-07-29  
-**Total Remaining Items**: ~60+ (across all categories)  
-**Critical Path**: Authentication → Database → Form Handlers → Calculations
+**Session Focus**: Code organization and refactoring (routes, middleware, handlers), bug fixes (Bootstrap, templates)  
+**Total Remaining Items**: ~50+ (across all categories)  
+**Critical Path**: User Authorization → Form POST Handlers → Financial Calculations → Testing
+
+## Session Summary (2026-07-29)
+
+### Refactoring Completed
+1. **Route Registration** - Moved route definitions from cmd/cli/serve.go to internal/handlers/routes.go via RegisterRoutes() method
+2. **Middleware Organization** - Created internal/middleware package and moved Logger to internal/middleware/logger.go
+3. **Handler Organization** - Consolidated auth handlers (login, signup, logout, profile) in internal/handlers/auth.go
+4. **HTTP Semantics** - Changed logout endpoint from GET to POST (state-modifying operations require POST)
+
+### Bug Fixes
+1. **Bootstrap Sourcemap Errors** - Removed sourcemap references from bootstrap.min.js, bootstrap.bundle.min.js, and bootstrap.min.css (404 errors resolved)
+2. **Dropdown Functionality** - Fixed "createPopper is not a function" error by removing duplicate bootstrap.min.js script tags (kept only bootstrap.bundle.min.js which includes Popper.js)
+3. **Template Error** - Fixed cash-flow.html template error by removing reference to non-existent .Plan.AdditionalInventory field
+
+### Code Quality
+- Better separation of concerns (routes, middleware in dedicated modules)
+- Cleaner CLI entry point (cmd/cli/serve.go now minimal and focused)
+- Consistent auth logic organization
+- Removed sourcemap comments from minified assets for cleaner production builds
