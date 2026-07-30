@@ -62,14 +62,12 @@
 
       <!-- MAIN CONTENT AREA -->
       <main class="main-content bg-light p-4 p-lg-5">
-        <!-- THIS IS THE MAGIC YIELD POINT -->
         <!-- Child templates will inject their HTML right here -->
         {{ block "content" . }}{{ end }}
       </main>
     </div>
 
     <!-- Shared Scripts -->
-    <script src="/static/js/bootstrap.min.js"></script>
     <script src="/static/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>

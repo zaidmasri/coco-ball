@@ -279,8 +279,8 @@ func (app *App) PostSignup() http.HandlerFunc {
 	}
 }
 
-// GetLogout logs out the user
-func (app *App) GetLogout() http.HandlerFunc {
+// PostLogout logs out the user
+func (app *App) PostLogout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get session cookie
 		cookie, err := r.Cookie(sessionCookieName)
@@ -292,5 +292,19 @@ func (app *App) GetLogout() http.HandlerFunc {
 		// Clear cookie
 		clearSessionCookie(w)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+}
+
+// GetProfile displays the user's profile page
+func (app *App) GetProfile() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetUserFromContext(r)
+		if user == nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		page := views.BuildProfilePage(user)
+		views.RenderProfilePage(w, app.TemplateCache, page)
 	}
 }

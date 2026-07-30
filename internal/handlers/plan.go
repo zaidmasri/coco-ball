@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
@@ -478,30 +477,7 @@ func (app *App) GetAnalytics() http.HandlerFunc {
 	}
 }
 
-// GetProfile displays the user's profile page
-func (app *App) GetProfile() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user := GetUserFromContext(r)
-		if user == nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
-
-		page := views.BuildProfilePage(user)
-		views.RenderProfilePage(w, app.TemplateCache, page)
-	}
-}
-
 // parsePlanID extracts and parses the plan ID from the request path
 func parsePlanID(r *http.Request) (uuid.UUID, error) {
 	return uuid.Parse(r.PathValue("id"))
-}
-
-// Logger func is used as Middleware
-func Logger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s %s", r.Method, r.RemoteAddr, r.URL.Path, time.Since(start))
-	})
 }
