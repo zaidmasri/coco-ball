@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26-bookworm AS builder
 
-# go-sqlite3 uses cgo, so we need a C toolchain
-RUN apk add --no-cache gcc musl-dev
+# go-sqlite3 uses cgo; build against glibc to avoid musl-related cgo issues
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -14,9 +15,10 @@ COPY . .
 
 RUN CGO_ENABLED=1 GOOS=linux go build -o /app/bin/northbasis-cli ./cmd/cli
 
-FROM alpine:3.20
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
