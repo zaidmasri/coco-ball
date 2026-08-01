@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -88,16 +89,23 @@ type UserWithPassword struct {
 	PasswordHash string
 }
 
-// NewUserWithPassword creates a user with a hashed password
-func NewUserWithPassword(email, password string) (*UserWithPassword, error) {
+// NewUserWithPassword creates a user with a hashed password. First and last
+// name are required at registration.
+func NewUserWithPassword(email, firstName, lastName, password string) (*UserWithPassword, error) {
 	if err := (&UserCredentials{Email: email, Password: password}).Validate(); err != nil {
 		return nil, err
+	}
+
+	if strings.TrimSpace(firstName) == "" || strings.TrimSpace(lastName) == "" {
+		return nil, ErrInvalidUserName
 	}
 
 	user, err := NewUser(email)
 	if err != nil {
 		return nil, err
 	}
+	user.SetFirstName(strings.TrimSpace(firstName))
+	user.SetLastName(strings.TrimSpace(lastName))
 
 	hash, err := HashPassword(password)
 	if err != nil {

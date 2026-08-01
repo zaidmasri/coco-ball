@@ -49,6 +49,29 @@ var migrations = []string{
 		FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`,
+
+	// Migration 7: Add first name to users
+	`ALTER TABLE users ADD COLUMN first_name TEXT NOT NULL DEFAULT ''`,
+
+	// Migration 8: Add last name to users
+	`ALTER TABLE users ADD COLUMN last_name TEXT NOT NULL DEFAULT ''`,
+
+	// Migration 9: Create plan_invites table
+	`CREATE TABLE IF NOT EXISTS plan_invites (
+		id TEXT PRIMARY KEY,
+		plan_id TEXT NOT NULL,
+		email TEXT NOT NULL,
+		access_level TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		invited_by TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		responded_at INTEGER,
+		FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
+		FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE CASCADE
+	)`,
+
+	// Migration 10: Index invites by email for onboarding lookups
+	`CREATE INDEX IF NOT EXISTS idx_plan_invites_email ON plan_invites(email)`,
 }
 
 // GetMigrations returns all migration SQL statements

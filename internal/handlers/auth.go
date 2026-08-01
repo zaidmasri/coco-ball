@@ -16,7 +16,7 @@ type contextKey string
 const (
 	userContextKey    contextKey = "user"
 	sessionCookieName string     = "session_id"
-	sessionDuration            = 7 * 24 * time.Hour // 7 days
+	sessionDuration              = 7 * 24 * time.Hour // 7 days
 )
 
 // GetUserFromContext extracts the current user from the request context
@@ -230,12 +230,14 @@ func (app *App) PostSignup() http.HandlerFunc {
 		}
 
 		email := r.PostForm.Get("email")
+		firstName := r.PostForm.Get("firstName")
+		lastName := r.PostForm.Get("lastName")
 		password := r.PostForm.Get("password")
 		confirmPassword := r.PostForm.Get("confirmPassword")
 
 		// Validate form
 		if password != confirmPassword {
-			page := views.BuildSignupPageWithError(email, "Passwords do not match")
+			page := views.BuildSignupPageWithError(email, firstName, lastName, "Passwords do not match")
 			views.RenderSignupPage(w, app.TemplateCache, page)
 			return
 		}
@@ -244,15 +246,15 @@ func (app *App) PostSignup() http.HandlerFunc {
 		_, err := app.Store.GetUserWithPassword(email)
 		if err == nil {
 			// User exists
-			page := views.BuildSignupPageWithError(email, "Email already registered")
+			page := views.BuildSignupPageWithError(email, firstName, lastName, "Email already registered")
 			views.RenderSignupPage(w, app.TemplateCache, page)
 			return
 		}
 
 		// Create user with password
-		userCreds, err := domain.NewUserWithPassword(email, password)
+		userCreds, err := domain.NewUserWithPassword(email, firstName, lastName, password)
 		if err != nil {
-			page := views.BuildSignupPageWithError(email, err.Error())
+			page := views.BuildSignupPageWithError(email, firstName, lastName, err.Error())
 			views.RenderSignupPage(w, app.TemplateCache, page)
 			return
 		}

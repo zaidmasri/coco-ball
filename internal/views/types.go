@@ -14,13 +14,25 @@ type BasePage struct {
 // IndexPage is the data for the home page
 type IndexPage struct {
 	BasePage
-	Plans []*domain.Plan
+	Plans          []*domain.Plan
+	PendingInvites []InviteSummary
+}
+
+// InviteSummary is a display-friendly view of a pending invite, used on the
+// landing page onboarding section.
+type InviteSummary struct {
+	Invite      *domain.PlanInvite
+	PlanName    string
+	InviterName string
 }
 
 // SetupPage is the data for the plan setup page
 type SetupPage struct {
 	BasePage
-	Plan *domain.Plan
+	Plan         *domain.Plan
+	ErrorMessage string
+	Invites      []*domain.PlanInvite
+	IsOwner      bool
 }
 
 // StartingPointPage is the data for the starting point page
@@ -122,7 +134,9 @@ type LoginPage struct {
 
 // SignupPage is the data for the signup page
 type SignupPage struct {
-	Title    string
-	ErrorMsg string
-	Email    string
+	Title     string
+	ErrorMsg  string
+	Email     string
+	FirstName string
+	LastName  string
 }

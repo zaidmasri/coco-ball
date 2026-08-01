@@ -19,20 +19,23 @@ func BuildBasePage(r *http.Request, title string, user *domain.User) BasePage {
 }
 
 // BuildIndexPage creates an IndexPage
-func BuildIndexPage(r *http.Request, user *domain.User, plans []*domain.Plan) IndexPage {
+func BuildIndexPage(r *http.Request, user *domain.User, plans []*domain.Plan, pendingInvites []InviteSummary) IndexPage {
 	base := BuildBasePage(r, "Business Planning Tool", user)
 	return IndexPage{
-		BasePage: base,
-		Plans:    plans,
+		BasePage:       base,
+		Plans:          plans,
+		PendingInvites: pendingInvites,
 	}
 }
 
 // BuildSetupPage creates a SetupPage
-func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan) SetupPage {
+func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan, invites []*domain.PlanInvite, isOwner bool) SetupPage {
 	base := BuildBasePage(r, "Edit Setup | Business Planning Tool", user)
 	return SetupPage{
 		BasePage: base,
 		Plan:     plan,
+		Invites:  invites,
+		IsOwner:  isOwner,
 	}
 }
 
@@ -201,12 +204,15 @@ func BuildSignupPage() SignupPage {
 	}
 }
 
-// BuildSignupPageWithError creates a SignupPage with an error message
-func BuildSignupPageWithError(email, errMsg string) SignupPage {
+// BuildSignupPageWithError creates a SignupPage with an error message,
+// preserving whatever the user had already typed in.
+func BuildSignupPageWithError(email, firstName, lastName, errMsg string) SignupPage {
 	return SignupPage{
-		Title:    "Sign Up | Business Planning Tool",
-		ErrorMsg: errMsg,
-		Email:    email,
+		Title:     "Sign Up | Business Planning Tool",
+		ErrorMsg:  errMsg,
+		Email:     email,
+		FirstName: firstName,
+		LastName:  lastName,
 	}
 }
 

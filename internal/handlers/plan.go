@@ -65,9 +65,43 @@ func (app *App) GetRoot() http.HandlerFunc {
 			plans = []*domain.Plan{}
 		}
 
-		page := views.BuildIndexPage(r, user, plans)
+		pendingInvites := app.pendingInvitesForUser(user)
+
+		page := views.BuildIndexPage(r, user, plans, pendingInvites)
 		views.RenderIndexPage(w, app.TemplateCache, page)
 	}
+}
+
+// pendingInvitesForUser loads the pending invites addressed to a user's
+// email and enriches each with the plan name and inviter's name for
+// display in the landing page onboarding section.
+func (app *App) pendingInvitesForUser(user *domain.User) []views.InviteSummary {
+	invites, err := app.Store.GetPendingInvitesForEmail(user.Email())
+	if err != nil {
+		log.Printf("Failed to load pending invites for %s: %v", user.Email(), err)
+		return nil
+	}
+
+	summaries := make([]views.InviteSummary, 0, len(invites))
+	for _, invite := range invites {
+		summary := views.InviteSummary{Invite: invite}
+
+		if plan, err := app.Store.Get(invite.PlanID); err == nil {
+			summary.PlanName = plan.Name()
+		} else {
+			summary.PlanName = "Unknown Plan"
+		}
+
+		if inviter, err := app.Store.GetUser(invite.InvitedBy); err == nil {
+			summary.InviterName = inviter.FullName()
+		} else {
+			summary.InviterName = "a collaborator"
+		}
+
+		summaries = append(summaries, summary)
+	}
+
+	return summaries
 }
 
 // PostSetup POST /plan/setup (Saves a brand new plan)
@@ -176,9 +210,31 @@ func (app *App) GetSetup() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildSetupPage(r, user, plan)
+		invites, isOwner := app.invitesAndOwnerStatus(planID, user)
+
+		page := views.BuildSetupPage(r, user, plan, invites, isOwner)
 		views.RenderSetupPage(w, app.TemplateCache, page)
 	}
+}
+
+// invitesAndOwnerStatus loads every invite sent for a plan (any status) and
+// reports whether the current user is the plan's Owner, so the template can
+// decide whether to show the "invite a collaborator" form.
+func (app *App) invitesAndOwnerStatus(planID uuid.UUID, user *domain.User) ([]*domain.PlanInvite, bool) {
+	invites, err := app.Store.GetInvitesForPlan(planID)
+	if err != nil {
+		log.Printf("Failed to load invites for plan %s: %v", planID, err)
+		invites = nil
+	}
+
+	isOwner := false
+	if user != nil {
+		if access, err := app.Store.GetAccess(planID, user.ID()); err == nil {
+			isOwner = access.AccessLevel == domain.Owner
+		}
+	}
+
+	return invites, isOwner
 }
 
 // GetStartingPoint GET /plan/{id}/starting-point

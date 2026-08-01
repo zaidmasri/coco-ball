@@ -17,6 +17,15 @@
 
     <!-- Form Body -->
     <div class="card-body p-4 p-md-5">
+      {{ if .ErrorMessage }}
+      <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <div>
+          <strong>Validation Error:</strong> {{ .ErrorMessage }}
+        </div>
+      </div>
+      {{ end }}
+
       <form action="/plan/{{ .Plan.ID }}/setup" method="POST" id="setupForm">
         <!-- SECTION 1: Company Details -->
         <h5 class="mb-4 text-primary">
@@ -273,137 +282,96 @@
             </div>
           </div>
         </div>
+      </form>
 
-        <hr class="my-5 text-muted opacity-25" />
+      <hr class="my-5 text-muted opacity-25" />
 
-        <!-- SECTION 2: Team & Collaborators -->
-        <h5 class="mb-4 text-primary">
-          <i class="bi bi-people me-2"></i>Team & Collaborators
-        </h5>
+      <!-- SECTION 2: Team & Collaborators -->
+      <h5 class="mb-4 text-primary">
+        <i class="bi bi-people me-2"></i>Team & Collaborators
+      </h5>
 
-        <!-- Invite Input -->
+      {{ if .IsOwner }}
+      <!-- Invite Input -->
+      <form action="/plan/{{ .Plan.ID }}/invites" method="POST" class="mb-4">
         <label class="form-label fw-bold">Invite a new member</label>
-        <div class="input-group mb-4 shadow-sm">
-          <span class="input-group-text bg-white text-muted border-end-0"
-            ><i class="bi bi-envelope"></i
-          ></span>
-          <input
-            type="email"
-            class="form-control border-start-0 ps-0"
-            placeholder="colleague@example.com"
-            aria-label="Email address"
-          />
-          <button class="btn btn-primary px-4" type="button">
-            Send Invite
-          </button>
+        <div class="row g-2">
+          <div class="col-md-7">
+            <div class="input-group shadow-sm">
+              <span class="input-group-text bg-white text-muted border-end-0"
+                ><i class="bi bi-envelope"></i
+              ></span>
+              <input
+                type="email"
+                class="form-control border-start-0 ps-0"
+                name="email"
+                placeholder="colleague@example.com"
+                aria-label="Email address"
+                required
+              />
+            </div>
+          </div>
+          <div class="col-md-3">
+            <select class="form-select shadow-sm" name="accessLevel" required>
+              <option value="viewer" selected>Viewer</option>
+              <option value="editor">Editor</option>
+              <option value="owner">Owner</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary w-100" type="submit">
+              Send Invite
+            </button>
+          </div>
         </div>
+      </form>
+      {{ end }}
 
-        <!-- Members List -->
-        <!--
-        {{/* Note for Go: You will eventually wrap these list items in a range block */}} -->
-        <div class="card border shadow-sm">
-          <ul class="list-group list-group-flush">
-            <!-- Member: Joined (Owner) -->
-            <li
-              class="list-group-item d-flex justify-content-between align-items-center p-3 bg-light"
-            >
-              <div class="d-flex align-items-center">
-                <div
-                  class="bg-secondary text-white rounded-circle d-flex justify-content-center align-items-center me-3"
-                  style="width: 40px; height: 40px"
-                >
-                  <i class="bi bi-person-fill fs-5"></i>
-                </div>
-                <div>
-                  <h6 class="mb-0 fw-bold">Sarah Jenkins (You)</h6>
-                  <small class="text-muted">sarah@acmecorp.com</small>
-                </div>
+      <!-- Members List -->
+      <div class="card border shadow-sm">
+        {{ if .Invites }}
+        <ul class="list-group list-group-flush">
+          {{ range .Invites }}
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center p-3"
+          >
+            <div class="d-flex align-items-center">
+              <div
+                class="bg-light text-muted rounded-circle border d-flex justify-content-center align-items-center me-3"
+                style="width: 40px; height: 40px"
+              >
+                <i class="bi bi-envelope"></i>
               </div>
               <div>
-                <span
-                  class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 border border-success border-opacity-25"
-                  >Owner</span
-                >
+                <h6 class="mb-0 fw-bold">{{ .Email }}</h6>
+                <small class="text-muted text-capitalize">{{ .AccessLevel }} access</small>
               </div>
-            </li>
-
-            <!-- Member: Accepted/Joined -->
-            <li
-              class="list-group-item d-flex justify-content-between align-items-center p-3"
-            >
-              <div class="d-flex align-items-center">
-                <div
-                  class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex justify-content-center align-items-center me-3"
-                  style="width: 40px; height: 40px"
-                >
-                  <span class="fw-bold">MR</span>
-                </div>
-                <div>
-                  <h6 class="mb-0 fw-bold">Michael Ross</h6>
-                  <small class="text-muted">michael.ross@acmecorp.com</small>
-                </div>
-              </div>
-              <div class="d-flex align-items-center gap-3">
-                <span
-                  class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3 py-2"
-                  >Joined</span
-                >
-
-                <div class="dropdown">
-                  <button
-                    class="btn btn-link text-muted p-0 border-0"
-                    type="button"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false"
-                  >
-                    <i class="bi bi-three-dots-vertical fs-5"></i>
-                  </button>
-
-                  <ul class="dropdown-menu shadow-sm">
-                    <li>
-                      <a class="dropdown-item text-danger" href="#">Remove</a>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </li>
-
-            <!-- Member: Invited (Pending) -->
-            <li
-              class="list-group-item d-flex justify-content-between align-items-center p-3"
-            >
-              <div class="d-flex align-items-center">
-                <div
-                  class="bg-light text-muted rounded-circle border border-dashed d-flex justify-content-center align-items-center me-3"
-                  style="width: 40px; height: 40px"
-                >
-                  <i class="bi bi-envelope"></i>
-                </div>
-                <div>
-                  <h6 class="mb-0 text-muted fst-italic">
-                    Awaiting registration...
-                  </h6>
-                  <small class="text-muted">investor@venturefund.com</small>
-                </div>
-              </div>
-              <div class="d-flex align-items-center gap-3">
-                <span
-                  class="badge bg-warning bg-opacity-10 text-warning rounded-pill px-3 py-2"
-                  >Invite Sent</span
-                >
-                <button
-                  type="button"
-                  class="btn btn-link text-danger p-0 text-decoration-none"
-                  title="Revoke Invite"
-                >
-                  <i class="bi bi-x-circle"></i>
-                </button>
-              </div>
-            </li>
-          </ul>
+            </div>
+            <div>
+              {{ if eq .Status "pending" }}
+              <span class="badge bg-warning bg-opacity-10 text-warning rounded-pill px-3 py-2"
+                >Invite Sent</span
+              >
+              {{ else if eq .Status "accepted" }}
+              <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2"
+                >Joined</span
+              >
+              {{ else }}
+              <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill px-3 py-2"
+                >Declined</span
+              >
+              {{ end }}
+            </div>
+          </li>
+          {{ end }}
+        </ul>
+        {{ else }}
+        <div class="p-4 text-center text-muted small">
+          No collaborators invited yet.
         </div>
-        <!-- End Members List -->
-      </form>
+        {{ end }}
+      </div>
+      <!-- End Members List -->
     </div>
 
     <!-- Footer Navigation -->

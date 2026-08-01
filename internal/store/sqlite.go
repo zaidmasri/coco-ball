@@ -187,9 +187,11 @@ func (s *SQLiteStore) Delete(id uuid.UUID) error {
 func (s *SQLiteStore) SaveUser(u *domain.User) error {
 	now := time.Now().Unix()
 	_, err := s.db.Exec(
-		"INSERT OR IGNORE INTO users (id, email, created_at) VALUES (?, ?, ?)",
+		"INSERT OR IGNORE INTO users (id, email, first_name, last_name, created_at) VALUES (?, ?, ?, ?, ?)",
 		u.ID().String(),
 		strings.ToLower(u.Email()),
+		u.FirstName(),
+		u.LastName(),
 		now,
 	)
 
@@ -202,9 +204,9 @@ func (s *SQLiteStore) SaveUser(u *domain.User) error {
 
 // GetUser retrieves a user by ID
 func (s *SQLiteStore) GetUser(id uuid.UUID) (*domain.User, error) {
-	var email string
+	var email, firstName, lastName string
 
-	err := s.db.QueryRow("SELECT email FROM users WHERE id = ?", id.String()).Scan(&email)
+	err := s.db.QueryRow("SELECT email, first_name, last_name FROM users WHERE id = ?", id.String()).Scan(&email, &firstName, &lastName)
 	if err == sql.ErrNoRows {
 		return nil, domain.ErrUserNotFound
 	}
@@ -219,6 +221,8 @@ func (s *SQLiteStore) GetUser(id uuid.UUID) (*domain.User, error) {
 
 	// Manually set the ID since NewUser generates a new one
 	user.SetID(id)
+	user.SetFirstName(firstName)
+	user.SetLastName(lastName)
 
 	return user, nil
 }
@@ -293,12 +297,10 @@ func (s *SQLiteStore) GetUserWithPassword(email string) (*domain.UserWithPasswor
 		return nil, fmt.Errorf("invalid user id: %w", err)
 	}
 
-	user, err := domain.NewUser(email)
+	user, err := s.GetUser(id)
 	if err != nil {
 		return nil, err
 	}
-
-	user.SetID(id)
 
 	return &domain.UserWithPassword{
 		User:         user,
@@ -510,6 +512,197 @@ func (s *SQLiteStore) GetUserPlans(userID uuid.UUID) ([]*domain.Plan, error) {
 	}
 
 	return plans, nil
+}
+
+// CreateInvite stores a new plan invite
+func (s *SQLiteStore) CreateInvite(invite *domain.PlanInvite) error {
+	now := time.Now().Unix()
+	_, err := s.db.Exec(
+		`INSERT INTO plan_invites (id, plan_id, email, access_level, status, invited_by, created_at, responded_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+		invite.ID.String(),
+		invite.PlanID.String(),
+		invite.Email,
+		string(invite.AccessLevel),
+		string(invite.Status),
+		invite.InvitedBy.String(),
+		now,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create invite: %w", err)
+	}
+
+	invite.CreatedAt = now
+	return nil
+}
+
+// GetInvite retrieves an invite by ID
+func (s *SQLiteStore) GetInvite(id uuid.UUID) (*domain.PlanInvite, error) {
+	var planIDStr, email, accessLevel, status, invitedByStr string
+	var createdAt int64
+	var respondedAt sql.NullInt64
+
+	err := s.db.QueryRow(
+		`SELECT plan_id, email, access_level, status, invited_by, created_at, responded_at
+		 FROM plan_invites WHERE id = ?`,
+		id.String(),
+	).Scan(&planIDStr, &email, &accessLevel, &status, &invitedByStr, &createdAt, &respondedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrInviteNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query invite: %w", err)
+	}
+
+	planID, err := uuid.Parse(planIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid plan id: %w", err)
+	}
+	invitedBy, err := uuid.Parse(invitedByStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid inviter id: %w", err)
+	}
+
+	return &domain.PlanInvite{
+		ID:          id,
+		PlanID:      planID,
+		Email:       email,
+		AccessLevel: domain.AccessLevel(accessLevel),
+		Status:      domain.InviteStatus(status),
+		InvitedBy:   invitedBy,
+		CreatedAt:   createdAt,
+		RespondedAt: respondedAt.Int64,
+	}, nil
+}
+
+// GetInvitesForPlan retrieves every invite (any status) sent for a plan
+func (s *SQLiteStore) GetInvitesForPlan(planID uuid.UUID) ([]*domain.PlanInvite, error) {
+	rows, err := s.db.Query(
+		`SELECT id, email, access_level, status, invited_by, created_at, responded_at
+		 FROM plan_invites WHERE plan_id = ? ORDER BY created_at DESC`,
+		planID.String(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query plan invites: %w", err)
+	}
+	defer rows.Close()
+
+	var invites []*domain.PlanInvite
+	for rows.Next() {
+		var idStr, email, accessLevel, status, invitedByStr string
+		var createdAt int64
+		var respondedAt sql.NullInt64
+
+		if err := rows.Scan(&idStr, &email, &accessLevel, &status, &invitedByStr, &createdAt, &respondedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan invite: %w", err)
+		}
+
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid invite id: %w", err)
+		}
+		invitedBy, err := uuid.Parse(invitedByStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid inviter id: %w", err)
+		}
+
+		invites = append(invites, &domain.PlanInvite{
+			ID:          id,
+			PlanID:      planID,
+			Email:       email,
+			AccessLevel: domain.AccessLevel(accessLevel),
+			Status:      domain.InviteStatus(status),
+			InvitedBy:   invitedBy,
+			CreatedAt:   createdAt,
+			RespondedAt: respondedAt.Int64,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate invites: %w", err)
+	}
+
+	return invites, nil
+}
+
+// GetPendingInvitesForEmail retrieves all pending invites addressed to an email
+func (s *SQLiteStore) GetPendingInvitesForEmail(email string) ([]*domain.PlanInvite, error) {
+	rows, err := s.db.Query(
+		`SELECT id, plan_id, access_level, status, invited_by, created_at, responded_at
+		 FROM plan_invites WHERE LOWER(email) = ? AND status = ? ORDER BY created_at DESC`,
+		strings.ToLower(email),
+		string(domain.InvitePending),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query pending invites: %w", err)
+	}
+	defer rows.Close()
+
+	var invites []*domain.PlanInvite
+	for rows.Next() {
+		var idStr, planIDStr, accessLevel, status, invitedByStr string
+		var createdAt int64
+		var respondedAt sql.NullInt64
+
+		if err := rows.Scan(&idStr, &planIDStr, &accessLevel, &status, &invitedByStr, &createdAt, &respondedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan invite: %w", err)
+		}
+
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid invite id: %w", err)
+		}
+		planID, err := uuid.Parse(planIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid plan id: %w", err)
+		}
+		invitedBy, err := uuid.Parse(invitedByStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid inviter id: %w", err)
+		}
+
+		invites = append(invites, &domain.PlanInvite{
+			ID:          id,
+			PlanID:      planID,
+			Email:       strings.ToLower(email),
+			AccessLevel: domain.AccessLevel(accessLevel),
+			Status:      domain.InviteStatus(status),
+			InvitedBy:   invitedBy,
+			CreatedAt:   createdAt,
+			RespondedAt: respondedAt.Int64,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate invites: %w", err)
+	}
+
+	return invites, nil
+}
+
+// UpdateInviteStatus marks an invite as accepted or rejected
+func (s *SQLiteStore) UpdateInviteStatus(id uuid.UUID, status domain.InviteStatus) error {
+	now := time.Now().Unix()
+	res, err := s.db.Exec(
+		`UPDATE plan_invites SET status = ?, responded_at = ? WHERE id = ?`,
+		string(status),
+		now,
+		id.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update invite: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check update result: %w", err)
+	}
+	if rows == 0 {
+		return domain.ErrInviteNotFound
+	}
+
+	return nil
 }
 
 // Close closes the database connection

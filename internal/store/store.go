@@ -32,4 +32,11 @@ type PlanStore interface {
 	GetAccess(planID, userID uuid.UUID) (*domain.PlanAccess, error)
 	GetPlanAccess(planID uuid.UUID) ([]*domain.PlanAccess, error)
 	GetUserPlans(userID uuid.UUID) ([]*domain.Plan, error)
+
+	// Invites
+	CreateInvite(invite *domain.PlanInvite) error
+	GetInvite(id uuid.UUID) (*domain.PlanInvite, error)
+	GetInvitesForPlan(planID uuid.UUID) ([]*domain.PlanInvite, error)
+	GetPendingInvitesForEmail(email string) ([]*domain.PlanInvite, error)
+	UpdateInviteStatus(id uuid.UUID, status domain.InviteStatus) error
 }

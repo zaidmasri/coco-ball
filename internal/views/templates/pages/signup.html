@@ -23,6 +23,33 @@
               {{end}}
 
               <form method="POST" action="/signup">
+                <div class="row g-3 mb-3">
+                  <div class="col-sm-6">
+                    <label for="firstName" class="form-label">First Name</label>
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="firstName"
+                      name="firstName"
+                      placeholder="Jane"
+                      value="{{.FirstName}}"
+                      required
+                    />
+                  </div>
+                  <div class="col-sm-6">
+                    <label for="lastName" class="form-label">Last Name</label>
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="lastName"
+                      name="lastName"
+                      placeholder="Doe"
+                      value="{{.LastName}}"
+                      required
+                    />
+                  </div>
+                </div>
+
                 <div class="mb-3">
                   <label for="email" class="form-label">Email Address</label>
                   <input

@@ -8,14 +8,17 @@ import (
 )
 
 var (
-	ErrInvalidEmail = errors.New("email cannot be empty")
-	ErrUserNotFound = errors.New("user not found")
-	ErrAccessDenied = errors.New("access denied")
+	ErrInvalidEmail    = errors.New("email cannot be empty")
+	ErrInvalidUserName = errors.New("first and last name are required")
+	ErrUserNotFound    = errors.New("user not found")
+	ErrAccessDenied    = errors.New("access denied")
 )
 
 type User struct {
-	id    uuid.UUID
-	email string
+	id        uuid.UUID
+	email     string
+	firstName string
+	lastName  string
 }
 
 func NewUser(email string) (*User, error) {
@@ -30,17 +33,32 @@ func NewUser(email string) (*User, error) {
 	}, nil
 }
 
-func (u *User) ID() uuid.UUID { return u.id }
-func (u *User) Email() string { return u.email }
-func (u *User) SetID(id uuid.UUID) { u.id = id }
+func (u *User) ID() uuid.UUID          { return u.id }
+func (u *User) Email() string          { return u.email }
+func (u *User) FirstName() string      { return u.firstName }
+func (u *User) LastName() string       { return u.lastName }
+func (u *User) SetID(id uuid.UUID)     { u.id = id }
+func (u *User) SetFirstName(fn string) { u.firstName = fn }
+func (u *User) SetLastName(ln string)  { u.lastName = ln }
+
+// FullName returns the user's display name, falling back to their email
+// when no name has been set (e.g. legacy accounts created before names
+// were required).
+func (u *User) FullName() string {
+	name := strings.TrimSpace(u.firstName + " " + u.lastName)
+	if name == "" {
+		return u.email
+	}
+	return name
+}
 
 // AccessLevel defines what a user can do with a plan
 type AccessLevel string
 
 const (
-	Owner    AccessLevel = "owner"
-	Editor   AccessLevel = "editor"
-	Viewer   AccessLevel = "viewer"
+	Owner  AccessLevel = "owner"
+	Editor AccessLevel = "editor"
+	Viewer AccessLevel = "viewer"
 )
 
 func (a AccessLevel) IsValid() bool {

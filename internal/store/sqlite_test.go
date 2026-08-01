@@ -50,7 +50,7 @@ func TestSQLiteStore(t *testing.T) {
 
 	// Test user with password
 	fmt.Println("\nTesting user credentials...")
-	userWithPwd, err := domain.NewUserWithPassword("auth@example.com", "securepassword123")
+	userWithPwd, err := domain.NewUserWithPassword("auth@example.com", "Auth", "User", "securepassword123")
 	if err != nil {
 		t.Fatalf("Failed to create user with password: %v", err)
 	}

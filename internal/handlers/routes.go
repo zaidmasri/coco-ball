@@ -41,6 +41,15 @@ func (app *App) RegisterRoutes(mux *http.ServeMux) {
 		app.PostStartingPoint()(w, r)
 	})))
 
+	// Invites - only the plan owner can invite collaborators
+	mux.Handle("POST /plan/{id}/invites", app.RequireAccess(domain.Owner)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostCreateInvite()(w, r)
+	})))
+	// Accept/reject are keyed by invite ID, not plan ID, so auth is checked
+	// inside the handler rather than via RequireAccess.
+	mux.HandleFunc("POST /invites/{id}/accept", app.PostAcceptInvite())
+	mux.HandleFunc("POST /invites/{id}/reject", app.PostRejectInvite())
+
 	// Payroll - requires viewer access for GET, editor for POST
 	mux.Handle("GET /plan/{id}/payroll", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		app.GetPayroll()(w, r)
