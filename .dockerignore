@@ -1,0 +1,9 @@
+.git
+.gitignore
+.claude
+*.md
+cli
+northbasis-cli
+web
+northbasis.db
+northbasis.db-*
