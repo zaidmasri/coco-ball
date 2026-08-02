@@ -1,0 +1,32 @@
+{{ template "base" . }}
+
+{{ define "question-fields" }}
+<datalist id="opCapitalList">
+  <option value="Pre-Opening Salaries and Wages"></option>
+  <option value="Prepaid Insurance Premiums"></option>
+  <option value="Inventory"></option>
+  <option value="Legal and Accounting"></option>
+  <option value="Rent Deposits"></option>
+  <option value="Utility Deposits"></option>
+  <option value="Supplies"></option>
+  <option value="Advertising and Promotions"></option>
+  <option value="Licenses"></option>
+  <option value="Other Initial Startup Costs"></option>
+</datalist>
+
+{{ if eq .Step "name" }}
+<label for="name" class="form-label fw-bold fs-5">What is this startup cost?</label>
+<input type="text" list="opCapitalList" class="form-control form-control-lg" id="name" name="name"
+       value="{{ .Cost.Name }}" autofocus required />
+
+{{ else if eq .Step "amount" }}
+<label for="amount" class="form-label fw-bold fs-5">How much will it cost?</label>
+<div class="input-group input-group-lg">
+  <span class="input-group-text">$</span>
+  <input type="number" step="0.01" min="0" class="form-control" id="amount" name="amount"
+         value="{{ if ne .Cost.Amount 0 }}{{ .Cost.Amount }}{{ end }}" autofocus required />
+</div>
+{{ end }}
+{{ end }}
+
+{{ define "content" }}{{ template "question-step" . }}{{ end }}

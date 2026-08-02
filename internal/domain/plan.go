@@ -27,6 +27,17 @@ const (
 	AnnualStepPercent GrowthType = "AnnualStepPercent"
 )
 
+// Starting Point section keys. Shared by the store layer (section
+// completion tracking), the handlers layer (wizard route path segments),
+// and the views layer (summary page rendering) so all three always agree
+// on the same literal strings.
+const (
+	SectionFixedAssets    = "fixed-assets"
+	SectionStartupCosts   = "startup-costs"
+	SectionFundingSources = "funding-sources"
+	SectionCashOnHand     = "cash-on-hand"
+)
+
 var (
 	ErrInvalidName                      = errors.New("name cannot be empty")
 	ErrNegativeAmount                   = errors.New("expense amount cannot be negative")
@@ -322,27 +333,58 @@ func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int, ownerID
 	}, nil
 }
 
-// ClearStartingPoint wipes the existing starting point data.
-// This is critical for dynamic forms so we don't duplicate data when editing.
-func (p *Plan) ClearStartingPoint() {
-	p.futurePurchases = make([]CapitalAsset, 0)
-	p.startupCosts = make([]StartupCost, 0)
-	p.fundingSources = make([]FundingSource, 0)
-	p.startingBalances = StartingBalances{}
+// LoadStartingPointData populates the Starting Point section fields from an
+// external source. It exists for the store layer's use: since Starting
+// Point moved to normalized SQL tables, Plan's own JSON (un)marshalling no
+// longer carries this data, so the store queries the tables itself and
+// hands the results back here after loading the rest of the Plan.
+func (p *Plan) LoadStartingPointData(assets []CapitalAsset, costs []StartupCost, funding []FundingSource, balances StartingBalances) {
+	p.futurePurchases = assets
+	p.startupCosts = costs
+	p.fundingSources = funding
+	p.startingBalances = balances
 }
 
-func (p *Plan) AddStartupCost(name string, amount Money) {
-	if strings.TrimSpace(name) != "" && amount > 0 {
-		p.startupCosts = append(p.startupCosts, StartupCost{Name: name, Amount: amount})
+// ValidateStartupCost checks a StartupCost before it's persisted.
+func ValidateStartupCost(cost StartupCost) error {
+	if strings.TrimSpace(cost.Name) == "" {
+		return ErrInvalidName
 	}
+	if cost.Amount < 0 {
+		return ErrNegativeAmount
+	}
+	return nil
 }
 
-func (p *Plan) AddFundingSource(name string, amount Money, rate float64, term int) {
-	if strings.TrimSpace(name) != "" && amount > 0 {
-		p.fundingSources = append(p.fundingSources, FundingSource{
-			Name: name, Amount: amount, InterestRate: rate, TermMonths: term,
-		})
+// AddStartupCost validates and appends a startup cost line item.
+func (p *Plan) AddStartupCost(name string, amount Money) error {
+	cost := StartupCost{Name: name, Amount: amount}
+	if err := ValidateStartupCost(cost); err != nil {
+		return err
 	}
+	p.startupCosts = append(p.startupCosts, cost)
+	return nil
+}
+
+// ValidateFundingSource checks a FundingSource before it's persisted.
+func ValidateFundingSource(funding FundingSource) error {
+	if strings.TrimSpace(funding.Name) == "" {
+		return ErrInvalidName
+	}
+	if funding.Amount < 0 {
+		return ErrNegativeAmount
+	}
+	return nil
+}
+
+// AddFundingSource validates and appends a funding source line item.
+func (p *Plan) AddFundingSource(name string, amount Money, rate float64, term int) error {
+	funding := FundingSource{Name: name, Amount: amount, InterestRate: rate, TermMonths: term}
+	if err := ValidateFundingSource(funding); err != nil {
+		return err
+	}
+	p.fundingSources = append(p.fundingSources, funding)
+	return nil
 }
 
 func (p *Plan) SetStartingBalances(cash, ar, pe, ap, ae Money) {
@@ -677,8 +719,11 @@ func (p *Plan) AddCOGS(name string, baseAmount Money, growth GrowthStrategy) err
 	return nil
 }
 
-// AddCapitalPurchase validates and appends a new asset.
-func (p *Plan) AddCapitalPurchase(asset CapitalAsset) error {
+// ValidateCapitalAsset checks a CapitalAsset before it's persisted. Factored
+// out of AddCapitalPurchase so the Starting Point wizard's step handlers
+// can validate a single field/struct at a time without needing a *Plan
+// receiver.
+func ValidateCapitalAsset(asset CapitalAsset) error {
 	if asset.PurchaseCost < 0 || asset.SalvageValue < 0 {
 		return ErrNegativeAmount
 	}
@@ -688,16 +733,29 @@ func (p *Plan) AddCapitalPurchase(asset CapitalAsset) error {
 	if asset.PurchaseCost < asset.SalvageValue {
 		return ErrPurchaseCostLessThanSalvageValue
 	}
-
 	if asset.DepreciationMethod != StraightLine && asset.DepreciationMethod != DoubleDeclining && asset.DepreciationMethod != None {
 		return ErrInvalidDepreciationMethod
 	}
+	return nil
+}
 
+// AddCapitalPurchase validates and appends a new asset.
+func (p *Plan) AddCapitalPurchase(asset CapitalAsset) error {
+	if err := ValidateCapitalAsset(asset); err != nil {
+		return err
+	}
 	p.futurePurchases = append(p.futurePurchases, asset)
 	return nil
 }
 
-// planJSON is an intermediate struct for JSON marshalling
+// planJSON is an intermediate struct for JSON marshalling.
+//
+// Starting Point (Fixed Assets/Startup Costs/Funding Sources/Cash on Hand)
+// is deliberately NOT included here - it moved to normalized SQL tables
+// (see internal/store/sqlite_starting_point.go) so the Starting Point
+// wizard's sub-pages can save progressively without racing other sections.
+// The store layer populates those fields on Plan via LoadStartingPointData
+// after unmarshalling everything else from this blob.
 type planJSON struct {
 	ID                  string              `json:"id"`
 	Name                string              `json:"name"`
@@ -707,10 +765,6 @@ type planJSON struct {
 	Revenues            []RevenueStream     `json:"revenues"`
 	OpEx                []Cost              `json:"opEx"`
 	COGS                []Cost              `json:"cogs"`
-	FuturePurchases     []CapitalAsset      `json:"futurePurchases"`
-	StartupCosts        []StartupCost       `json:"startupCosts"`
-	FundingSources      []FundingSource     `json:"fundingSources"`
-	StartingBalances    StartingBalances    `json:"startingBalances"`
 	SalaryRoles         []SalaryRole        `json:"salaryRoles"`
 	Benefits            []Benefit           `json:"benefits"`
 	PayrollTaxRates     PayrollTaxRates     `json:"payrollTaxRates"`
@@ -731,10 +785,6 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		Revenues:            p.revenues,
 		OpEx:                p.opEx,
 		COGS:                p.cogs,
-		FuturePurchases:     p.futurePurchases,
-		StartupCosts:        p.startupCosts,
-		FundingSources:      p.fundingSources,
-		StartingBalances:    p.startingBalances,
 		SalaryRoles:         p.salaryRoles,
 		Benefits:            p.benefits,
 		PayrollTaxRates:     p.payrollTaxRates,
@@ -772,10 +822,6 @@ func (p *Plan) UnmarshalJSON(data []byte) error {
 	p.revenues = pj.Revenues
 	p.opEx = pj.OpEx
 	p.cogs = pj.COGS
-	p.futurePurchases = pj.FuturePurchases
-	p.startupCosts = pj.StartupCosts
-	p.fundingSources = pj.FundingSources
-	p.startingBalances = pj.StartingBalances
 	p.salaryRoles = pj.SalaryRoles
 	p.benefits = pj.Benefits
 	p.payrollTaxRates = pj.PayrollTaxRates

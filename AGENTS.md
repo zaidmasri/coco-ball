@@ -53,19 +53,28 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [x] Comprehensive validation and error types
 
 ### Data Storage
-- [x] In-memory plan store with GetAll(), GetByID(), Save() methods
+- [x] In-memory plan store with GetAll(), GetByID(), Save() methods (superseded by SQLite; interface still supports swapping implementations)
 - [x] Plan store interface for future database implementation
 - [x] SQLite database implementation with persistent storage
+- [x] All form data persists to SQLite: Payroll, Sales Forecast/Products, Operating Expenses, Cash Flow (inventory + distributions), Starting Point (startup costs, funding sources, capital assets, initial balances)
+- [x] Migration system (`internal/store/migrations.go` — ordered list of SQL statements run automatically on store init; 10 migrations as of 2026-08-01, covering plans, users, sessions, plan_access, first/last name, plan_invites)
 
 ### Authentication & Authorization
 - [x] User authentication system (login/logout/signup)
 - [x] Password hashing and verification
 - [x] Session management and middleware
-- [x] User registration/signup flow
+- [x] User registration/signup flow (now requires first and last name in addition to email/password)
 - [x] Session-based auth with cookies
 - [x] User profile page (GET `/profile`)
 - [x] Logout as POST (proper state-modifying HTTP semantics)
 - [x] User Authorization - Ensure users can only access their own plans (access control middleware enforces Owner/Editor/Viewer roles)
+
+### Teams & Collaboration (2026-08-01)
+- [x] Plan invites - Owner can invite a collaborator by email at a chosen access level (Editor/Viewer) via `POST /plan/{id}/invites`
+- [x] Invite inbox - Pending invites addressed to a user's email surface in an onboarding section on the home dashboard (`GetRoot`/`pendingInvitesForUser`), not via email delivery — no outbound email is sent anywhere in the app
+- [x] Accept/reject flow - `POST /invites/{id}/accept` grants access (`Store.GrantAccess`) and marks the invite accepted; `POST /invites/{id}/reject` marks it rejected; both verify the invite is addressed to the logged-in user's email and still pending
+- [x] User display names - `User` now carries `FirstName`/`LastName`/`FullName()` (falls back to email if unset, for accounts created before names were required), used to show "invited by" on the setup page and invite inbox
+- [x] Setup page collaborator management - Owners see pending invites and can send new ones from the plan's Setup page (`internal/views/templates/pages/setup.html`)
 
 ### Routes & Pages
 - [x] Home page (root `/`) - List of existing plans
@@ -90,6 +99,9 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [x] POST `/plan/{id}/operating-expenses` - Save OpEx data
 - [x] POST `/plan/{id}/cash-flow` - Save discretionary cash flow (additional inventory, distributions)
 - [x] POST `/plan/{id}/delete` - Delete a plan (requires Owner access)
+- [x] POST `/plan/{id}/invites` - Create a collaborator invite (requires Owner access)
+- [x] POST `/invites/{id}/accept` - Accept an invite addressed to the logged-in user
+- [x] POST `/invites/{id}/reject` - Decline an invite addressed to the logged-in user
 
 ### Financial Calculations & Reporting
 - [x] Payroll tax calculations (employer SS/Medicare/FUTA/SUTA on W-2 wages, contractors exempt)
@@ -121,30 +133,29 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [ ] Two-factor authentication (optional)
 
 ### User Management
-- [ ] User model and database table
-- [ ] User profile management
+- [x] User model and database table
+- [x] User role-based access control (Owner, Editor, Viewer — per-plan via `plan_access`/invites, not a global Admin role)
+- [ ] User profile management (profile page is currently display-only — no edit form)
 - [ ] User preferences/settings
-- [ ] Workspace/organization support (optional multi-user teams)
-- [ ] User role-based access control (Admin, Editor, Viewer)
+- [ ] Workspace/organization support (still no multi-plan "team" grouping above individual plan invites — see Teams & Collaboration above for what exists today)
 - [ ] Audit logging for plan changes
 
 ### Database Implementation
-- [ ] PostgreSQL/MySQL schema design
-- [ ] Database driver integration (github.com/lib/pq or similar)
-- [ ] Migration system
-- [ ] Connection pooling and health checks
-- [ ] Persistent plan storage (replace in-memory store)
-- [ ] User data persistence
+- [x] Migration system (`internal/store/migrations.go`, run automatically on store init)
+- [x] Persistent plan storage (SQLite, replacing the in-memory store)
+- [x] User data persistence
+- [ ] PostgreSQL/MySQL schema design (SQLite is still the only backend — fine for current single-instance Docker deployment, would need revisiting for horizontal scaling)
+- [ ] Connection pooling and health checks (beyond the Docker Compose HTTP healthcheck — no DB-level pooling since SQLite is a single file)
 - [ ] Plan versioning/history (optional)
 
 ### Data Persistence
-- [ ] Implement database store interface
-- [ ] Save revenue streams to database
-- [ ] Save operating expenses to database
-- [ ] Save COGS to database
-- [ ] Save capital assets/depreciation to database
-- [ ] Save funding sources and startup costs
-- [ ] Plan update/edit persistence
+- [x] Implement database store interface (`store.PlanStore`)
+- [x] Save revenue streams/products to database
+- [x] Save operating expenses to database
+- [x] Save COGS to database (captured per-unit on the Sales Forecast form, persists with products)
+- [x] Save capital assets/depreciation to database
+- [x] Save funding sources and startup costs
+- [x] Plan update/edit persistence (clear-then-rebuild pattern across all form handlers)
 
 ### Financial Calculations & Reporting (remaining)
 - [ ] Income tax modeling (currently deliberately unmodeled — see Tech Decisions Log)
@@ -192,13 +203,16 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 - [ ] Test fixtures and factories
 
 ### DevOps & Deployment
-- [ ] Docker containerization
-- [ ] Environment configuration (.env, config files)
-- [ ] Database migrations automation
+- [x] Docker containerization - Multi-stage production `Dockerfile` (Alpine, cgo-enabled build for `go-sqlite3`) plus a separate `Dockerfile.dev` running `air` for hot reload; `docker-compose.yml` (production, with HTTP healthcheck and a named volume for the SQLite file) and `docker-compose.dev.yml` (source bind-mounted, Go module/build caches as volumes)
+- [x] Database migrations automation - `migrate` CLI command runs the migration list; also runs automatically on every store init
+- [x] `Makefile` with `build`/`serve`/`migrate`/`reset`/`test` (local Go) and `docker-build`/`up`/`down`/`logs`/`dev`/`dev-down`/`dev-logs` (Docker) targets
+- [ ] Environment configuration (.env, config files) - currently just CLI flags (`--db`, `--port`); no `.env`/secrets management
 - [ ] CI/CD pipeline
-- [ ] Logging and monitoring
+- [ ] Logging and monitoring (beyond the existing request logger middleware)
 - [ ] Error tracking (Sentry, etc.)
 - [ ] Performance monitoring
+
+Note: the Makefile comments indicate the production image (`docker-compose.yml`) is intended to be deployed via Coolify; actual live-deployment status is not tracked in this repo.
 
 ### Documentation
 - [ ] Architecture decision records (ADRs)
@@ -221,48 +235,58 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 1. ~~**User Authorization**~~ ✅ **COMPLETED** - Users can only access plans they own or have access to via Owner/Editor/Viewer roles
 2. ~~**Form POST handlers**~~ ✅ **COMPLETED** - Payroll, Sales Forecast, Operating Expenses, Cash Flow, and Delete Plan all persist via POST
 3. ~~**Financial calculations**~~ ✅ **COMPLETED** - Income Statement, Balance Sheet, and Analytics (breakeven/ratios/amortization) now show real computed 3-year projections
-4. **Testing** - Add handler-level tests for the new report pages (GetIncomeStatement/GetBalanceSheet/GetAnalytics); domain-level projection engine already has test coverage in projection_test.go
-5. **Form Validation** - Client and server-side validation for all inputs
-6. **Error handling** - Comprehensive error messages and recovery flows
-7. **Income tax modeling** - No tax-rate input exists anywhere in the app; Net Income is currently pre-tax
+4. ~~**Data persistence**~~ ✅ **COMPLETED** - All plan sub-entities persist to SQLite via the clear-then-rebuild pattern
+5. ~~**Docker containerization**~~ ✅ **COMPLETED** - Production + dev Dockerfiles, docker-compose files, Makefile targets
+6. **Testing** - `internal/handlers/` has exactly one test file (`auth_test.go`); no handler-level tests exist yet for the report pages (GetIncomeStatement/GetBalanceSheet/GetAnalytics), the form POST handlers (Payroll/SalesForecast/OpExpenses/CashFlow), or the new invite flow (PostCreateInvite/PostAcceptInvite/PostRejectInvite). Domain-level projection engine already has coverage in `projection_test.go`
+7. **Form Validation** - Client and server-side validation for all inputs
+8. **Error handling** - Comprehensive error messages and recovery flows
+9. **Income tax modeling** - No tax-rate input exists anywhere in the app; Net Income is currently pre-tax
 
 ## Project Structure Reference
 
 ```
 .
 ├── cmd/cli/
-│   ├── main.go                  # CLI entry point
-│   ├── serve.go                 # Server setup and initialization
-│   ├── migrate.go               # Database migrations
-│   └── ...                      # Other CLI commands
+│   ├── main.go                  # CLI entry point, flag parsing, command dispatch (serve/migrate/reset)
+│   ├── serve.go                 # Server setup: store init, template loading, route registration, middleware chain
+│   └── migrate.go               # `migrate` command (runs the migration list via store init)
 ├── internal/
 │   ├── domain/
 │   │   ├── plan.go              # Plan aggregate root, business logic
-│   │   ├── user.go              # User domain model
-│   │   ├── session.go           # Session domain model
-│   │   └── plan_test.go         # Domain tests
+│   │   ├── projection.go        # Month-by-month financial projection engine
+│   │   ├── invite.go            # PlanInvite domain model (teams & collaboration)
+│   │   ├── user.go              # User domain model (id, email, first/last name, access levels)
+│   │   ├── session.go           # Session domain model + NewUserWithPassword
+│   │   ├── plan_test.go         # Domain tests
+│   │   └── projection_test.go   # Projection engine tests (incl. balance-sheet-balances invariant)
 │   ├── handlers/
-│   │   ├── plan.go              # Plan HTTP handlers
+│   │   ├── plan.go              # Plan HTTP handlers (setup, all report/form pages, delete)
 │   │   ├── auth.go              # Authentication handlers (login, signup, logout, profile)
-│   │   └── routes.go            # Route registration (RegisterRoutes method)
+│   │   ├── invites.go           # Invite handlers (create/accept/reject)
+│   │   ├── routes.go            # Route registration (RegisterRoutes method)
+│   │   └── auth_test.go         # Authorization middleware tests (only handler test file so far)
 │   ├── middleware/
 │   │   └── logger.go            # Request logging middleware
 │   ├── store/
-│   │   ├── store.go             # Store interface
+│   │   ├── store.go             # PlanStore interface (plans, access, invites)
 │   │   ├── sqlite.go            # SQLite implementation
-│   │   ├── migrations.go        # Database migrations
+│   │   ├── migrations.go        # Ordered SQL migration list, run automatically on store init
 │   │   └── sqlite_test.go       # Store tests
-│   ├── templates/               # Go HTML templates
-│   │   ├── base.html            # Base layout template
-│   │   ├── pages/               # Page templates
-│   │   ├── components/          # Reusable components
-│   │   └── embed.go             # Embedded FS
-│   ├── views/
-│   │   ├── builders.go          # Page view builders
-│   │   ├── types.go             # View data types
-│   │   └── embed.go             # Embedded template resources
-│   └── static/                  # CSS, JS, images
-│       └── embed.go             # Embedded FS
+│   └── views/                   # Templates, static assets, and view-layer glue (merged into one package 2026-07-29)
+│       ├── builders.go          # Page view builders (Build*Page functions)
+│       ├── types.go             # View data types (per-page structs, InviteSummary, etc.)
+│       ├── funcs.go             # html/template helper funcs (formatMoney, addMoney, formatPercent, formatRatio)
+│       ├── templates_embed.go   # Embedded template FS
+│       ├── static_embed.go      # Embedded static FS
+│       ├── templates/
+│       │   ├── base.html        # Base layout template
+│       │   ├── pages/           # Page templates
+│       │   └── components/      # Reusable components
+│       └── static/               # CSS, JS, icons
+├── Dockerfile / Dockerfile.dev   # Production (multi-stage, Alpine) and dev (air hot-reload) images
+├── docker-compose.yml / docker-compose.dev.yml
+├── .air.toml                    # air hot-reload config (used by Dockerfile.dev)
+├── Makefile                     # build/serve/migrate/reset/test + docker-build/up/down/logs/dev targets
 ├── go.mod
 └── go.sum
 ```
@@ -270,10 +294,11 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 ## Key Files to Understand
 
 - **plan.go** (domain) - Core business logic, validation, calculations
-- **main.go** - Route definitions and server setup
-- **memory.go** - Current data storage implementation (needs replacement)
+- **projection.go** (domain) - Financial projection engine; its file-level comment documents every modeling simplification
+- **serve.go** (cmd/cli) - Route definitions and server setup
 - **plan.go** (handlers) - HTTP request/response handling
-- Templates in `internal/templates/` - UI layer
+- **invites.go** (handlers) - Collaboration/invite flow
+- Templates in `internal/views/templates/` - UI layer
 
 ## Important Notes for Future Agents
 
@@ -310,6 +335,11 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
   - The balance sheet is guaranteed to balance (Assets = Liabilities + Equity) by construction, up to a few dollars of whole-dollar (`Money` is `int64`) rounding drift across a 36-month projection.
 - **Template Currency/Math Helpers Added (2026-07-29)**: Go's `html/template` has no built-in arithmetic or currency formatting. Added `internal/views/funcs.go` (`formatMoney`, `addMoney`, `formatPercent`, `formatRatio`) registered via `template.Funcs()` in `cmd/cli/serve.go`'s `loadTemplates()`.
 - **Balance Sheet Categories Simplified (2026-07-29)**: The original balance-sheet.html mockup had separate "Line of Credit," "Commercial Loans & Mortgages," and "Other Bank & Credit Card Debt" rows, and separate "Real Estate/Vehicles/Equipment" vs "Other Fixed Assets" rows — but the domain model doesn't categorize funding sources or capital assets that finely (just one pool of amortizing loans, one pool of capital assets). Rewrote those sections to a single "Loans Payable" and "Fixed Assets (at cost)" line each rather than fabricating a category split the data doesn't support.
+- **Templates/Static Merged into `views` Package (2026-07-29)**: Moved `internal/templates/` and `internal/static/` under `internal/views/` (as `templates/`, `static/`, `templates_embed.go`, `static_embed.go`) so view-layer concerns (builders, types, embedded assets) live in one package instead of three.
+- **All Form Data Now Persists to SQLite (2026-07-30)**: Wired Starting Point, Payroll, Sales Forecast/Products, Operating Expenses, and Cash Flow handlers to actually save/reload from the SQLite store (previously some of these round-tripped through in-memory state only within a session). Closes out the "Data Persistence" checklist that had been open since the store was first built.
+- **Plan-Level Invites, Not Org/Workspace Teams (2026-08-01)**: "Teams and collab" was implemented as per-plan email invites (`domain.PlanInvite`, `plan_invites` table) at a chosen Owner/Editor/Viewer access level, surfaced as a pending-invite inbox on the home dashboard — deliberately not a workspace/organization model. No email is actually sent; the invitee only sees the invite if they're logged into the app with a matching email. Choose this scope if extending collaboration further, rather than assuming an org layer already exists.
+- **First/Last Name Now Required at Signup (2026-08-01)**: `NewUserWithPassword` gained `firstName`/`lastName` params (migrations 7–8 add the columns, default `''` for existing rows). `User.FullName()` falls back to email when both are blank, so legacy accounts created before this change still render sensibly in the invite inbox and setup page's "invited by" text.
+- **Docker Deployment Split into Prod/Dev Images (2026-08-01/02)**: Production `Dockerfile` is a multi-stage Alpine build (cgo enabled for `go-sqlite3`, `CGO_CFLAGS=-D_LARGEFILE64_SOURCE` needed for musl+sqlite compatibility) producing a small runtime image; `Dockerfile.dev` instead installs `air` and hot-reloads from a bind-mounted source tree via `docker-compose.dev.yml`. `docker-compose.yml` (prod) adds an HTTP healthcheck and a named volume for the SQLite file so data survives container recreation. Makefile centralizes both local-Go and Docker workflows.
 
 ### Known Limitations
 
@@ -318,6 +348,10 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 - **Money Truncates Cents** - `domain.Money` is `int64`; form amounts are parsed as float64 then truncated, so fractional cents are dropped (pre-existing pattern from Starting Point, kept for consistency). Over a 36-month projection this can drift the balance sheet by a few dollars — `BuildBalanceSheetPage`/`BuildAnalyticsPage` tolerate up to $25 before flagging "does not balance"
 - **Current/Quick Ratio show 0.00 when undefined** - if a plan has no Accounts Payable/Accrued Expenses, current liabilities are $0 and these ratios are mathematically undefined; the UI currently can't distinguish that from an actually-computed 0.0
 - **Loan/Fixed-Asset categories are not sub-typed** - the Balance Sheet and Amortization tab show one combined "Loans Payable" and "Fixed Assets" figure rather than breaking out Line-of-Credit vs. Commercial Loan vs. Equipment vs. Real Estate, since the domain model doesn't track those distinctions
+- **No email delivery** - Plan invites are stored in the database and only visible in-app to a logged-in user with the matching email; nothing is sent externally, so an invitee who doesn't already have an account (or doesn't think to log in) will never learn they were invited
+- **Collaboration is per-plan, not org-wide** - there is no workspace/team entity above individual plans; each plan has its own independent set of invites/access grants
+- **SQLite only** - single-file database; fine for the current single-instance Docker deployment but no connection pooling or horizontal-scaling story if that becomes necessary
+- **No handler-level test coverage for report/form pages or invites** - `internal/handlers/auth_test.go` is the only handler test file; the report pages, all form POST handlers, and the invite accept/reject flow are exercised only by manual browser testing during development, not by automated tests
 
 ### Questions to Ask If Stuck
 
@@ -328,10 +362,10 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 
 ---
 
-**Last Updated**: 2026-07-29  
-**Session Focus**: Financial projection engine (Income Statement, Balance Sheet, Analytics — breakeven/ratios/amortization) built on top of the Payroll/Sales/OpEx/CashFlow data captured in the prior session  
-**Total Remaining Items**: ~35 (across all categories)  
-**Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → Testing → Form Validation
+**Last Updated**: 2026-08-02
+**Session Focus**: Documentation catch-up — AGENTS.md had drifted since 2026-07-29 while three real chunks of work landed: full data persistence (2026-07-30), plan-level teams/invites (2026-08-01), and Docker deployment for both prod and dev (2026-08-01/02)
+**Total Remaining Items**: ~28 (across all categories, down from ~35 as Data Persistence and Docker Containerization checklists closed out)
+**Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → ~~Data Persistence~~ ✅ → ~~Docker Containerization~~ ✅ → Testing → Form Validation → Income Tax Modeling
 
 ## Session Summary (2026-07-29)
 
@@ -445,3 +479,66 @@ AR/Prepaid/AP, inventory-as-asset-swap). These are simplifying assumptions
 appropriate for an MVP financial planning tool, not oversights — each is
 documented in `projection.go`'s file-level comment so future work can
 tighten them deliberately rather than rediscover them by surprise.
+
+## Session Summary (2026-07-30): Data Persistence
+
+### What Shipped
+- Wired Starting Point, Payroll, Sales Forecast/Products, Operating Expenses,
+  and Cash Flow handlers so every form actually saves to and reloads from the
+  SQLite store, closing out the "Data Persistence" checklist that had been
+  open since the store interface was first built.
+
+## Session Summary (2026-08-01): Teams & Collaboration
+
+### What Shipped
+1. **Invite domain model** (`internal/domain/invite.go`) - `PlanInvite` with
+   `Pending`/`Accepted`/`Rejected` status, tied to a plan, an email, an
+   `AccessLevel`, and the inviting user.
+2. **Invite handlers** (`internal/handlers/invites.go`) - `PostCreateInvite`
+   (Owner-only, `POST /plan/{id}/invites`), `PostAcceptInvite` and
+   `PostRejectInvite` (`POST /invites/{id}/accept|reject`, keyed by invite ID
+   so authorization is checked inside the handler against the logged-in
+   user's email rather than via the plan-scoped `RequireAccess` middleware).
+3. **Store support** - `plan_invites` table (migration 9) plus an index on
+   email (migration 10) for the pending-invite inbox lookup; new
+   `PlanStore` methods `CreateInvite`/`GetInvite`/`GetInvitesForPlan`/
+   `GetPendingInvitesForEmail`/`UpdateInviteStatus`.
+4. **User names** - `User` gained `FirstName`/`LastName`/`FullName()`
+   (migrations 7–8); signup now requires both, `NewUserWithPassword` gained
+   the params. Used to show "invited by {name}" instead of a bare email.
+5. **UI** - Home dashboard (`index.html`) shows a pending-invites onboarding
+   section for the logged-in user's email; the Setup page shows an owner-only
+   collaborator invite form and the plan's outstanding invites.
+
+### Deliberately Deferred
+- No email is sent for invites — the invitee must already have an account
+  and log in to see it in their dashboard's pending-invites section.
+- No workspace/organization layer — invites and access are strictly
+  per-plan; there's still no way to group multiple plans under one team.
+
+## Session Summary (2026-08-01 to 2026-08-02): Docker Deployment
+
+### What Shipped
+1. **Production image** (`Dockerfile`) - Multi-stage Alpine build; builder
+   stage installs gcc/musl-dev for `go-sqlite3`'s cgo dependency and sets
+   `CGO_CFLAGS=-D_LARGEFILE64_SOURCE` (needed for musl+sqlite largefile
+   compatibility), runtime stage is a slim Alpine image with just the binary
+   and a `/app/data` mount point for the SQLite file.
+2. **Dev image** (`Dockerfile.dev`) - Installs `air` and hot-reloads Go/HTML
+   changes from a bind-mounted source tree per `.air.toml`
+   (`full_bin = "./tmp/northbasis-cli serve --db ./northbasis.db --port :8080"`).
+3. **Compose files** - `docker-compose.yml` (production: HTTP healthcheck
+   against `/`, named volume `northbasis-data` for the SQLite file) and
+   `docker-compose.dev.yml` (bind-mounts the repo plus separate volumes for
+   the Go module and build caches so rebuilds inside the container stay fast).
+4. **Makefile** - Centralizes both local-Go (`build`/`serve`/`migrate`/
+   `reset`/`test`/`clean`) and Docker (`docker-build`/`up`/`down`/`logs`/
+   `dev`/`dev-down`/`dev-logs`) workflows; comments note production is
+   intended to deploy via Coolify using `docker-compose.yml`.
+5. **CLI flag hardening** (`cmd/cli/main.go`, 2026-08-02) - Minor cleanup to
+   flag parsing/validation for the `serve`/`migrate`/`reset` commands.
+
+### Deliberately Deferred
+- No CI/CD pipeline wired up yet — Docker builds are local/manual only.
+- No `.env`/secrets management — configuration is CLI flags only (`--db`,
+  `--port`).

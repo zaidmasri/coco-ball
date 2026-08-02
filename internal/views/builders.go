@@ -39,21 +39,7 @@ func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan, invit
 	}
 }
 
-// BuildStartingPointPage creates a StartingPointPage
-func BuildStartingPointPage(r *http.Request, user *domain.User, plan *domain.Plan) StartingPointPage {
-	base := BuildBasePage(r, "Starting Point | Business Planning Tool", user)
-	return StartingPointPage{
-		BasePage: base,
-		Plan:     plan,
-	}
-}
-
-// BuildStartingPointPageWithError creates a StartingPointPage with an error message
-func BuildStartingPointPageWithError(r *http.Request, user *domain.User, plan *domain.Plan, errMsg string) StartingPointPage {
-	page := BuildStartingPointPage(r, user, plan)
-	page.ErrorMessage = errMsg
-	return page
-}
+// Starting Point's builders/renderers live in starting_point.go.
 
 // BuildPayrollPage creates a PayrollPage
 func BuildPayrollPage(r *http.Request, user *domain.User, plan *domain.Plan) PayrollPage {
@@ -243,11 +229,6 @@ func RenderIndexPage(w http.ResponseWriter, tc map[string]*template.Template, pa
 // RenderSetupPage renders the setup page
 func RenderSetupPage(w http.ResponseWriter, tc map[string]*template.Template, page SetupPage) {
 	renderTemplate(w, tc, "setup.html", "base", page)
-}
-
-// RenderStartingPointPage renders the starting point page
-func RenderStartingPointPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointPage) {
-	renderTemplate(w, tc, "starting-point.html", "base", page)
 }
 
 // RenderPayrollPage renders the payroll page

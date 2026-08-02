@@ -35,12 +35,10 @@ type SetupPage struct {
 	IsOwner      bool
 }
 
-// StartingPointPage is the data for the starting point page
-type StartingPointPage struct {
-	BasePage
-	Plan         *domain.Plan
-	ErrorMessage string
-}
+// Starting Point's page types, builders, and renderers live in
+// starting_point.go, not here - they're numerous enough (summary, 3
+// repeatable sections x list/step/add-another, Cash on Hand, section
+// intro) to warrant their own file rather than growing this one.
 
 // PayrollPage is the data for the payroll page
 type PayrollPage struct {

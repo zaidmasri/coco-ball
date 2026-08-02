@@ -1,0 +1,44 @@
+<!-- SECTIONS TABLE: the Starting Point summary's list of sections, each
+     with a completion badge and a Get Started (-> intro page) or Edit
+     (-> straight into the section) link. Expects "." to be a page struct
+     with .Plan and .Sections []StartingPointSectionStatus fields
+     (currently only StartingPointSummaryPage, but factored out as its own
+     component so it stays that way on purpose). -->
+{{ define "sections-table" }}
+<div class="card border shadow-sm">
+  <ul class="list-group list-group-flush">
+    {{ range .Sections }}
+    <li class="list-group-item d-flex justify-content-between align-items-center p-3">
+      <div class="d-flex align-items-center">
+        <div
+          class="rounded-circle border d-flex justify-content-center align-items-center me-3 {{ if .Complete }}bg-success bg-opacity-10 text-success{{ else }}bg-light text-muted{{ end }}"
+          style="width: 40px; height: 40px"
+        >
+          {{ if .Complete }}
+          <i class="bi bi-check-lg"></i>
+          {{ else }}
+          <i class="bi bi-circle"></i>
+          {{ end }}
+        </div>
+        <div>
+          <h6 class="mb-0 fw-bold">{{ .Title }}</h6>
+          <small class="text-muted">
+            {{ .Description }}
+            {{ if gt .ItemCount 0 }}&middot; {{ .ItemCount }} added{{ end }}
+          </small>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        {{ if .Complete }}
+        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">Complete</span>
+        <a href="/plan/{{ $.Plan.ID }}/starting-point/{{ .Key }}" class="btn btn-sm btn-outline-primary">Edit</a>
+        {{ else }}
+        <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill px-3 py-2">Not Started</span>
+        <a href="/plan/{{ $.Plan.ID }}/starting-point/intro/{{ .Key }}" class="btn btn-sm btn-primary">Get Started</a>
+        {{ end }}
+      </div>
+    </li>
+    {{ end }}
+  </ul>
+</div>
+{{ end }}

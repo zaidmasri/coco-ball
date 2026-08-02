@@ -62,8 +62,13 @@ func (s *SQLiteStore) runMigrations() error {
 			continue
 		}
 
-		// Execute migration
-		if _, err := s.db.Exec(migration); err != nil {
+		// Execute migration - either a raw SQL statement or a Go func
+		// (used for data backfills raw SQL can't express)
+		if migration.Fn != nil {
+			if err := migration.Fn(s.db); err != nil {
+				return fmt.Errorf("migration %d failed: %w", version, err)
+			}
+		} else if _, err := s.db.Exec(migration.SQL); err != nil {
 			return fmt.Errorf("migration %d failed: %w", version, err)
 		}
 
@@ -122,6 +127,10 @@ func (s *SQLiteStore) Get(id uuid.UUID) (*domain.Plan, error) {
 		return nil, fmt.Errorf("failed to unmarshal plan: %w", err)
 	}
 
+	if err := s.loadStartingPointInto(&plan); err != nil {
+		return nil, err
+	}
+
 	return &plan, nil
 }
 
@@ -145,6 +154,10 @@ func (s *SQLiteStore) GetAll() ([]*domain.Plan, error) {
 			return nil, fmt.Errorf("failed to unmarshal plan: %w", err)
 		}
 
+		if err := s.loadStartingPointInto(&plan); err != nil {
+			return nil, err
+		}
+
 		plans = append(plans, &plan)
 	}
 
@@ -165,6 +178,25 @@ func (s *SQLiteStore) Delete(id uuid.UUID) error {
 
 	if _, err := tx.Exec("DELETE FROM plan_access WHERE plan_id = ?", id.String()); err != nil {
 		return fmt.Errorf("failed to delete plan access: %w", err)
+	}
+
+	// Starting Point tables aren't covered by SQLite foreign-key cascades
+	// (this codebase never sets PRAGMA foreign_keys=ON), so they must be
+	// deleted explicitly, matching how plan_access is handled above.
+	if _, err := tx.Exec("DELETE FROM capital_assets WHERE plan_id = ?", id.String()); err != nil {
+		return fmt.Errorf("failed to delete capital assets: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM startup_costs WHERE plan_id = ?", id.String()); err != nil {
+		return fmt.Errorf("failed to delete startup costs: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM funding_sources WHERE plan_id = ?", id.String()); err != nil {
+		return fmt.Errorf("failed to delete funding sources: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM starting_balances WHERE plan_id = ?", id.String()); err != nil {
+		return fmt.Errorf("failed to delete starting balances: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM starting_point_sections WHERE plan_id = ?", id.String()); err != nil {
+		return fmt.Errorf("failed to delete starting point sections: %w", err)
 	}
 
 	res, err := tx.Exec("DELETE FROM plans WHERE id = ?", id.String())
@@ -502,6 +534,10 @@ func (s *SQLiteStore) GetUserPlans(userID uuid.UUID) ([]*domain.Plan, error) {
 		var plan domain.Plan
 		if err := json.Unmarshal(data, &plan); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal plan: %w", err)
+		}
+
+		if err := s.loadStartingPointInto(&plan); err != nil {
+			return nil, err
 		}
 
 		plans = append(plans, &plan)

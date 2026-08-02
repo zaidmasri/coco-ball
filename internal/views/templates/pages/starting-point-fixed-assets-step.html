@@ -1,0 +1,42 @@
+{{ template "base" . }}
+
+{{ define "question-fields" }}
+<datalist id="fixedAssetsList">
+  <option value="Real Estate-Land"></option>
+  <option value="Real Estate-Buildings"></option>
+  <option value="Leasehold Improvements"></option>
+  <option value="Equipment"></option>
+  <option value="Furniture and Fixtures"></option>
+  <option value="Vehicles"></option>
+</datalist>
+
+{{ if eq .Step "name" }}
+<label for="name" class="form-label fw-bold fs-5">What is this asset called?</label>
+<input type="text" list="fixedAssetsList" class="form-control form-control-lg" id="name" name="name"
+       value="{{ .Asset.Name }}" autofocus required  />
+
+{{ else if eq .Step "cost" }}
+<label for="cost" class="form-label fw-bold fs-5">What will it cost to purchase?</label>
+<div class="input-group input-group-lg">
+  <span class="input-group-text">$</span>
+  <input type="number" step="0.01" min="0" class="form-control" id="cost" name="cost"
+         value="{{ if ne .Asset.PurchaseCost 0 }}{{ .Asset.PurchaseCost }}{{ end }}" autofocus required />
+</div>
+
+{{ else if eq .Step "depreciation-method" }}
+<label class="form-label fw-bold fs-5">How should this asset depreciate?</label>
+<select class="form-select form-select-lg" name="depreciation_method" required>
+  <option value="StraightLine" {{ if eq .Asset.DepreciationMethod "StraightLine" }}selected{{ end }}>Straight Line</option>
+  <option value="DoubleDeclining" {{ if eq .Asset.DepreciationMethod "DoubleDeclining" }}selected{{ end }}>Double Declining</option>
+  <option value="None" {{ if eq .Asset.DepreciationMethod "None" }}selected{{ end }}>None (e.g., Land)</option>
+</select>
+<small class="text-muted d-block mt-2">Choosing "None" skips the next question — land doesn't depreciate.</small>
+
+{{ else if eq .Step "useful-life" }}
+<label for="useful_life_years" class="form-label fw-bold fs-5">Over how many years?</label>
+<input type="number" min="1" class="form-control form-control-lg" id="useful_life_years" name="useful_life_years"
+       value="{{ if ne .Asset.UsefulLifeYears 0 }}{{ .Asset.UsefulLifeYears }}{{ else }}5{{ end }}" autofocus required />
+{{ end }}
+{{ end }}
+
+{{ define "content" }}{{ template "question-step" . }}{{ end }}

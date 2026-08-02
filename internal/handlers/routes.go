@@ -33,12 +33,91 @@ func (app *App) RegisterRoutes(mux *http.ServeMux) {
 		app.PostUpdateSetup()(w, r)
 	})))
 
-	// Starting Point - requires viewer access for GET, editor for POST
+	// Starting Point - summary page, requires viewer access
 	mux.Handle("GET /plan/{id}/starting-point", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.GetStartingPoint()(w, r)
+		app.GetStartingPointSummary()(w, r)
 	})))
-	mux.Handle("POST /plan/{id}/starting-point", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.PostStartingPoint()(w, r)
+
+	// Starting Point - section landing/description page, shown from the
+	// summary's "Get Started" link before a not-yet-started section.
+	// "intro" comes before {section} (not after) so this can't collide
+	// with /starting-point/cash-on-hand/{step} - a wildcard-then-literal
+	// pattern here would tie with that literal-then-wildcard one on paths
+	// like ".../cash-on-hand/intro", which net/http's mux rejects at
+	// startup as genuinely ambiguous.
+	mux.Handle("GET /plan/{id}/starting-point/intro/{section}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetStartingPointSectionIntro()(w, r)
+	})))
+
+	// Starting Point: Fixed Assets wizard
+	mux.Handle("GET /plan/{id}/starting-point/fixed-assets", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetFixedAssetList()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/fixed-assets/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostFixedAssetNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/fixed-assets/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostFixedAssetFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/starting-point/fixed-assets/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetFixedAssetStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/fixed-assets/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostFixedAssetStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/fixed-assets/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostFixedAssetDelete()(w, r)
+	})))
+
+	// Starting Point: Startup Costs wizard
+	mux.Handle("GET /plan/{id}/starting-point/startup-costs", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetStartupCostList()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/startup-costs/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostStartupCostNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/startup-costs/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostStartupCostFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/starting-point/startup-costs/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetStartupCostStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/startup-costs/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostStartupCostStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/startup-costs/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostStartupCostDelete()(w, r)
+	})))
+
+	// Starting Point: Funding Sources wizard
+	mux.Handle("GET /plan/{id}/starting-point/funding-sources", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetFundingSourceList()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/funding-sources/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostFundingSourceNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/funding-sources/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostFundingSourceFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/starting-point/funding-sources/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetFundingSourceStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/funding-sources/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostFundingSourceStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/funding-sources/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostFundingSourceDelete()(w, r)
+	})))
+
+	// Starting Point: Cash on Hand wizard (singleton per plan, no item ID)
+	mux.Handle("GET /plan/{id}/starting-point/cash-on-hand", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetCashOnHandEntry()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/starting-point/cash-on-hand/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetCashOnHandStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/starting-point/cash-on-hand/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostCashOnHandStep()(w, r)
 	})))
 
 	// Invites - only the plan owner can invite collaborators
