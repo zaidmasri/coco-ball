@@ -4,8 +4,6 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    # Coolify assigns a domain and proxies to this port from its dashboard;
-    # no host port publish is needed.
     expose:
       - "8080"
     volumes:
