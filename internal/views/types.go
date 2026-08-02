@@ -9,6 +9,12 @@ type BasePage struct {
 	Title string
 	Path  string
 	User  *domain.User
+
+	// StartingPointComplete reports whether every Starting Point
+	// sub-section (Fixed Assets, Startup Costs, Funding Sources, Cash on
+	// Hand) is complete. The sidebar (rendered on every page) uses it to
+	// decide whether the Starting Point nav icon shows filled or outline.
+	StartingPointComplete bool
 }
 
 // IndexPage is the data for the home page

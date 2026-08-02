@@ -29,8 +29,9 @@ func BuildIndexPage(r *http.Request, user *domain.User, plans []*domain.Plan, pe
 }
 
 // BuildSetupPage creates a SetupPage
-func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan, invites []*domain.PlanInvite, isOwner bool) SetupPage {
+func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan, invites []*domain.PlanInvite, isOwner bool, startingPointComplete bool) SetupPage {
 	base := BuildBasePage(r, "Edit Setup | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return SetupPage{
 		BasePage: base,
 		Plan:     plan,
@@ -42,8 +43,9 @@ func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan, invit
 // Starting Point's builders/renderers live in starting_point.go.
 
 // BuildPayrollPage creates a PayrollPage
-func BuildPayrollPage(r *http.Request, user *domain.User, plan *domain.Plan) PayrollPage {
+func BuildPayrollPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) PayrollPage {
 	base := BuildBasePage(r, "Payroll | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return PayrollPage{
 		BasePage: base,
 		Plan:     plan,
@@ -51,8 +53,9 @@ func BuildPayrollPage(r *http.Request, user *domain.User, plan *domain.Plan) Pay
 }
 
 // BuildSalesForecastPage creates a SalesForecastPage
-func BuildSalesForecastPage(r *http.Request, user *domain.User, plan *domain.Plan) SalesForecastPage {
+func BuildSalesForecastPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) SalesForecastPage {
 	base := BuildBasePage(r, "Sales Forecast | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return SalesForecastPage{
 		BasePage: base,
 		Plan:     plan,
@@ -60,8 +63,9 @@ func BuildSalesForecastPage(r *http.Request, user *domain.User, plan *domain.Pla
 }
 
 // BuildOpExpensesPage creates an OpExpensesPage
-func BuildOpExpensesPage(r *http.Request, user *domain.User, plan *domain.Plan) OpExpensesPage {
+func BuildOpExpensesPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) OpExpensesPage {
 	base := BuildBasePage(r, "Operating Expenses | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return OpExpensesPage{
 		BasePage: base,
 		Plan:     plan,
@@ -69,8 +73,9 @@ func BuildOpExpensesPage(r *http.Request, user *domain.User, plan *domain.Plan) 
 }
 
 // BuildCashFlowPage creates a CashFlowPage
-func BuildCashFlowPage(r *http.Request, user *domain.User, plan *domain.Plan) CashFlowPage {
+func BuildCashFlowPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) CashFlowPage {
 	base := BuildBasePage(r, "Cash Flow | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return CashFlowPage{
 		BasePage: base,
 		Plan:     plan,
@@ -78,8 +83,9 @@ func BuildCashFlowPage(r *http.Request, user *domain.User, plan *domain.Plan) Ca
 }
 
 // BuildIncomeStatementPage creates an IncomeStatementPage
-func BuildIncomeStatementPage(r *http.Request, user *domain.User, plan *domain.Plan) IncomeStatementPage {
+func BuildIncomeStatementPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) IncomeStatementPage {
 	base := BuildBasePage(r, "Income Statement | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return IncomeStatementPage{
 		BasePage:  base,
 		Plan:      plan,
@@ -90,8 +96,9 @@ func BuildIncomeStatementPage(r *http.Request, user *domain.User, plan *domain.P
 }
 
 // BuildBalanceSheetPage creates a BalanceSheetPage
-func BuildBalanceSheetPage(r *http.Request, user *domain.User, plan *domain.Plan) BalanceSheetPage {
+func BuildBalanceSheetPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) BalanceSheetPage {
 	base := BuildBasePage(r, "Balance Sheet | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	years := plan.BalanceSheetSnapshots(domain.ProjectionYears)
 
 	balances := true
@@ -112,8 +119,9 @@ func BuildBalanceSheetPage(r *http.Request, user *domain.User, plan *domain.Plan
 }
 
 // BuildAnalyticsPage creates an AnalyticsPage
-func BuildAnalyticsPage(r *http.Request, user *domain.User, plan *domain.Plan) AnalyticsPage {
+func BuildAnalyticsPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) AnalyticsPage {
 	base := BuildBasePage(r, "Analytics | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 
 	years := plan.BalanceSheetSnapshots(domain.ProjectionYears)
 	balances := true

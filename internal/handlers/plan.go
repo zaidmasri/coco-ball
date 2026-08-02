@@ -212,7 +212,7 @@ func (app *App) GetSetup() http.HandlerFunc {
 
 		invites, isOwner := app.invitesAndOwnerStatus(planID, user)
 
-		page := views.BuildSetupPage(r, user, plan, invites, isOwner)
+		page := views.BuildSetupPage(r, user, plan, invites, isOwner, app.startingPointComplete(planID))
 		views.RenderSetupPage(w, app.TemplateCache, page)
 	}
 }
@@ -251,7 +251,7 @@ func (app *App) GetPayroll() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildPayrollPage(r, GetUserFromContext(r), plan)
+		page := views.BuildPayrollPage(r, GetUserFromContext(r), plan, app.startingPointComplete(planID))
 		views.RenderPayrollPage(w, app.TemplateCache, page)
 	}
 }
@@ -281,7 +281,7 @@ func (app *App) PostPayroll() http.HandlerFunc {
 
 		renderError := func(errMsg string, statusCode int) {
 			w.WriteHeader(statusCode)
-			page := views.BuildPayrollPage(r, user, plan)
+			page := views.BuildPayrollPage(r, user, plan, app.startingPointComplete(id))
 			page.ErrorMessage = errMsg
 			views.RenderPayrollPage(w, app.TemplateCache, page)
 		}
@@ -406,7 +406,7 @@ func (app *App) GetSalesForecast() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildSalesForecastPage(r, GetUserFromContext(r), plan)
+		page := views.BuildSalesForecastPage(r, GetUserFromContext(r), plan, app.startingPointComplete(plan.ID()))
 		views.RenderSalesForecastPage(w, app.TemplateCache, page)
 	}
 }
@@ -436,7 +436,7 @@ func (app *App) PostSalesForecast() http.HandlerFunc {
 
 		renderError := func(errMsg string, statusCode int) {
 			w.WriteHeader(statusCode)
-			page := views.BuildSalesForecastPage(r, user, plan)
+			page := views.BuildSalesForecastPage(r, user, plan, app.startingPointComplete(plan.ID()))
 			page.ErrorMessage = errMsg
 			views.RenderSalesForecastPage(w, app.TemplateCache, page)
 		}
@@ -518,7 +518,7 @@ func (app *App) GetOpExpenses() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildOpExpensesPage(r, GetUserFromContext(r), plan)
+		page := views.BuildOpExpensesPage(r, GetUserFromContext(r), plan, app.startingPointComplete(plan.ID()))
 		views.RenderOpExpensesPage(w, app.TemplateCache, page)
 	}
 }
@@ -548,7 +548,7 @@ func (app *App) PostOpExpenses() http.HandlerFunc {
 
 		renderError := func(errMsg string, statusCode int) {
 			w.WriteHeader(statusCode)
-			page := views.BuildOpExpensesPage(r, user, plan)
+			page := views.BuildOpExpensesPage(r, user, plan, app.startingPointComplete(plan.ID()))
 			page.ErrorMessage = errMsg
 			views.RenderOpExpensesPage(w, app.TemplateCache, page)
 		}
@@ -609,7 +609,7 @@ func (app *App) GetCashFlow() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildCashFlowPage(r, GetUserFromContext(r), plan)
+		page := views.BuildCashFlowPage(r, GetUserFromContext(r), plan, app.startingPointComplete(plan.ID()))
 		views.RenderCashFlowPage(w, app.TemplateCache, page)
 	}
 }
@@ -639,7 +639,7 @@ func (app *App) PostCashFlow() http.HandlerFunc {
 
 		renderError := func(errMsg string, statusCode int) {
 			w.WriteHeader(statusCode)
-			page := views.BuildCashFlowPage(r, user, plan)
+			page := views.BuildCashFlowPage(r, user, plan, app.startingPointComplete(plan.ID()))
 			page.ErrorMessage = errMsg
 			views.RenderCashFlowPage(w, app.TemplateCache, page)
 		}
@@ -735,7 +735,7 @@ func (app *App) GetIncomeStatement() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildIncomeStatementPage(r, GetUserFromContext(r), plan)
+		page := views.BuildIncomeStatementPage(r, GetUserFromContext(r), plan, app.startingPointComplete(plan.ID()))
 		views.RenderIncomeStatementPage(w, app.TemplateCache, page)
 	}
 }
@@ -754,7 +754,7 @@ func (app *App) GetBalanceSheet() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildBalanceSheetPage(r, GetUserFromContext(r), plan)
+		page := views.BuildBalanceSheetPage(r, GetUserFromContext(r), plan, app.startingPointComplete(plan.ID()))
 		views.RenderBalanceSheetPage(w, app.TemplateCache, page)
 	}
 }
@@ -773,7 +773,7 @@ func (app *App) GetAnalytics() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildAnalyticsPage(r, GetUserFromContext(r), plan)
+		page := views.BuildAnalyticsPage(r, GetUserFromContext(r), plan, app.startingPointComplete(plan.ID()))
 		views.RenderAnalyticsPage(w, app.TemplateCache, page)
 	}
 }

@@ -28,6 +28,18 @@ var (
 	cashOnHandSteps    = []string{"cash", "accounts-receivable", "prepaid-expenses", "accounts-payable", "accrued-expenses"}
 )
 
+// startingPointComplete reports whether every Starting Point sub-section is
+// complete for planID. Used to drive the sidebar's Starting Point nav icon,
+// which is shown on every page, not just Starting Point's own.
+func (app *App) startingPointComplete(planID uuid.UUID) bool {
+	status, err := app.Store.GetStartingPointSectionStatus(planID)
+	if err != nil {
+		log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
+		return false
+	}
+	return views.IsStartingPointComplete(status)
+}
+
 func stepIndex(steps []string, current string) int {
 	for i, s := range steps {
 		if s == current {
@@ -109,7 +121,7 @@ func (app *App) GetStartingPointSectionIntro() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildStartingPointSectionIntroPage(r, user, plan, section)
+		page := views.BuildStartingPointSectionIntroPage(r, user, plan, section, app.startingPointComplete(planID))
 		views.RenderStartingPointSectionIntroPage(w, app.TemplateCache, page)
 	}
 }
@@ -199,7 +211,7 @@ func (app *App) GetFixedAssetList() http.HandlerFunc {
 			draftStep = fixedAssetSteps[idx]
 		}
 
-		page := views.BuildFixedAssetsListPage(r, user, plan, items, sectionStatus[domain.SectionFixedAssets], draftItemID, draftStep)
+		page := views.BuildFixedAssetsListPage(r, user, plan, items, sectionStatus[domain.SectionFixedAssets], draftItemID, draftStep, views.IsStartingPointComplete(sectionStatus))
 		views.RenderFixedAssetsListPage(w, app.TemplateCache, page)
 	}
 }
@@ -263,7 +275,7 @@ func (app *App) GetFixedAssetStep() http.HandlerFunc {
 			backURL = views.SectionStepURL(planID, itemID, domain.SectionFixedAssets, prev)
 		}
 
-		page := views.BuildFixedAssetStepPage(r, user, plan, itemID, item.Asset, step, idx+1, len(fixedAssetSteps), backURL, "Next", "")
+		page := views.BuildFixedAssetStepPage(r, user, plan, itemID, item.Asset, step, idx+1, len(fixedAssetSteps), backURL, "Next", "", app.startingPointComplete(planID))
 		views.RenderFixedAssetStepPage(w, app.TemplateCache, page)
 	}
 }
@@ -311,7 +323,7 @@ func (app *App) PostFixedAssetStep() http.HandlerFunc {
 			if prev := prevStepName(fixedAssetSteps, idx); prev != "" {
 				backURL = views.SectionStepURL(planID, itemID, domain.SectionFixedAssets, prev)
 			}
-			page := views.BuildFixedAssetStepPage(r, user, plan, itemID, asset, step, idx+1, len(fixedAssetSteps), backURL, "Next", errMsg)
+			page := views.BuildFixedAssetStepPage(r, user, plan, itemID, asset, step, idx+1, len(fixedAssetSteps), backURL, "Next", errMsg, app.startingPointComplete(planID))
 			views.RenderFixedAssetStepPageWithStatus(w, app.TemplateCache, page, http.StatusBadRequest)
 		}
 
@@ -388,7 +400,7 @@ func (app *App) PostFixedAssetStep() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildFixedAssetsAddAnotherPage(r, user, plan, asset)
+		page := views.BuildFixedAssetsAddAnotherPage(r, user, plan, asset, app.startingPointComplete(planID))
 		views.RenderFixedAssetsAddAnotherPage(w, app.TemplateCache, page)
 	}
 }
@@ -473,7 +485,7 @@ func (app *App) GetStartupCostList() http.HandlerFunc {
 			draftStep = startupCostSteps[idx]
 		}
 
-		page := views.BuildStartupCostsListPage(r, user, plan, items, sectionStatus[domain.SectionStartupCosts], draftItemID, draftStep)
+		page := views.BuildStartupCostsListPage(r, user, plan, items, sectionStatus[domain.SectionStartupCosts], draftItemID, draftStep, views.IsStartingPointComplete(sectionStatus))
 		views.RenderStartupCostsListPage(w, app.TemplateCache, page)
 	}
 }
@@ -535,7 +547,7 @@ func (app *App) GetStartupCostStep() http.HandlerFunc {
 			backURL = views.SectionStepURL(planID, itemID, domain.SectionStartupCosts, prev)
 		}
 
-		page := views.BuildStartupCostStepPage(r, user, plan, itemID, item.Cost, step, idx+1, len(startupCostSteps), backURL, "Next", "")
+		page := views.BuildStartupCostStepPage(r, user, plan, itemID, item.Cost, step, idx+1, len(startupCostSteps), backURL, "Next", "", app.startingPointComplete(planID))
 		views.RenderStartupCostStepPage(w, app.TemplateCache, page)
 	}
 }
@@ -583,7 +595,7 @@ func (app *App) PostStartupCostStep() http.HandlerFunc {
 			if prev := prevStepName(startupCostSteps, idx); prev != "" {
 				backURL = views.SectionStepURL(planID, itemID, domain.SectionStartupCosts, prev)
 			}
-			page := views.BuildStartupCostStepPage(r, user, plan, itemID, cost, step, idx+1, len(startupCostSteps), backURL, "Next", errMsg)
+			page := views.BuildStartupCostStepPage(r, user, plan, itemID, cost, step, idx+1, len(startupCostSteps), backURL, "Next", errMsg, app.startingPointComplete(planID))
 			views.RenderStartupCostStepPageWithStatus(w, app.TemplateCache, page, http.StatusBadRequest)
 		}
 
@@ -636,7 +648,7 @@ func (app *App) PostStartupCostStep() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildStartupCostsAddAnotherPage(r, user, plan, cost)
+		page := views.BuildStartupCostsAddAnotherPage(r, user, plan, cost, app.startingPointComplete(planID))
 		views.RenderStartupCostsAddAnotherPage(w, app.TemplateCache, page)
 	}
 }
@@ -721,7 +733,7 @@ func (app *App) GetFundingSourceList() http.HandlerFunc {
 			draftStep = fundingSourceSteps[idx]
 		}
 
-		page := views.BuildFundingSourcesListPage(r, user, plan, items, sectionStatus[domain.SectionFundingSources], draftItemID, draftStep)
+		page := views.BuildFundingSourcesListPage(r, user, plan, items, sectionStatus[domain.SectionFundingSources], draftItemID, draftStep, views.IsStartingPointComplete(sectionStatus))
 		views.RenderFundingSourcesListPage(w, app.TemplateCache, page)
 	}
 }
@@ -783,7 +795,7 @@ func (app *App) GetFundingSourceStep() http.HandlerFunc {
 			backURL = views.SectionStepURL(planID, itemID, domain.SectionFundingSources, prev)
 		}
 
-		page := views.BuildFundingSourceStepPage(r, user, plan, itemID, item.Funding, step, idx+1, len(fundingSourceSteps), backURL, "Next", "")
+		page := views.BuildFundingSourceStepPage(r, user, plan, itemID, item.Funding, step, idx+1, len(fundingSourceSteps), backURL, "Next", "", app.startingPointComplete(planID))
 		views.RenderFundingSourceStepPage(w, app.TemplateCache, page)
 	}
 }
@@ -831,7 +843,7 @@ func (app *App) PostFundingSourceStep() http.HandlerFunc {
 			if prev := prevStepName(fundingSourceSteps, idx); prev != "" {
 				backURL = views.SectionStepURL(planID, itemID, domain.SectionFundingSources, prev)
 			}
-			page := views.BuildFundingSourceStepPage(r, user, plan, itemID, funding, step, idx+1, len(fundingSourceSteps), backURL, "Next", errMsg)
+			page := views.BuildFundingSourceStepPage(r, user, plan, itemID, funding, step, idx+1, len(fundingSourceSteps), backURL, "Next", errMsg, app.startingPointComplete(planID))
 			views.RenderFundingSourceStepPageWithStatus(w, app.TemplateCache, page, http.StatusBadRequest)
 		}
 
@@ -898,7 +910,7 @@ func (app *App) PostFundingSourceStep() http.HandlerFunc {
 			return
 		}
 
-		page := views.BuildFundingSourcesAddAnotherPage(r, user, plan, funding)
+		page := views.BuildFundingSourcesAddAnotherPage(r, user, plan, funding, app.startingPointComplete(planID))
 		views.RenderFundingSourcesAddAnotherPage(w, app.TemplateCache, page)
 	}
 }
@@ -1020,7 +1032,7 @@ func (app *App) GetCashOnHandStep() http.HandlerFunc {
 			backURL = views.SectionSingletonStepURL(planID, domain.SectionCashOnHand, prev)
 		}
 
-		page := views.BuildCashOnHandStepPage(r, user, plan, row.Balances, step, idx+1, len(cashOnHandSteps), backURL, cashOnHandButtonLabel(idx), "")
+		page := views.BuildCashOnHandStepPage(r, user, plan, row.Balances, step, idx+1, len(cashOnHandSteps), backURL, cashOnHandButtonLabel(idx), "", app.startingPointComplete(planID))
 		views.RenderCashOnHandStepPage(w, app.TemplateCache, page)
 	}
 }
@@ -1062,7 +1074,7 @@ func (app *App) PostCashOnHandStep() http.HandlerFunc {
 			if prev := prevStepName(cashOnHandSteps, idx); prev != "" {
 				backURL = views.SectionSingletonStepURL(planID, domain.SectionCashOnHand, prev)
 			}
-			page := views.BuildCashOnHandStepPage(r, user, plan, balances, step, idx+1, len(cashOnHandSteps), backURL, cashOnHandButtonLabel(idx), errMsg)
+			page := views.BuildCashOnHandStepPage(r, user, plan, balances, step, idx+1, len(cashOnHandSteps), backURL, cashOnHandButtonLabel(idx), errMsg, app.startingPointComplete(planID))
 			views.RenderCashOnHandStepPageWithStatus(w, app.TemplateCache, page, http.StatusBadRequest)
 		}
 

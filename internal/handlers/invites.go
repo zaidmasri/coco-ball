@@ -36,7 +36,7 @@ func (app *App) PostCreateInvite() http.HandlerFunc {
 		renderError := func(errMsg string, statusCode int) {
 			invites, isOwner := app.invitesAndOwnerStatus(planID, user)
 			w.WriteHeader(statusCode)
-			page := views.BuildSetupPage(r, user, plan, invites, isOwner)
+			page := views.BuildSetupPage(r, user, plan, invites, isOwner, app.startingPointComplete(planID))
 			page.ErrorMessage = errMsg
 			views.RenderSetupPage(w, app.TemplateCache, page)
 		}

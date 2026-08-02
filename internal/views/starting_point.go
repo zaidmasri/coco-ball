@@ -76,6 +76,18 @@ func startingPointSectionMetaByKey(key string) startingPointSectionMeta {
 	return startingPointSectionMeta{Key: key, Title: key}
 }
 
+// IsStartingPointComplete reports whether every Starting Point sub-section
+// is complete, given the section-status map the store returns. Used to
+// decide whether the sidebar's Starting Point nav icon renders filled.
+func IsStartingPointComplete(sectionStatus map[string]bool) bool {
+	for _, m := range startingPointSectionMetas {
+		if !sectionStatus[m.Key] {
+			return false
+		}
+	}
+	return true
+}
+
 // --- URL helpers ---
 //
 // Exported so both this package's builders and internal/handlers can build
@@ -280,6 +292,7 @@ type StartingPointFundingSourcesAddAnotherPage struct {
 // taking pre-computed invites/isOwner.
 func BuildStartingPointSummaryPage(r *http.Request, user *domain.User, plan *domain.Plan, sectionStatus map[string]bool, fixedAssetCount, startupCostCount, fundingSourceCount int) StartingPointSummaryPage {
 	base := BuildBasePage(r, "Starting Point | Business Planning Tool", user)
+	base.StartingPointComplete = IsStartingPointComplete(sectionStatus)
 
 	counts := map[string]int{
 		domain.SectionFixedAssets:    fixedAssetCount,
@@ -308,9 +321,10 @@ func BuildStartingPointSummaryPage(r *http.Request, user *domain.User, plan *dom
 // BuildStartingPointSectionIntroPage creates the landing/description page
 // shown when a user clicks "Get Started" on a section. section must be one
 // of the domain.Section* constants.
-func BuildStartingPointSectionIntroPage(r *http.Request, user *domain.User, plan *domain.Plan, section string) StartingPointSectionIntroPage {
+func BuildStartingPointSectionIntroPage(r *http.Request, user *domain.User, plan *domain.Plan, section string, startingPointComplete bool) StartingPointSectionIntroPage {
 	meta := startingPointSectionMetaByKey(section)
 	base := BuildBasePage(r, meta.Title+" | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 
 	// SectionListURL is the right "continue" target for every section: for
 	// the 3 repeatable sections it's their list/entry page, and for Cash
@@ -331,8 +345,9 @@ func BuildStartingPointSectionIntroPage(r *http.Request, user *domain.User, plan
 }
 
 // BuildFixedAssetsListPage creates a StartingPointFixedAssetsListPage.
-func BuildFixedAssetsListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointFixedAssetItem, complete bool, draftItemID *uuid.UUID, draftStep string) StartingPointFixedAssetsListPage {
+func BuildFixedAssetsListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointFixedAssetItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) StartingPointFixedAssetsListPage {
 	base := BuildBasePage(r, "Fixed Assets | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointFixedAssetsListPage{
 		BasePage:    base,
 		Plan:        plan,
@@ -344,8 +359,9 @@ func BuildFixedAssetsListPage(r *http.Request, user *domain.User, plan *domain.P
 }
 
 // BuildStartupCostsListPage creates a StartingPointStartupCostsListPage.
-func BuildStartupCostsListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointStartupCostItem, complete bool, draftItemID *uuid.UUID, draftStep string) StartingPointStartupCostsListPage {
+func BuildStartupCostsListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointStartupCostItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) StartingPointStartupCostsListPage {
 	base := BuildBasePage(r, "Startup Costs | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointStartupCostsListPage{
 		BasePage:    base,
 		Plan:        plan,
@@ -357,8 +373,9 @@ func BuildStartupCostsListPage(r *http.Request, user *domain.User, plan *domain.
 }
 
 // BuildFundingSourcesListPage creates a StartingPointFundingSourcesListPage.
-func BuildFundingSourcesListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointFundingSourceItem, complete bool, draftItemID *uuid.UUID, draftStep string) StartingPointFundingSourcesListPage {
+func BuildFundingSourcesListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointFundingSourceItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) StartingPointFundingSourcesListPage {
 	base := BuildBasePage(r, "Funding Sources | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointFundingSourcesListPage{
 		BasePage:    base,
 		Plan:        plan,
@@ -370,11 +387,13 @@ func BuildFundingSourcesListPage(r *http.Request, user *domain.User, plan *domai
 }
 
 // BuildFixedAssetStepPage creates a StartingPointFixedAssetStepPage.
-func BuildFixedAssetStepPage(r *http.Request, user *domain.User, plan *domain.Plan, itemID uuid.UUID, asset domain.CapitalAsset, step string, stepNumber, totalSteps int, backURL, buttonLabel, errMsg string) StartingPointFixedAssetStepPage {
+func BuildFixedAssetStepPage(r *http.Request, user *domain.User, plan *domain.Plan, itemID uuid.UUID, asset domain.CapitalAsset, step string, stepNumber, totalSteps int, backURL, buttonLabel, errMsg string, startingPointComplete bool) StartingPointFixedAssetStepPage {
 	meta := startingPointSectionMetaByKey(domain.SectionFixedAssets)
+	base := BuildBasePage(r, meta.Title+" | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointFixedAssetStepPage{
 		QuestionStepPage: QuestionStepPage{
-			BasePage:     BuildBasePage(r, meta.Title+" | Business Planning Tool", user),
+			BasePage:     base,
 			Plan:         plan,
 			SectionTitle: meta.Title,
 			SectionIcon:  meta.Icon,
@@ -392,11 +411,13 @@ func BuildFixedAssetStepPage(r *http.Request, user *domain.User, plan *domain.Pl
 }
 
 // BuildStartupCostStepPage creates a StartingPointStartupCostStepPage.
-func BuildStartupCostStepPage(r *http.Request, user *domain.User, plan *domain.Plan, itemID uuid.UUID, cost domain.StartupCost, step string, stepNumber, totalSteps int, backURL, buttonLabel, errMsg string) StartingPointStartupCostStepPage {
+func BuildStartupCostStepPage(r *http.Request, user *domain.User, plan *domain.Plan, itemID uuid.UUID, cost domain.StartupCost, step string, stepNumber, totalSteps int, backURL, buttonLabel, errMsg string, startingPointComplete bool) StartingPointStartupCostStepPage {
 	meta := startingPointSectionMetaByKey(domain.SectionStartupCosts)
+	base := BuildBasePage(r, meta.Title+" | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointStartupCostStepPage{
 		QuestionStepPage: QuestionStepPage{
-			BasePage:     BuildBasePage(r, meta.Title+" | Business Planning Tool", user),
+			BasePage:     base,
 			Plan:         plan,
 			SectionTitle: meta.Title,
 			SectionIcon:  meta.Icon,
@@ -414,11 +435,13 @@ func BuildStartupCostStepPage(r *http.Request, user *domain.User, plan *domain.P
 }
 
 // BuildFundingSourceStepPage creates a StartingPointFundingSourceStepPage.
-func BuildFundingSourceStepPage(r *http.Request, user *domain.User, plan *domain.Plan, itemID uuid.UUID, funding domain.FundingSource, step string, stepNumber, totalSteps int, backURL, buttonLabel, errMsg string) StartingPointFundingSourceStepPage {
+func BuildFundingSourceStepPage(r *http.Request, user *domain.User, plan *domain.Plan, itemID uuid.UUID, funding domain.FundingSource, step string, stepNumber, totalSteps int, backURL, buttonLabel, errMsg string, startingPointComplete bool) StartingPointFundingSourceStepPage {
 	meta := startingPointSectionMetaByKey(domain.SectionFundingSources)
+	base := BuildBasePage(r, meta.Title+" | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointFundingSourceStepPage{
 		QuestionStepPage: QuestionStepPage{
-			BasePage:     BuildBasePage(r, meta.Title+" | Business Planning Tool", user),
+			BasePage:     base,
 			Plan:         plan,
 			SectionTitle: meta.Title,
 			SectionIcon:  meta.Icon,
@@ -436,11 +459,13 @@ func BuildFundingSourceStepPage(r *http.Request, user *domain.User, plan *domain
 }
 
 // BuildCashOnHandStepPage creates a StartingPointCashOnHandStepPage.
-func BuildCashOnHandStepPage(r *http.Request, user *domain.User, plan *domain.Plan, balances domain.StartingBalances, step string, stepNumber, totalSteps int, backURL, buttonLabel, errMsg string) StartingPointCashOnHandStepPage {
+func BuildCashOnHandStepPage(r *http.Request, user *domain.User, plan *domain.Plan, balances domain.StartingBalances, step string, stepNumber, totalSteps int, backURL, buttonLabel, errMsg string, startingPointComplete bool) StartingPointCashOnHandStepPage {
 	meta := startingPointSectionMetaByKey(domain.SectionCashOnHand)
+	base := BuildBasePage(r, meta.Title+" | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointCashOnHandStepPage{
 		QuestionStepPage: QuestionStepPage{
-			BasePage:     BuildBasePage(r, meta.Title+" | Business Planning Tool", user),
+			BasePage:     base,
 			Plan:         plan,
 			SectionTitle: meta.Title,
 			SectionIcon:  meta.Icon,
@@ -459,8 +484,9 @@ func BuildCashOnHandStepPage(r *http.Request, user *domain.User, plan *domain.Pl
 
 // BuildFixedAssetsAddAnotherPage creates a
 // StartingPointFixedAssetsAddAnotherPage.
-func BuildFixedAssetsAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, asset domain.CapitalAsset) StartingPointFixedAssetsAddAnotherPage {
+func BuildFixedAssetsAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, asset domain.CapitalAsset, startingPointComplete bool) StartingPointFixedAssetsAddAnotherPage {
 	base := BuildBasePage(r, "Fixed Assets | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointFixedAssetsAddAnotherPage{
 		BasePage: base,
 		Plan:     plan,
@@ -470,8 +496,9 @@ func BuildFixedAssetsAddAnotherPage(r *http.Request, user *domain.User, plan *do
 
 // BuildStartupCostsAddAnotherPage creates a
 // StartingPointStartupCostsAddAnotherPage.
-func BuildStartupCostsAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, cost domain.StartupCost) StartingPointStartupCostsAddAnotherPage {
+func BuildStartupCostsAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, cost domain.StartupCost, startingPointComplete bool) StartingPointStartupCostsAddAnotherPage {
 	base := BuildBasePage(r, "Startup Costs | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointStartupCostsAddAnotherPage{
 		BasePage: base,
 		Plan:     plan,
@@ -481,8 +508,9 @@ func BuildStartupCostsAddAnotherPage(r *http.Request, user *domain.User, plan *d
 
 // BuildFundingSourcesAddAnotherPage creates a
 // StartingPointFundingSourcesAddAnotherPage.
-func BuildFundingSourcesAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, funding domain.FundingSource) StartingPointFundingSourcesAddAnotherPage {
+func BuildFundingSourcesAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, funding domain.FundingSource, startingPointComplete bool) StartingPointFundingSourcesAddAnotherPage {
 	base := BuildBasePage(r, "Funding Sources | Business Planning Tool", user)
+	base.StartingPointComplete = startingPointComplete
 	return StartingPointFundingSourcesAddAnotherPage{
 		BasePage: base,
 		Plan:     plan,
