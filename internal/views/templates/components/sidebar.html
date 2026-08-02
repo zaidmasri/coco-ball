@@ -10,22 +10,22 @@
   </h6>
   <nav class="nav flex-column gap-1">
     
-    <!-- 0. Setup -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/setup" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 1. Setup -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/setup" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/setup">
-      <i class="bi bi-circle me-2"></i> 0. Setup
+      <i class="bi bi-circle me-2"></i> 1. Setup
     </a>
 
-    <!-- 1. Starting Point -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/starting-point" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 2. Starting Point -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/starting-point" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/starting-point">
-      <i class="bi bi-circle me-2"></i> 1. Starting Point
+      <i class="bi bi-circle me-2"></i> 2. Starting Point
     </a>
 
-    <!-- 2. Payroll (With sub-items) -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/payroll" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 3. Payroll (With sub-items) -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/payroll" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/payroll">
-      <i class="bi bi-circle me-2"></i> 2. Payroll
+      <i class="bi bi-circle me-2"></i> 3. Payroll
     </a>
     <!-- <div class="nav-item"> -->
     <!--   <a -->
@@ -35,7 +35,7 @@
     <!--     role="button" -->
     <!--     aria-expanded="false" -->
     <!--   > -->
-    <!--     <span><i class="bi bi-circle me-2 text-muted"></i> 2. Payroll</span> -->
+    <!--     <span><i class="bi bi-circle me-2 text-muted"></i> 3. Payroll</span> -->
     <!--     <i class="bi bi-chevron-down" style="font-size: 0.75rem"></i> -->
     <!--   </a> -->
     <!--   <div class="collapse sub-nav" id="collapsePayroll"> -->
@@ -44,10 +44,10 @@
     <!--   </div> -->
     <!-- </div> -->
 
-    <!-- 3. Sales Forecast -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/sales-forecast" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 4. Sales Forecast -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/sales-forecast" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/sales-forecast">
-      <i class="bi bi-circle me-2"></i> 3. Sales Forecast 
+      <i class="bi bi-circle me-2"></i> 4. Sales Forecast
     </a>
     <!-- <div class="nav-item"> -->
     <!--   <a -->
@@ -58,7 +58,7 @@
     <!--     aria-expanded="false" -->
     <!--   > -->
     <!--     <span -->
-    <!--       ><i class="bi bi-circle me-2 text-muted"></i> 3. Sales Forecast</span -->
+    <!--       ><i class="bi bi-circle me-2 text-muted"></i> 4. Sales Forecast</span -->
     <!--     > -->
     <!--     <i class="bi bi-chevron-down" style="font-size: 0.75rem"></i> -->
     <!--   </a> -->
@@ -69,35 +69,35 @@
     <!-- </div> -->
     <!---->
 
-    <!-- 4. Additional Inputs -->
+    <!-- 5. Additional Inputs -->
     <!-- <a class="nav-link text-dark py-2 px-3" href="#"> -->
-    <!--   <i class="bi bi-circle me-2 text-muted"></i> 4. Additional Inputs -->
+    <!--   <i class="bi bi-circle me-2 text-muted"></i> 5. Additional Inputs -->
     <!-- </a> -->
 
-    <!-- 4. Operating Expenses -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/operating-expenses" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 5. Operating Expenses -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/operating-expenses" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/operating-expenses">
-      <i class="bi bi-circle me-2"></i> 4. Operating Expenses 
+      <i class="bi bi-circle me-2"></i> 5. Operating Expenses
     </a>
-    <!-- 5. Cash Flow -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/cash-flow" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 6. Cash Flow -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/cash-flow" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/cash-flow">
-      <i class="bi bi-circle me-2"></i> 5. Cash Flow
+      <i class="bi bi-circle me-2"></i> 6. Cash Flow
     </a>
-    <!-- 6. Income Statement -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/income-statement" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 7. Income Statement -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/income-statement" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/income-statement">
-      <i class="bi bi-circle me-2"></i> 6. Income Statement
+      <i class="bi bi-circle me-2"></i> 7. Income Statement
     </a>
-    <!-- 7. Balance Sheet -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/balance-sheet" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 8. Balance Sheet -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/balance-sheet" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/balance-sheet">
-      <i class="bi bi-circle me-2"></i> 7. Balance Sheet
+      <i class="bi bi-circle me-2"></i> 8. Balance Sheet
     </a>
-    <!-- 8. Analytics -->
-    <a class="nav-link {{ if eq .Path (printf "/plan/%s/analytics" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3" 
+    <!-- 9. Analytics -->
+    <a class="nav-link {{ if eq .Path (printf "/plan/%s/analytics" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
        href="/plan/{{ .Plan.ID }}/analytics">
-      <i class="bi bi-circle me-2"></i> 8. Analytics
+      <i class="bi bi-circle me-2"></i> 9. Analytics
     </a>
   </nav>
 </aside>
