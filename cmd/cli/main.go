@@ -35,7 +35,9 @@ func serveCmd() {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	dbPath := fs.String("db", "./northbasis.db", "path to SQLite database file")
 	port := fs.String("port", ":8080", "port to listen on")
-	fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		log.Fatalf("failed to parse flags: %v", err)
+	}
 
 	serve(*dbPath, *port)
 }
@@ -43,7 +45,9 @@ func serveCmd() {
 func migrateCmd() {
 	fs := flag.NewFlagSet("migrate", flag.ExitOnError)
 	dbPath := fs.String("db", "./northbasis.db", "path to SQLite database file")
-	fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		log.Fatalf("failed to parse flags: %v", err)
+	}
 
 	migrate(*dbPath)
 }
@@ -51,7 +55,9 @@ func migrateCmd() {
 func resetCmd() {
 	fs := flag.NewFlagSet("reset", flag.ExitOnError)
 	dbPath := fs.String("db", "./northbasis.db", "path to SQLite database file")
-	fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		log.Fatalf("failed to parse flags: %v", err)
+	}
 
 	if err := os.Remove(*dbPath); err != nil && !os.IsNotExist(err) {
 		log.Fatalf("failed to remove database: %v", err)
