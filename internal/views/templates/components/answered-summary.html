@@ -1,0 +1,20 @@
+<!-- ANSWERED SUMMARY: read-only "Label: Value" list of Starting Point
+     wizard fields answered so far. Used above the current question (fields
+     strictly before the current step) and on each repeatable section's
+     "Add another?" page (every field). Expects "." to be a
+     []views.AnsweredField. Renders nothing when empty, e.g. a section's
+     very first question. -->
+{{ define "answered-summary" }}
+{{ if . }}
+<div class="card bg-light border-0 mb-4">
+  <ul class="list-group list-group-flush rounded">
+    {{ range . }}
+    <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center py-2">
+      <span class="text-muted small">{{ .Label }}</span>
+      <span class="fw-semibold">{{ .Value }}</span>
+    </li>
+    {{ end }}
+  </ul>
+</div>
+{{ end }}
+{{ end }}

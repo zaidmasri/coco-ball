@@ -9,10 +9,7 @@
                     <i class="bi bi-check-lg fs-2"></i>
                 </div>
                 <h3 class="fw-bold mb-2">Added "{{ .Asset.Name }}"</h3>
-                <p class="text-secondary mb-4">
-                    {{ formatMoney .Asset.PurchaseCost }}
-                    {{ if ne .Asset.DepreciationMethod "None" }}&middot; {{ .Asset.DepreciationMethod }}{{ end }}
-                </p>
+                {{ template "answered-summary" .Answers }}
                 <p class="fw-bold mb-3">Add another fixed asset?</p>
                 <div class="d-flex justify-content-center gap-3">
                     <form method="POST"

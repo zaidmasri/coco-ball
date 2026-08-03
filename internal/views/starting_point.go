@@ -88,6 +88,134 @@ func IsStartingPointComplete(sectionStatus map[string]bool) bool {
 	return true
 }
 
+// --- Answered-so-far summaries ---
+
+// AnsweredField is one row in the "answered so far" summary box shown above
+// a Starting Point wizard question, and the full-answers summary shown on
+// each repeatable section's "Add another?" interstitial.
+type AnsweredField struct {
+	Label string
+	Value string
+}
+
+// depreciationMethodLabel humanizes the raw stored enum ("StraightLine")
+// for read-only display ("Straight Line"). Duplicates the <option> label
+// text hardcoded in starting-point-fixed-assets-step.html's <select> -
+// update both if the wording ever changes.
+func depreciationMethodLabel(m domain.DepreciationMethod) string {
+	switch m {
+	case domain.StraightLine:
+		return "Straight Line"
+	case domain.DoubleDeclining:
+		return "Double Declining"
+	case domain.None:
+		return "None"
+	default:
+		return string(m)
+	}
+}
+
+var fixedAssetFieldDefs = []struct {
+	Step  string
+	Label string
+	Value func(domain.CapitalAsset) string
+}{
+	{"name", "Asset Name", func(a domain.CapitalAsset) string { return a.Name }},
+	{"cost", "Cost", func(a domain.CapitalAsset) string { return formatMoney(a.PurchaseCost) }},
+	{"depreciation-method", "Depreciation", func(a domain.CapitalAsset) string { return depreciationMethodLabel(a.DepreciationMethod) }},
+	{"useful-life", "Useful Life", func(a domain.CapitalAsset) string { return fmt.Sprintf("%d years", a.UsefulLifeYears()) }},
+}
+
+// fixedAssetAnsweredFields returns the fields answered strictly before
+// uptoStep, in wizard order. uptoStep == "" returns every field (used by
+// the "Add another?" page). "useful-life" is always omitted when
+// DepreciationMethod is None, since that question is never asked in that
+// case (mirrors the finishNow skip in handlers.PostFixedAssetStep).
+func fixedAssetAnsweredFields(asset domain.CapitalAsset, uptoStep string) []AnsweredField {
+	var out []AnsweredField
+	for _, f := range fixedAssetFieldDefs {
+		if f.Step == uptoStep {
+			break
+		}
+		if f.Step == "useful-life" && asset.DepreciationMethod == domain.None {
+			continue
+		}
+		out = append(out, AnsweredField{Label: f.Label, Value: f.Value(asset)})
+	}
+	return out
+}
+
+var startupCostFieldDefs = []struct {
+	Step  string
+	Label string
+	Value func(domain.StartupCost) string
+}{
+	{"name", "Name", func(c domain.StartupCost) string { return c.Name }},
+	{"amount", "Amount", func(c domain.StartupCost) string { return formatMoney(c.Amount) }},
+}
+
+// startupCostAnsweredFields is the Startup Costs equivalent of
+// fixedAssetAnsweredFields.
+func startupCostAnsweredFields(cost domain.StartupCost, uptoStep string) []AnsweredField {
+	var out []AnsweredField
+	for _, f := range startupCostFieldDefs {
+		if f.Step == uptoStep {
+			break
+		}
+		out = append(out, AnsweredField{Label: f.Label, Value: f.Value(cost)})
+	}
+	return out
+}
+
+var fundingSourceFieldDefs = []struct {
+	Step  string
+	Label string
+	Value func(domain.FundingSource) string
+}{
+	{"name", "Name", func(f domain.FundingSource) string { return f.Name }},
+	{"amount", "Amount", func(f domain.FundingSource) string { return formatMoney(f.Amount) }},
+	{"interest-rate", "Interest Rate", func(f domain.FundingSource) string { return formatPercent(f.InterestRatePercent()) }},
+	{"term", "Term", func(f domain.FundingSource) string { return fmt.Sprintf("%d months", f.TermMonths) }},
+}
+
+// fundingSourceAnsweredFields is the Funding Sources equivalent of
+// fixedAssetAnsweredFields.
+func fundingSourceAnsweredFields(funding domain.FundingSource, uptoStep string) []AnsweredField {
+	var out []AnsweredField
+	for _, f := range fundingSourceFieldDefs {
+		if f.Step == uptoStep {
+			break
+		}
+		out = append(out, AnsweredField{Label: f.Label, Value: f.Value(funding)})
+	}
+	return out
+}
+
+var cashOnHandFieldDefs = []struct {
+	Step  string
+	Label string
+	Value func(domain.StartingBalances) string
+}{
+	{"cash", "Cash", func(b domain.StartingBalances) string { return formatMoney(b.Cash) }},
+	{"accounts-receivable", "Accounts Receivable", func(b domain.StartingBalances) string { return formatMoney(b.AccountsReceivable) }},
+	{"prepaid-expenses", "Prepaid Expenses", func(b domain.StartingBalances) string { return formatMoney(b.PrepaidExpenses) }},
+	{"accounts-payable", "Accounts Payable", func(b domain.StartingBalances) string { return formatMoney(b.AccountsPayable) }},
+	{"accrued-expenses", "Accrued Expenses", func(b domain.StartingBalances) string { return formatMoney(b.AccruedExpenses) }},
+}
+
+// cashOnHandAnsweredFields is the Cash on Hand equivalent of
+// fixedAssetAnsweredFields.
+func cashOnHandAnsweredFields(b domain.StartingBalances, uptoStep string) []AnsweredField {
+	var out []AnsweredField
+	for _, f := range cashOnHandFieldDefs {
+		if f.Step == uptoStep {
+			break
+		}
+		out = append(out, AnsweredField{Label: f.Label, Value: f.Value(b)})
+	}
+	return out
+}
+
 // --- URL helpers ---
 //
 // Exported so both this package's builders and internal/handlers can build
@@ -162,17 +290,18 @@ type StartingPointSectionIntroPage struct {
 // it carries (Asset/Cost/Funding/Balances).
 type QuestionStepPage struct {
 	BasePage
-	Plan         *domain.Plan
-	SectionTitle string
-	SectionIcon  string
-	Step         string
-	StepNumber   int
-	TotalSteps   int
-	FormAction   string
-	BackURL      string // empty on the first step
-	CancelURL    string // used instead of BackURL when there is no previous step
-	ButtonLabel  string // "Next" or "Finish"
-	ErrorMessage string
+	Plan            *domain.Plan
+	SectionTitle    string
+	SectionIcon     string
+	Step            string
+	StepNumber      int
+	TotalSteps      int
+	FormAction      string
+	BackURL         string // empty on the first step
+	CancelURL       string // used instead of BackURL when there is no previous step
+	ButtonLabel     string // "Next" or "Finish"
+	ErrorMessage    string
+	PreviousAnswers []AnsweredField // fields answered on earlier steps of this item
 }
 
 // StartingPointFixedAssetItem pairs a Fixed Asset's own wizard-item ID
@@ -264,16 +393,18 @@ type StartingPointCashOnHandStepPage struct {
 // shown after finishing one Fixed Asset item.
 type StartingPointFixedAssetsAddAnotherPage struct {
 	BasePage
-	Plan  *domain.Plan
-	Asset domain.CapitalAsset // the item just finished, for a confirmation summary
+	Plan    *domain.Plan
+	Asset   domain.CapitalAsset // the item just finished, for a confirmation summary
+	Answers []AnsweredField     // every answered field, for the summary box
 }
 
 // StartingPointStartupCostsAddAnotherPage is the Startup Costs equivalent
 // of StartingPointFixedAssetsAddAnotherPage.
 type StartingPointStartupCostsAddAnotherPage struct {
 	BasePage
-	Plan *domain.Plan
-	Cost domain.StartupCost
+	Plan    *domain.Plan
+	Cost    domain.StartupCost
+	Answers []AnsweredField
 }
 
 // StartingPointFundingSourcesAddAnotherPage is the Funding Sources
@@ -282,6 +413,7 @@ type StartingPointFundingSourcesAddAnotherPage struct {
 	BasePage
 	Plan    *domain.Plan
 	Funding domain.FundingSource
+	Answers []AnsweredField
 }
 
 // --- Builders ---
@@ -403,8 +535,9 @@ func BuildFixedAssetStepPage(r *http.Request, user *domain.User, plan *domain.Pl
 			FormAction:   SectionStepURL(plan.ID(), itemID, domain.SectionFixedAssets, step),
 			BackURL:      backURL,
 			CancelURL:    SectionListURL(plan.ID(), domain.SectionFixedAssets),
-			ButtonLabel:  buttonLabel,
-			ErrorMessage: errMsg,
+			ButtonLabel:     buttonLabel,
+			ErrorMessage:    errMsg,
+			PreviousAnswers: fixedAssetAnsweredFields(asset, step),
 		},
 		Asset: asset,
 	}
@@ -427,8 +560,9 @@ func BuildStartupCostStepPage(r *http.Request, user *domain.User, plan *domain.P
 			FormAction:   SectionStepURL(plan.ID(), itemID, domain.SectionStartupCosts, step),
 			BackURL:      backURL,
 			CancelURL:    SectionListURL(plan.ID(), domain.SectionStartupCosts),
-			ButtonLabel:  buttonLabel,
-			ErrorMessage: errMsg,
+			ButtonLabel:     buttonLabel,
+			ErrorMessage:    errMsg,
+			PreviousAnswers: startupCostAnsweredFields(cost, step),
 		},
 		Cost: cost,
 	}
@@ -451,8 +585,9 @@ func BuildFundingSourceStepPage(r *http.Request, user *domain.User, plan *domain
 			FormAction:   SectionStepURL(plan.ID(), itemID, domain.SectionFundingSources, step),
 			BackURL:      backURL,
 			CancelURL:    SectionListURL(plan.ID(), domain.SectionFundingSources),
-			ButtonLabel:  buttonLabel,
-			ErrorMessage: errMsg,
+			ButtonLabel:     buttonLabel,
+			ErrorMessage:    errMsg,
+			PreviousAnswers: fundingSourceAnsweredFields(funding, step),
 		},
 		Funding: funding,
 	}
@@ -475,8 +610,9 @@ func BuildCashOnHandStepPage(r *http.Request, user *domain.User, plan *domain.Pl
 			FormAction:   SectionSingletonStepURL(plan.ID(), domain.SectionCashOnHand, step),
 			BackURL:      backURL,
 			CancelURL:    StartingPointSummaryURL(plan.ID()), // Cash on Hand has no list page to cancel back to
-			ButtonLabel:  buttonLabel,
-			ErrorMessage: errMsg,
+			ButtonLabel:     buttonLabel,
+			ErrorMessage:    errMsg,
+			PreviousAnswers: cashOnHandAnsweredFields(balances, step),
 		},
 		Balances: balances,
 	}
@@ -491,6 +627,7 @@ func BuildFixedAssetsAddAnotherPage(r *http.Request, user *domain.User, plan *do
 		BasePage: base,
 		Plan:     plan,
 		Asset:    asset,
+		Answers:  fixedAssetAnsweredFields(asset, ""),
 	}
 }
 
@@ -503,6 +640,7 @@ func BuildStartupCostsAddAnotherPage(r *http.Request, user *domain.User, plan *d
 		BasePage: base,
 		Plan:     plan,
 		Cost:     cost,
+		Answers:  startupCostAnsweredFields(cost, ""),
 	}
 }
 
@@ -515,6 +653,7 @@ func BuildFundingSourcesAddAnotherPage(r *http.Request, user *domain.User, plan 
 		BasePage: base,
 		Plan:     plan,
 		Funding:  funding,
+		Answers:  fundingSourceAnsweredFields(funding, ""),
 	}
 }
 
