@@ -10,11 +10,16 @@ type BasePage struct {
 	Path  string
 	User  *domain.User
 
-	// StartingPointComplete reports whether every Starting Point
-	// sub-section (Fixed Assets, Startup Costs, Funding Sources, Cash on
-	// Hand) is complete. The sidebar (rendered on every page) uses it to
-	// decide whether the Starting Point nav icon shows filled or outline.
-	StartingPointComplete bool
+	// StartingPointComplete/PayrollComplete/SalesForecastComplete/
+	// OperatingExpensesComplete/CashFlowComplete each report whether every
+	// sub-section of that hub is complete. The sidebar (rendered on every
+	// page) uses these to decide whether each hub's nav icon shows filled
+	// or outline.
+	StartingPointComplete     bool
+	PayrollComplete           bool
+	SalesForecastComplete     bool
+	OperatingExpensesComplete bool
+	CashFlowComplete          bool
 }
 
 // IndexPage is the data for the home page
@@ -41,38 +46,14 @@ type SetupPage struct {
 	IsOwner      bool
 }
 
-// Starting Point's page types, builders, and renderers live in
-// starting_point.go, not here - they're numerous enough (summary, 3
-// repeatable sections x list/step/add-another, Cash on Hand, section
-// intro) to warrant their own file rather than growing this one.
-
-// PayrollPage is the data for the payroll page
-type PayrollPage struct {
-	BasePage
-	Plan         *domain.Plan
-	ErrorMessage string
-}
-
-// SalesForecastPage is the data for the sales forecast page
-type SalesForecastPage struct {
-	BasePage
-	Plan         *domain.Plan
-	ErrorMessage string
-}
-
-// OpExpensesPage is the data for the operating expenses page
-type OpExpensesPage struct {
-	BasePage
-	Plan         *domain.Plan
-	ErrorMessage string
-}
-
-// CashFlowPage is the data for the cash flow page
-type CashFlowPage struct {
-	BasePage
-	Plan         *domain.Plan
-	ErrorMessage string
-}
+// Starting Point/Payroll/Sales Forecast/Cash Flow's page types, builders,
+// and renderers live in their own files (starting_point.go, payroll.go,
+// sales_forecast.go, cash_flow.go), not here - they're numerous enough
+// (summary, N repeatable sections x list/step/add-another, singleton
+// sections, section intro) to warrant their own files rather than growing
+// this one. Most of their page shapes are shared generic types defined in
+// wizard_shared.go. Operating Expenses' page types, builders, and
+// renderers live in operating_expenses.go, following the same pattern.
 
 // IncomeStatementPage is the data for the income statement page
 type IncomeStatementPage struct {

@@ -1,0 +1,15 @@
+<!-- SUGGESTION PILLS: a row of quick-fill buttons shown under a wizard
+     step's primary text field. Expects "." to be a []string of suggestion
+     labels. Clicking a pill fills the input with id="name" - see
+     question-step.html's shared click handler, which every step page using
+     this component relies on (so every section's first-step input keeps
+     using id="name" regardless of what the field is actually called). -->
+{{ define "suggestion-pills" }}
+{{ if . }}
+<div class="d-flex flex-wrap gap-2 mt-2 mb-3">
+  {{ range . }}
+  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">{{ . }}</button>
+  {{ end }}
+</div>
+{{ end }}
+{{ end }}

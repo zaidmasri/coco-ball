@@ -10,19 +10,14 @@ import (
 )
 
 // --- Section metadata ---
+//
+// sectionMeta (shared type, see wizard_shared.go) is the single source of
+// truth for a section's display copy. Both the summary table and the
+// section intro/landing page read from this, so the two can never drift
+// apart. Starting Point's own instance is startingPointSectionMetas below;
+// Payroll/Sales Forecast/Cash Flow each have their own in their own files.
 
-// startingPointSectionMeta is the single source of truth for a Starting
-// Point section's display copy. Both the summary table and the section
-// intro/landing page read from this, so the two can never drift apart.
-type startingPointSectionMeta struct {
-	Key       string
-	Title     string
-	Icon      string // bootstrap-icons class, e.g. "bi-building"
-	ShortDesc string // one-liner used on the summary table and list page header
-	LongDesc  string // fuller paragraph used on the intro/landing page
-}
-
-var startingPointSectionMetas = []startingPointSectionMeta{
+var startingPointSectionMetas = []sectionMeta{
 	{
 		Key:       domain.SectionFixedAssets,
 		Title:     "Fixed Assets",
@@ -67,25 +62,15 @@ var startingPointSectionMetas = []startingPointSectionMeta{
 	},
 }
 
-func startingPointSectionMetaByKey(key string) startingPointSectionMeta {
-	for _, m := range startingPointSectionMetas {
-		if m.Key == key {
-			return m
-		}
-	}
-	return startingPointSectionMeta{Key: key, Title: key}
+func startingPointSectionMetaByKey(key string) sectionMeta {
+	return sectionMetaByKey(startingPointSectionMetas, key)
 }
 
 // IsStartingPointComplete reports whether every Starting Point sub-section
 // is complete, given the section-status map the store returns. Used to
 // decide whether the sidebar's Starting Point nav icon renders filled.
 func IsStartingPointComplete(sectionStatus map[string]bool) bool {
-	for _, m := range startingPointSectionMetas {
-		if !sectionStatus[m.Key] {
-			return false
-		}
-	}
-	return true
+	return hubComplete(sectionStatus, startingPointSectionMetas)
 }
 
 // --- Answered-so-far summaries ---
@@ -246,43 +231,6 @@ func SectionSingletonStepURL(planID uuid.UUID, section, step string) string {
 
 // --- Page types ---
 
-// StartingPointSummaryPage is the data for the Starting Point overview
-// page: one row per section, each with its own completion status and a
-// Get Started/Edit link into that section's wizard.
-type StartingPointSummaryPage struct {
-	BasePage
-	Plan     *domain.Plan
-	Sections []StartingPointSectionStatus
-}
-
-// StartingPointSectionStatus is one row of the Starting Point summary
-// table, rendered by the "sections-table" component.
-type StartingPointSectionStatus struct {
-	Key         string // route segment, e.g. domain.SectionFixedAssets
-	Title       string
-	Description string
-	Complete    bool
-	ItemCount   int // unused (0) for Cash on Hand, which isn't repeatable
-}
-
-// StartingPointSectionIntroPage is a section's landing/description page,
-// shown when the user clicks "Get Started" on a not-yet-started section.
-//
-// SectionTitle/SectionIcon (not Title/Icon) deliberately, matching
-// QuestionStepPage's naming: a plain "Title" field here would shadow the
-// embedded BasePage.Title that base.html's <title> tag actually needs
-// (Go's field-resolution rule prefers the shallower field), silently
-// dropping the "| Business Planning Tool" suffix from the browser tab.
-type StartingPointSectionIntroPage struct {
-	BasePage
-	Plan         *domain.Plan
-	Section      string
-	SectionTitle string
-	SectionIcon  string
-	Description  string
-	ContinueURL  string
-}
-
 // QuestionStepPage carries the fields common to every Starting Point
 // wizard question, regardless of section. The shared "question-step"
 // component template renders purely off these fields; each section-
@@ -302,6 +250,7 @@ type QuestionStepPage struct {
 	ButtonLabel     string // "Next" or "Finish"
 	ErrorMessage    string
 	PreviousAnswers []AnsweredField // fields answered on earlier steps of this item
+	Suggestions     []string        // quick-fill pills shown under the primary text field, if any
 }
 
 // StartingPointFixedAssetItem pairs a Fixed Asset's own wizard-item ID
@@ -325,40 +274,6 @@ type StartingPointStartupCostItem struct {
 type StartingPointFundingSourceItem struct {
 	ID      uuid.UUID
 	Funding domain.FundingSource
-}
-
-// StartingPointFixedAssetsListPage is the Fixed Assets section's list
-// page: every finished asset, plus a Resume link if the user left an item
-// mid-wizard.
-type StartingPointFixedAssetsListPage struct {
-	BasePage
-	Plan        *domain.Plan
-	Items       []StartingPointFixedAssetItem
-	Complete    bool
-	DraftItemID *uuid.UUID
-	DraftStep   string
-}
-
-// StartingPointStartupCostsListPage is the Startup Costs equivalent of
-// StartingPointFixedAssetsListPage.
-type StartingPointStartupCostsListPage struct {
-	BasePage
-	Plan        *domain.Plan
-	Items       []StartingPointStartupCostItem
-	Complete    bool
-	DraftItemID *uuid.UUID
-	DraftStep   string
-}
-
-// StartingPointFundingSourcesListPage is the Funding Sources equivalent of
-// StartingPointFixedAssetsListPage.
-type StartingPointFundingSourcesListPage struct {
-	BasePage
-	Plan        *domain.Plan
-	Items       []StartingPointFundingSourceItem
-	Complete    bool
-	DraftItemID *uuid.UUID
-	DraftStep   string
 }
 
 // StartingPointFixedAssetStepPage renders a single wizard question for one
@@ -389,31 +304,21 @@ type StartingPointCashOnHandStepPage struct {
 	Balances domain.StartingBalances
 }
 
-// StartingPointFixedAssetsAddAnotherPage is the "Add another?" interstitial
-// shown after finishing one Fixed Asset item.
-type StartingPointFixedAssetsAddAnotherPage struct {
-	BasePage
-	Plan    *domain.Plan
-	Asset   domain.CapitalAsset // the item just finished, for a confirmation summary
-	Answers []AnsweredField     // every answered field, for the summary box
-}
+// --- Suggestion pills ---
 
-// StartingPointStartupCostsAddAnotherPage is the Startup Costs equivalent
-// of StartingPointFixedAssetsAddAnotherPage.
-type StartingPointStartupCostsAddAnotherPage struct {
-	BasePage
-	Plan    *domain.Plan
-	Cost    domain.StartupCost
-	Answers []AnsweredField
-}
+var (
+	fixedAssetSuggestions    = []string{"Real Estate-Land", "Real Estate-Buildings", "Leasehold Improvements", "Equipment", "Furniture and Fixtures", "Vehicles"}
+	startupCostSuggestions   = []string{"Pre-Opening Salaries and Wages", "Prepaid Insurance Premiums", "Inventory", "Legal and Accounting", "Rent Deposits", "Utility Deposits", "Supplies", "Advertising and Promotions", "Licenses", "Other Initial Startup Costs"}
+	fundingSourceSuggestions = []string{"Owners Equity", "Outside Investors", "Commercial Loan", "Commercial Mortgage", "Credit Card Debt", "Vehicle Loans", "Other Bank Debt"}
+)
 
-// StartingPointFundingSourcesAddAnotherPage is the Funding Sources
-// equivalent of StartingPointFixedAssetsAddAnotherPage.
-type StartingPointFundingSourcesAddAnotherPage struct {
-	BasePage
-	Plan    *domain.Plan
-	Funding domain.FundingSource
-	Answers []AnsweredField
+// suggestionsForStep returns suggestions when step is the one step they
+// belong to (always the section's primary text-entry step), nil otherwise.
+func suggestionsForStep(step, targetStep string, suggestions []string) []string {
+	if step == targetStep {
+		return suggestions
+	}
+	return nil
 }
 
 // --- Builders ---
@@ -422,7 +327,7 @@ type StartingPointFundingSourcesAddAnotherPage struct {
 // sectionStatus and the item counts are computed by the store layer (the
 // handler queries them), following the same pattern as BuildSetupPage
 // taking pre-computed invites/isOwner.
-func BuildStartingPointSummaryPage(r *http.Request, user *domain.User, plan *domain.Plan, sectionStatus map[string]bool, fixedAssetCount, startupCostCount, fundingSourceCount int) StartingPointSummaryPage {
+func BuildStartingPointSummaryPage(r *http.Request, user *domain.User, plan *domain.Plan, sectionStatus map[string]bool, fixedAssetCount, startupCostCount, fundingSourceCount int) HubSummaryPage {
 	base := BuildBasePage(r, "Starting Point | Business Planning Tool", user)
 	base.StartingPointComplete = IsStartingPointComplete(sectionStatus)
 
@@ -432,28 +337,35 @@ func BuildStartingPointSummaryPage(r *http.Request, user *domain.User, plan *dom
 		domain.SectionFundingSources: fundingSourceCount,
 	}
 
-	sections := make([]StartingPointSectionStatus, len(startingPointSectionMetas))
+	sections := make([]HubSectionStatus, len(startingPointSectionMetas))
 	for i, m := range startingPointSectionMetas {
-		sections[i] = StartingPointSectionStatus{
-			Key:         m.Key,
-			Title:       m.Title,
-			Description: m.ShortDesc,
-			Complete:    sectionStatus[m.Key],
-			ItemCount:   counts[m.Key],
+		sections[i] = HubSectionStatus{
+			Key:           m.Key,
+			Title:         m.Title,
+			Description:   m.ShortDesc,
+			Complete:      sectionStatus[m.Key],
+			ItemCount:     counts[m.Key],
+			EditURL:       SectionListURL(plan.ID(), m.Key),
+			GetStartedURL: fmt.Sprintf("/plan/%s/starting-point/intro/%s", plan.ID(), m.Key),
 		}
 	}
 
-	return StartingPointSummaryPage{
-		BasePage: base,
-		Plan:     plan,
-		Sections: sections,
+	return HubSummaryPage{
+		BasePage:       base,
+		Plan:           plan,
+		StepBadge:      "Step 2 of 9",
+		HubTitle:       "Starting Point",
+		HubDescription: "Let's establish your baseline, one section at a time. Work through each section below — you can leave and come back whenever you like.",
+		Sections:       sections,
+		BackURL:        fmt.Sprintf("/plan/%s/setup", plan.ID()),
+		ContinueURL:    fmt.Sprintf("/plan/%s/payroll", plan.ID()),
 	}
 }
 
 // BuildStartingPointSectionIntroPage creates the landing/description page
 // shown when a user clicks "Get Started" on a section. section must be one
 // of the domain.Section* constants.
-func BuildStartingPointSectionIntroPage(r *http.Request, user *domain.User, plan *domain.Plan, section string, startingPointComplete bool) StartingPointSectionIntroPage {
+func BuildStartingPointSectionIntroPage(r *http.Request, user *domain.User, plan *domain.Plan, section string, startingPointComplete bool) SectionIntroPage {
 	meta := startingPointSectionMetaByKey(section)
 	base := BuildBasePage(r, meta.Title+" | Business Planning Tool", user)
 	base.StartingPointComplete = startingPointComplete
@@ -465,56 +377,169 @@ func BuildStartingPointSectionIntroPage(r *http.Request, user *domain.User, plan
 	// singleton wizard automatically.
 	continueURL := SectionListURL(plan.ID(), section)
 
-	return StartingPointSectionIntroPage{
-		BasePage:     base,
-		Plan:         plan,
-		Section:      section,
-		SectionTitle: meta.Title,
-		SectionIcon:  meta.Icon,
-		Description:  meta.LongDesc,
-		ContinueURL:  continueURL,
+	return SectionIntroPage{
+		BasePage:      base,
+		Plan:          plan,
+		HubBadge:      "Starting Point",
+		HubSummaryURL: StartingPointSummaryURL(plan.ID()),
+		SectionTitle:  meta.Title,
+		SectionIcon:   meta.Icon,
+		Description:   meta.LongDesc,
+		ContinueURL:   continueURL,
 	}
 }
 
-// BuildFixedAssetsListPage creates a StartingPointFixedAssetsListPage.
-func BuildFixedAssetsListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointFixedAssetItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) StartingPointFixedAssetsListPage {
+// fixedAssetListItem formats a Fixed Asset for the shared section-list page.
+func fixedAssetListItem(planID uuid.UUID, item StartingPointFixedAssetItem) SectionListItem {
+	detail := formatMoney(item.Asset.PurchaseCost)
+	if item.Asset.DepreciationMethod == domain.None {
+		detail += " · No depreciation"
+	} else {
+		detail += fmt.Sprintf(" · %s, %d yrs", item.Asset.DepreciationMethod, item.Asset.UsefulLifeYears())
+	}
+	return SectionListItem{
+		ID:           item.ID,
+		Title:        item.Asset.Name,
+		Detail:       detail,
+		EditURL:      SectionStepURL(planID, item.ID, domain.SectionFixedAssets, "name"),
+		DeleteAction: fmt.Sprintf("/plan/%s/starting-point/fixed-assets/%s", planID, item.ID),
+	}
+}
+
+// BuildFixedAssetsListPage creates the Fixed Assets section's list page.
+func BuildFixedAssetsListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointFixedAssetItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) SectionListPage {
 	base := BuildBasePage(r, "Fixed Assets | Business Planning Tool", user)
 	base.StartingPointComplete = startingPointComplete
-	return StartingPointFixedAssetsListPage{
-		BasePage:    base,
-		Plan:        plan,
-		Items:       items,
-		Complete:    complete,
-		DraftItemID: draftItemID,
-		DraftStep:   draftStep,
+
+	listItems := make([]SectionListItem, len(items))
+	for i, item := range items {
+		listItems[i] = fixedAssetListItem(plan.ID(), item)
+	}
+
+	var draftStepURL string
+	if draftItemID != nil {
+		draftStepURL = SectionStepURL(plan.ID(), *draftItemID, domain.SectionFixedAssets, draftStep)
+	}
+
+	return SectionListPage{
+		BasePage:           base,
+		Plan:               plan,
+		HubBadge:           "Starting Point",
+		SectionIcon:        "bi-building",
+		SectionTitle:       "Fixed Assets",
+		SectionDescription: "Equipment, vehicles, real estate, and other assets you'll purchase.",
+		EmptyIcon:          "bi-building-add",
+		EmptyText:          "No fixed assets yet.",
+		ItemNounSingular:   "fixed asset",
+		AddButtonLabel:     "Add Asset",
+		Items:              listItems,
+		DraftItemID:        draftItemID,
+		DraftStepURL:       draftStepURL,
+		AddAction:          fmt.Sprintf("/plan/%s/starting-point/fixed-assets/new", plan.ID()),
+		FinishAction:       fmt.Sprintf("/plan/%s/starting-point/fixed-assets/finish", plan.ID()),
+		OverviewURL:        StartingPointSummaryURL(plan.ID()),
+		Complete:           complete,
 	}
 }
 
-// BuildStartupCostsListPage creates a StartingPointStartupCostsListPage.
-func BuildStartupCostsListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointStartupCostItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) StartingPointStartupCostsListPage {
+// startupCostListItem formats a Startup Cost for the shared section-list page.
+func startupCostListItem(planID uuid.UUID, item StartingPointStartupCostItem) SectionListItem {
+	return SectionListItem{
+		ID:           item.ID,
+		Title:        item.Cost.Name,
+		Detail:       formatMoney(item.Cost.Amount),
+		EditURL:      SectionStepURL(planID, item.ID, domain.SectionStartupCosts, "name"),
+		DeleteAction: fmt.Sprintf("/plan/%s/starting-point/startup-costs/%s", planID, item.ID),
+	}
+}
+
+// BuildStartupCostsListPage creates the Startup Costs section's list page.
+func BuildStartupCostsListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointStartupCostItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) SectionListPage {
 	base := BuildBasePage(r, "Startup Costs | Business Planning Tool", user)
 	base.StartingPointComplete = startingPointComplete
-	return StartingPointStartupCostsListPage{
-		BasePage:    base,
-		Plan:        plan,
-		Items:       items,
-		Complete:    complete,
-		DraftItemID: draftItemID,
-		DraftStep:   draftStep,
+
+	listItems := make([]SectionListItem, len(items))
+	for i, item := range items {
+		listItems[i] = startupCostListItem(plan.ID(), item)
+	}
+
+	var draftStepURL string
+	if draftItemID != nil {
+		draftStepURL = SectionStepURL(plan.ID(), *draftItemID, domain.SectionStartupCosts, draftStep)
+	}
+
+	return SectionListPage{
+		BasePage:           base,
+		Plan:               plan,
+		HubBadge:           "Starting Point",
+		SectionIcon:        "bi-cash-coin",
+		SectionTitle:       "Startup Costs",
+		SectionDescription: "One-time costs to get the business up and running.",
+		EmptyIcon:          "bi-cash-stack",
+		EmptyText:          "No startup costs yet.",
+		ItemNounSingular:   "startup cost",
+		AddButtonLabel:     "Add Startup Cost",
+		Items:              listItems,
+		DraftItemID:        draftItemID,
+		DraftStepURL:       draftStepURL,
+		AddAction:          fmt.Sprintf("/plan/%s/starting-point/startup-costs/new", plan.ID()),
+		FinishAction:       fmt.Sprintf("/plan/%s/starting-point/startup-costs/finish", plan.ID()),
+		OverviewURL:        StartingPointSummaryURL(plan.ID()),
+		Complete:           complete,
 	}
 }
 
-// BuildFundingSourcesListPage creates a StartingPointFundingSourcesListPage.
-func BuildFundingSourcesListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointFundingSourceItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) StartingPointFundingSourcesListPage {
+// fundingSourceListItem formats a Funding Source for the shared
+// section-list page.
+func fundingSourceListItem(planID uuid.UUID, item StartingPointFundingSourceItem) SectionListItem {
+	detail := formatMoney(item.Funding.Amount)
+	if item.Funding.InterestRate != 0 || item.Funding.TermMonths != 0 {
+		detail += fmt.Sprintf(" · %s over %d mo", formatPercent(item.Funding.InterestRatePercent()), item.Funding.TermMonths)
+	} else {
+		detail += " · Equity (no loan)"
+	}
+	return SectionListItem{
+		ID:           item.ID,
+		Title:        item.Funding.Name,
+		Detail:       detail,
+		EditURL:      SectionStepURL(planID, item.ID, domain.SectionFundingSources, "name"),
+		DeleteAction: fmt.Sprintf("/plan/%s/starting-point/funding-sources/%s", planID, item.ID),
+	}
+}
+
+// BuildFundingSourcesListPage creates the Funding Sources section's list page.
+func BuildFundingSourcesListPage(r *http.Request, user *domain.User, plan *domain.Plan, items []StartingPointFundingSourceItem, complete bool, draftItemID *uuid.UUID, draftStep string, startingPointComplete bool) SectionListPage {
 	base := BuildBasePage(r, "Funding Sources | Business Planning Tool", user)
 	base.StartingPointComplete = startingPointComplete
-	return StartingPointFundingSourcesListPage{
-		BasePage:    base,
-		Plan:        plan,
-		Items:       items,
-		Complete:    complete,
-		DraftItemID: draftItemID,
-		DraftStep:   draftStep,
+
+	listItems := make([]SectionListItem, len(items))
+	for i, item := range items {
+		listItems[i] = fundingSourceListItem(plan.ID(), item)
+	}
+
+	var draftStepURL string
+	if draftItemID != nil {
+		draftStepURL = SectionStepURL(plan.ID(), *draftItemID, domain.SectionFundingSources, draftStep)
+	}
+
+	return SectionListPage{
+		BasePage:           base,
+		Plan:               plan,
+		HubBadge:           "Starting Point",
+		SectionIcon:        "bi-piggy-bank",
+		SectionTitle:       "Funding Sources",
+		SectionDescription: "Loans and owner investment used to finance the business.",
+		EmptyIcon:          "bi-bank",
+		EmptyText:          "No funding sources yet.",
+		ItemNounSingular:   "funding source",
+		AddButtonLabel:     "Add Funding Source",
+		Items:              listItems,
+		DraftItemID:        draftItemID,
+		DraftStepURL:       draftStepURL,
+		AddAction:          fmt.Sprintf("/plan/%s/starting-point/funding-sources/new", plan.ID()),
+		FinishAction:       fmt.Sprintf("/plan/%s/starting-point/funding-sources/finish", plan.ID()),
+		OverviewURL:        StartingPointSummaryURL(plan.ID()),
+		Complete:           complete,
 	}
 }
 
@@ -525,19 +550,20 @@ func BuildFixedAssetStepPage(r *http.Request, user *domain.User, plan *domain.Pl
 	base.StartingPointComplete = startingPointComplete
 	return StartingPointFixedAssetStepPage{
 		QuestionStepPage: QuestionStepPage{
-			BasePage:     base,
-			Plan:         plan,
-			SectionTitle: meta.Title,
-			SectionIcon:  meta.Icon,
-			Step:         step,
-			StepNumber:   stepNumber,
-			TotalSteps:   totalSteps,
-			FormAction:   SectionStepURL(plan.ID(), itemID, domain.SectionFixedAssets, step),
-			BackURL:      backURL,
-			CancelURL:    SectionListURL(plan.ID(), domain.SectionFixedAssets),
+			BasePage:        base,
+			Plan:            plan,
+			SectionTitle:    meta.Title,
+			SectionIcon:     meta.Icon,
+			Step:            step,
+			StepNumber:      stepNumber,
+			TotalSteps:      totalSteps,
+			FormAction:      SectionStepURL(plan.ID(), itemID, domain.SectionFixedAssets, step),
+			BackURL:         backURL,
+			CancelURL:       SectionListURL(plan.ID(), domain.SectionFixedAssets),
 			ButtonLabel:     buttonLabel,
 			ErrorMessage:    errMsg,
 			PreviousAnswers: fixedAssetAnsweredFields(asset, step),
+			Suggestions:     suggestionsForStep(step, "name", fixedAssetSuggestions),
 		},
 		Asset: asset,
 	}
@@ -550,19 +576,20 @@ func BuildStartupCostStepPage(r *http.Request, user *domain.User, plan *domain.P
 	base.StartingPointComplete = startingPointComplete
 	return StartingPointStartupCostStepPage{
 		QuestionStepPage: QuestionStepPage{
-			BasePage:     base,
-			Plan:         plan,
-			SectionTitle: meta.Title,
-			SectionIcon:  meta.Icon,
-			Step:         step,
-			StepNumber:   stepNumber,
-			TotalSteps:   totalSteps,
-			FormAction:   SectionStepURL(plan.ID(), itemID, domain.SectionStartupCosts, step),
-			BackURL:      backURL,
-			CancelURL:    SectionListURL(plan.ID(), domain.SectionStartupCosts),
+			BasePage:        base,
+			Plan:            plan,
+			SectionTitle:    meta.Title,
+			SectionIcon:     meta.Icon,
+			Step:            step,
+			StepNumber:      stepNumber,
+			TotalSteps:      totalSteps,
+			FormAction:      SectionStepURL(plan.ID(), itemID, domain.SectionStartupCosts, step),
+			BackURL:         backURL,
+			CancelURL:       SectionListURL(plan.ID(), domain.SectionStartupCosts),
 			ButtonLabel:     buttonLabel,
 			ErrorMessage:    errMsg,
 			PreviousAnswers: startupCostAnsweredFields(cost, step),
+			Suggestions:     suggestionsForStep(step, "name", startupCostSuggestions),
 		},
 		Cost: cost,
 	}
@@ -575,19 +602,20 @@ func BuildFundingSourceStepPage(r *http.Request, user *domain.User, plan *domain
 	base.StartingPointComplete = startingPointComplete
 	return StartingPointFundingSourceStepPage{
 		QuestionStepPage: QuestionStepPage{
-			BasePage:     base,
-			Plan:         plan,
-			SectionTitle: meta.Title,
-			SectionIcon:  meta.Icon,
-			Step:         step,
-			StepNumber:   stepNumber,
-			TotalSteps:   totalSteps,
-			FormAction:   SectionStepURL(plan.ID(), itemID, domain.SectionFundingSources, step),
-			BackURL:      backURL,
-			CancelURL:    SectionListURL(plan.ID(), domain.SectionFundingSources),
+			BasePage:        base,
+			Plan:            plan,
+			SectionTitle:    meta.Title,
+			SectionIcon:     meta.Icon,
+			Step:            step,
+			StepNumber:      stepNumber,
+			TotalSteps:      totalSteps,
+			FormAction:      SectionStepURL(plan.ID(), itemID, domain.SectionFundingSources, step),
+			BackURL:         backURL,
+			CancelURL:       SectionListURL(plan.ID(), domain.SectionFundingSources),
 			ButtonLabel:     buttonLabel,
 			ErrorMessage:    errMsg,
 			PreviousAnswers: fundingSourceAnsweredFields(funding, step),
+			Suggestions:     suggestionsForStep(step, "name", fundingSourceSuggestions),
 		},
 		Funding: funding,
 	}
@@ -600,16 +628,16 @@ func BuildCashOnHandStepPage(r *http.Request, user *domain.User, plan *domain.Pl
 	base.StartingPointComplete = startingPointComplete
 	return StartingPointCashOnHandStepPage{
 		QuestionStepPage: QuestionStepPage{
-			BasePage:     base,
-			Plan:         plan,
-			SectionTitle: meta.Title,
-			SectionIcon:  meta.Icon,
-			Step:         step,
-			StepNumber:   stepNumber,
-			TotalSteps:   totalSteps,
-			FormAction:   SectionSingletonStepURL(plan.ID(), domain.SectionCashOnHand, step),
-			BackURL:      backURL,
-			CancelURL:    StartingPointSummaryURL(plan.ID()), // Cash on Hand has no list page to cancel back to
+			BasePage:        base,
+			Plan:            plan,
+			SectionTitle:    meta.Title,
+			SectionIcon:     meta.Icon,
+			Step:            step,
+			StepNumber:      stepNumber,
+			TotalSteps:      totalSteps,
+			FormAction:      SectionSingletonStepURL(plan.ID(), domain.SectionCashOnHand, step),
+			BackURL:         backURL,
+			CancelURL:       StartingPointSummaryURL(plan.ID()), // Cash on Hand has no list page to cancel back to
 			ButtonLabel:     buttonLabel,
 			ErrorMessage:    errMsg,
 			PreviousAnswers: cashOnHandAnsweredFields(balances, step),
@@ -618,61 +646,55 @@ func BuildCashOnHandStepPage(r *http.Request, user *domain.User, plan *domain.Pl
 	}
 }
 
-// BuildFixedAssetsAddAnotherPage creates a
-// StartingPointFixedAssetsAddAnotherPage.
-func BuildFixedAssetsAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, asset domain.CapitalAsset, startingPointComplete bool) StartingPointFixedAssetsAddAnotherPage {
+// BuildFixedAssetsAddAnotherPage creates the Fixed Assets "add another?"
+// interstitial.
+func BuildFixedAssetsAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, asset domain.CapitalAsset, startingPointComplete bool) AddAnotherPage {
 	base := BuildBasePage(r, "Fixed Assets | Business Planning Tool", user)
 	base.StartingPointComplete = startingPointComplete
-	return StartingPointFixedAssetsAddAnotherPage{
-		BasePage: base,
-		Plan:     plan,
-		Asset:    asset,
-		Answers:  fixedAssetAnsweredFields(asset, ""),
+	return AddAnotherPage{
+		BasePage:         base,
+		Plan:             plan,
+		ItemName:         asset.Name,
+		Answers:          fixedAssetAnsweredFields(asset, ""),
+		ItemNounSingular: "fixed asset",
+		DoneAction:       fmt.Sprintf("/plan/%s/starting-point/fixed-assets/finish", plan.ID()),
+		AddAnotherAction: fmt.Sprintf("/plan/%s/starting-point/fixed-assets/new", plan.ID()),
 	}
 }
 
-// BuildStartupCostsAddAnotherPage creates a
-// StartingPointStartupCostsAddAnotherPage.
-func BuildStartupCostsAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, cost domain.StartupCost, startingPointComplete bool) StartingPointStartupCostsAddAnotherPage {
+// BuildStartupCostsAddAnotherPage creates the Startup Costs "add another?"
+// interstitial.
+func BuildStartupCostsAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, cost domain.StartupCost, startingPointComplete bool) AddAnotherPage {
 	base := BuildBasePage(r, "Startup Costs | Business Planning Tool", user)
 	base.StartingPointComplete = startingPointComplete
-	return StartingPointStartupCostsAddAnotherPage{
-		BasePage: base,
-		Plan:     plan,
-		Cost:     cost,
-		Answers:  startupCostAnsweredFields(cost, ""),
+	return AddAnotherPage{
+		BasePage:         base,
+		Plan:             plan,
+		ItemName:         cost.Name,
+		Answers:          startupCostAnsweredFields(cost, ""),
+		ItemNounSingular: "startup cost",
+		DoneAction:       fmt.Sprintf("/plan/%s/starting-point/startup-costs/finish", plan.ID()),
+		AddAnotherAction: fmt.Sprintf("/plan/%s/starting-point/startup-costs/new", plan.ID()),
 	}
 }
 
-// BuildFundingSourcesAddAnotherPage creates a
-// StartingPointFundingSourcesAddAnotherPage.
-func BuildFundingSourcesAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, funding domain.FundingSource, startingPointComplete bool) StartingPointFundingSourcesAddAnotherPage {
+// BuildFundingSourcesAddAnotherPage creates the Funding Sources "add
+// another?" interstitial.
+func BuildFundingSourcesAddAnotherPage(r *http.Request, user *domain.User, plan *domain.Plan, funding domain.FundingSource, startingPointComplete bool) AddAnotherPage {
 	base := BuildBasePage(r, "Funding Sources | Business Planning Tool", user)
 	base.StartingPointComplete = startingPointComplete
-	return StartingPointFundingSourcesAddAnotherPage{
-		BasePage: base,
-		Plan:     plan,
-		Funding:  funding,
-		Answers:  fundingSourceAnsweredFields(funding, ""),
+	return AddAnotherPage{
+		BasePage:         base,
+		Plan:             plan,
+		ItemName:         funding.Name,
+		Answers:          fundingSourceAnsweredFields(funding, ""),
+		ItemNounSingular: "funding source",
+		DoneAction:       fmt.Sprintf("/plan/%s/starting-point/funding-sources/finish", plan.ID()),
+		AddAnotherAction: fmt.Sprintf("/plan/%s/starting-point/funding-sources/new", plan.ID()),
 	}
 }
 
 // --- Renderers ---
-
-// RenderStartingPointSummaryPage renders the Starting Point overview page
-func RenderStartingPointSummaryPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointSummaryPage) {
-	renderTemplate(w, tc, "starting-point.html", "base", page)
-}
-
-// RenderStartingPointSectionIntroPage renders a section's landing page
-func RenderStartingPointSectionIntroPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointSectionIntroPage) {
-	renderTemplate(w, tc, "starting-point-section-intro.html", "base", page)
-}
-
-// RenderFixedAssetsListPage renders the Fixed Assets section list page
-func RenderFixedAssetsListPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointFixedAssetsListPage) {
-	renderTemplate(w, tc, "starting-point-fixed-assets.html", "base", page)
-}
 
 // RenderFixedAssetStepPage renders a single Fixed Assets wizard step
 func RenderFixedAssetStepPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointFixedAssetStepPage) {
@@ -683,17 +705,6 @@ func RenderFixedAssetStepPage(w http.ResponseWriter, tc map[string]*template.Tem
 // with a custom status code (used on validation errors)
 func RenderFixedAssetStepPageWithStatus(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointFixedAssetStepPage, statusCode int) {
 	renderTemplateWithStatus(w, tc, "starting-point-fixed-assets-step.html", "base", page, statusCode)
-}
-
-// RenderFixedAssetsAddAnotherPage renders the Fixed Assets "Add another?"
-// interstitial
-func RenderFixedAssetsAddAnotherPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointFixedAssetsAddAnotherPage) {
-	renderTemplate(w, tc, "starting-point-fixed-assets-add-another.html", "base", page)
-}
-
-// RenderStartupCostsListPage renders the Startup Costs section list page
-func RenderStartupCostsListPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointStartupCostsListPage) {
-	renderTemplate(w, tc, "starting-point-startup-costs.html", "base", page)
 }
 
 // RenderStartupCostStepPage renders a single Startup Costs wizard step
@@ -707,17 +718,6 @@ func RenderStartupCostStepPageWithStatus(w http.ResponseWriter, tc map[string]*t
 	renderTemplateWithStatus(w, tc, "starting-point-startup-costs-step.html", "base", page, statusCode)
 }
 
-// RenderStartupCostsAddAnotherPage renders the Startup Costs "Add another?"
-// interstitial
-func RenderStartupCostsAddAnotherPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointStartupCostsAddAnotherPage) {
-	renderTemplate(w, tc, "starting-point-startup-costs-add-another.html", "base", page)
-}
-
-// RenderFundingSourcesListPage renders the Funding Sources section list page
-func RenderFundingSourcesListPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointFundingSourcesListPage) {
-	renderTemplate(w, tc, "starting-point-funding-sources.html", "base", page)
-}
-
 // RenderFundingSourceStepPage renders a single Funding Sources wizard step
 func RenderFundingSourceStepPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointFundingSourceStepPage) {
 	renderTemplate(w, tc, "starting-point-funding-sources-step.html", "base", page)
@@ -727,12 +727,6 @@ func RenderFundingSourceStepPage(w http.ResponseWriter, tc map[string]*template.
 // step with a custom status code (used on validation errors)
 func RenderFundingSourceStepPageWithStatus(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointFundingSourceStepPage, statusCode int) {
 	renderTemplateWithStatus(w, tc, "starting-point-funding-sources-step.html", "base", page, statusCode)
-}
-
-// RenderFundingSourcesAddAnotherPage renders the Funding Sources
-// "Add another?" interstitial
-func RenderFundingSourcesAddAnotherPage(w http.ResponseWriter, tc map[string]*template.Template, page StartingPointFundingSourcesAddAnotherPage) {
-	renderTemplate(w, tc, "starting-point-funding-sources-add-another.html", "base", page)
 }
 
 // RenderCashOnHandStepPage renders a single Cash on Hand wizard step

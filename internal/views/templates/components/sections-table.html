@@ -1,13 +1,13 @@
-<!-- SECTIONS TABLE: the Starting Point summary's list of sections, each
-     with a completion badge and a Get Started (-> intro page) or Edit
-     (-> straight into the section) link. Expects "." to be a page struct
-     with .Plan and .Sections []StartingPointSectionStatus fields
-     (currently only StartingPointSummaryPage, but factored out as its own
-     component so it stays that way on purpose). -->
+<!-- SECTIONS TABLE: a wizard hub summary's list of sections, each with a
+     completion badge and a Get Started (-> intro page) or Edit (-> straight
+     into the section) link. Used by all four hubs (Starting Point, Payroll,
+     Sales Forecast, Cash Flow). Expects "." to be a []views.HubSectionStatus
+     - EditURL/GetStartedURL are pre-built per section, so this component has
+     no hub-specific knowledge. -->
 {{ define "sections-table" }}
 <div class="card border shadow-sm">
   <ul class="list-group list-group-flush">
-    {{ range .Sections }}
+    {{ range . }}
     <li class="list-group-item d-flex justify-content-between align-items-center p-3">
       <div class="d-flex align-items-center">
         <div
@@ -31,10 +31,10 @@
       <div class="d-flex align-items-center gap-2">
         {{ if .Complete }}
         <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">Complete</span>
-        <a href="/plan/{{ $.Plan.ID }}/starting-point/{{ .Key }}" class="btn btn-sm btn-outline-primary">Edit</a>
+        <a href="{{ .EditURL }}" class="btn btn-sm btn-outline-primary">Edit</a>
         {{ else }}
         <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill px-3 py-2">Not Started</span>
-        <a href="/plan/{{ $.Plan.ID }}/starting-point/intro/{{ .Key }}" class="btn btn-sm btn-primary">Get Started</a>
+        <a href="{{ .GetStartedURL }}" class="btn btn-sm btn-primary">Get Started</a>
         {{ end }}
       </div>
     </li>

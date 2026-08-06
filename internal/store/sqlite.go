@@ -130,6 +130,18 @@ func (s *SQLiteStore) Get(id uuid.UUID) (*domain.Plan, error) {
 	if err := s.loadStartingPointInto(&plan); err != nil {
 		return nil, err
 	}
+	if err := s.loadPayrollInto(&plan); err != nil {
+		return nil, err
+	}
+	if err := s.loadSalesForecastInto(&plan); err != nil {
+		return nil, err
+	}
+	if err := s.loadCashFlowInto(&plan); err != nil {
+		return nil, err
+	}
+	if err := s.loadOperatingExpensesInto(&plan); err != nil {
+		return nil, err
+	}
 
 	return &plan, nil
 }
@@ -157,6 +169,18 @@ func (s *SQLiteStore) GetAll() ([]*domain.Plan, error) {
 		if err := s.loadStartingPointInto(&plan); err != nil {
 			return nil, err
 		}
+		if err := s.loadPayrollInto(&plan); err != nil {
+			return nil, err
+		}
+		if err := s.loadSalesForecastInto(&plan); err != nil {
+			return nil, err
+		}
+		if err := s.loadCashFlowInto(&plan); err != nil {
+			return nil, err
+		}
+		if err := s.loadOperatingExpensesInto(&plan); err != nil {
+			return nil, err
+		}
 
 		plans = append(plans, &plan)
 	}
@@ -180,23 +204,21 @@ func (s *SQLiteStore) Delete(id uuid.UUID) error {
 		return fmt.Errorf("failed to delete plan access: %w", err)
 	}
 
-	// Starting Point tables aren't covered by SQLite foreign-key cascades
-	// (this codebase never sets PRAGMA foreign_keys=ON), so they must be
-	// deleted explicitly, matching how plan_access is handled above.
-	if _, err := tx.Exec("DELETE FROM capital_assets WHERE plan_id = ?", id.String()); err != nil {
-		return fmt.Errorf("failed to delete capital assets: %w", err)
+	// Wizard tables aren't covered by SQLite foreign-key cascades (this
+	// codebase never sets PRAGMA foreign_keys=ON), so they must be deleted
+	// explicitly, matching how plan_access is handled above.
+	wizardTables := []string{
+		"capital_assets", "startup_costs", "funding_sources", "starting_balances",
+		"salary_roles", "benefits", "payroll_tax_rates",
+		"products", "sales_growth_curve",
+		"operating_expenses",
+		"inventory_purchases", "distributions",
+		"wizard_sections",
 	}
-	if _, err := tx.Exec("DELETE FROM startup_costs WHERE plan_id = ?", id.String()); err != nil {
-		return fmt.Errorf("failed to delete startup costs: %w", err)
-	}
-	if _, err := tx.Exec("DELETE FROM funding_sources WHERE plan_id = ?", id.String()); err != nil {
-		return fmt.Errorf("failed to delete funding sources: %w", err)
-	}
-	if _, err := tx.Exec("DELETE FROM starting_balances WHERE plan_id = ?", id.String()); err != nil {
-		return fmt.Errorf("failed to delete starting balances: %w", err)
-	}
-	if _, err := tx.Exec("DELETE FROM starting_point_sections WHERE plan_id = ?", id.String()); err != nil {
-		return fmt.Errorf("failed to delete starting point sections: %w", err)
+	for _, table := range wizardTables {
+		if _, err := tx.Exec("DELETE FROM "+table+" WHERE plan_id = ?", id.String()); err != nil {
+			return fmt.Errorf("failed to delete %s: %w", table, err)
+		}
 	}
 
 	res, err := tx.Exec("DELETE FROM plans WHERE id = ?", id.String())
@@ -537,6 +559,18 @@ func (s *SQLiteStore) GetUserPlans(userID uuid.UUID) ([]*domain.Plan, error) {
 		}
 
 		if err := s.loadStartingPointInto(&plan); err != nil {
+			return nil, err
+		}
+		if err := s.loadPayrollInto(&plan); err != nil {
+			return nil, err
+		}
+		if err := s.loadSalesForecastInto(&plan); err != nil {
+			return nil, err
+		}
+		if err := s.loadCashFlowInto(&plan); err != nil {
+			return nil, err
+		}
+		if err := s.loadOperatingExpensesInto(&plan); err != nil {
 			return nil, err
 		}
 

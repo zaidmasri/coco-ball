@@ -542,16 +542,32 @@ func (s *SQLiteStore) SaveStartingBalancesStep(planID uuid.UUID, balances domain
 }
 
 // --- Section-level explicit completion ---
+//
+// Generalized across all four wizard hubs (Starting Point, Payroll, Sales
+// Forecast, Cash Flow) via a "hub" key, rather than one hub-specific table
+// and method pair each. Lives here because this file was the first (and
+// for a while only) consumer; the mechanism itself is hub-agnostic.
 
-// MarkStartingPointSectionComplete records that the user explicitly
-// finished a Starting Point section. This is a one-way marker: later
-// deleting all of a section's items does not un-complete it.
-func (s *SQLiteStore) MarkStartingPointSectionComplete(planID uuid.UUID, section string) error {
+// wizardHubSections lists the known sections for each hub, so
+// GetWizardSectionStatus can report "not started" (false) for a section
+// that has no wizard_sections row yet, not just omit it from the map.
+var wizardHubSections = map[string][]string{
+	domain.HubStartingPoint:     {domain.SectionFixedAssets, domain.SectionStartupCosts, domain.SectionFundingSources, domain.SectionCashOnHand},
+	domain.HubPayroll:           {domain.SectionSalaryRoles, domain.SectionBenefits, domain.SectionPayrollTaxRates},
+	domain.HubSalesForecast:     {domain.SectionProducts, domain.SectionSalesGrowthCurve},
+	domain.HubOperatingExpenses: {domain.SectionOperatingExpenses},
+	domain.HubCashFlow:          {domain.SectionInventoryPurchases, domain.SectionDistributions},
+}
+
+// MarkWizardSectionComplete records that the user explicitly finished a
+// section of a wizard hub. This is a one-way marker: later deleting all of
+// a section's items does not un-complete it.
+func (s *SQLiteStore) MarkWizardSectionComplete(planID uuid.UUID, hub, section string) error {
 	now := time.Now().Unix()
 	_, err := s.db.Exec(
-		`INSERT INTO starting_point_sections (plan_id, section, completed_at) VALUES (?, ?, ?)
-		 ON CONFLICT(plan_id, section) DO UPDATE SET completed_at = excluded.completed_at`,
-		planID.String(), section, now,
+		`INSERT INTO wizard_sections (plan_id, hub, section, completed_at) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(plan_id, hub, section) DO UPDATE SET completed_at = excluded.completed_at`,
+		planID.String(), hub, section, now,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to mark section complete: %w", err)
@@ -559,22 +575,20 @@ func (s *SQLiteStore) MarkStartingPointSectionComplete(planID uuid.UUID, section
 	return nil
 }
 
-// GetStartingPointSectionStatus returns, for all four Starting Point
-// sections, whether the user has explicitly completed them.
-func (s *SQLiteStore) GetStartingPointSectionStatus(planID uuid.UUID) (map[string]bool, error) {
-	status := map[string]bool{
-		domain.SectionFixedAssets:    false,
-		domain.SectionStartupCosts:   false,
-		domain.SectionFundingSources: false,
-		domain.SectionCashOnHand:     false,
+// GetWizardSectionStatus returns, for every known section of hub, whether
+// the user has explicitly completed it.
+func (s *SQLiteStore) GetWizardSectionStatus(planID uuid.UUID, hub string) (map[string]bool, error) {
+	status := make(map[string]bool, len(wizardHubSections[hub]))
+	for _, section := range wizardHubSections[hub] {
+		status[section] = false
 	}
 
 	rows, err := s.db.Query(
-		"SELECT section, completed_at FROM starting_point_sections WHERE plan_id = ?",
-		planID.String(),
+		"SELECT section, completed_at FROM wizard_sections WHERE plan_id = ? AND hub = ?",
+		planID.String(), hub,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query starting point sections: %w", err)
+		return nil, fmt.Errorf("failed to query wizard sections: %w", err)
 	}
 	defer rows.Close()
 
@@ -582,12 +596,12 @@ func (s *SQLiteStore) GetStartingPointSectionStatus(planID uuid.UUID) (map[strin
 		var section string
 		var completedAt sql.NullInt64
 		if err := rows.Scan(&section, &completedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan starting point section: %w", err)
+			return nil, fmt.Errorf("failed to scan wizard section: %w", err)
 		}
 		status[section] = completedAt.Valid && completedAt.Int64 > 0
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate starting point sections: %w", err)
+		return nil, fmt.Errorf("failed to iterate wizard sections: %w", err)
 	}
 
 	return status, nil

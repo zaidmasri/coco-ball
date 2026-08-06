@@ -1,0 +1,29 @@
+{{ template "base" . }}
+
+{{ define "question-fields" }}
+{{ if eq .Step "name" }}
+<label for="name" class="form-label fw-bold fs-5">What's this expense called?</label>
+<input type="text" class="form-control form-control-lg" id="name" name="name"
+       value="{{ .Cost.Name }}" autofocus required />
+{{ template "suggestion-pills" .Suggestions }}
+
+{{ else if eq .Step "amount" }}
+<label for="amount" class="form-label fw-bold fs-5">What's the base monthly cost?</label>
+<div class="input-group input-group-lg">
+  <span class="input-group-text">$</span>
+  <input type="number" step="0.01" min="0" class="form-control" id="amount" name="amount"
+         value="{{ if ne .Cost.BaseAmountPerMonth 0 }}{{ .Cost.BaseAmountPerMonth }}{{ end }}" autofocus required />
+</div>
+
+{{ else if eq .Step "growth" }}
+<label for="growth" class="form-label fw-bold fs-5">Estimated annual inflation or growth?</label>
+<div class="input-group input-group-lg">
+  <input type="number" step="0.1" class="form-control" id="growth" name="growth"
+         value="{{ if .Cost.Growth.AnnualRatePercent }}{{ .Cost.Growth.AnnualRatePercent }}{{ else }}3.0{{ end }}" autofocus />
+  <span class="input-group-text">%</span>
+</div>
+<small class="text-muted d-block mt-2">Enter 0 if this expense stays flat year over year.</small>
+{{ end }}
+{{ end }}
+
+{{ define "content" }}{{ template "question-step" . }}{{ end }}

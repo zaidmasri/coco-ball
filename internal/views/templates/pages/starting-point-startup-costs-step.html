@@ -5,18 +5,7 @@
 <label for="name" class="form-label fw-bold fs-5">What is this startup cost?</label>
 <input type="text" class="form-control form-control-lg" id="name" name="name"
        value="{{ .Cost.Name }}" autofocus required />
-<div class="d-flex flex-wrap gap-2 mt-2 mb-3">
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Pre-Opening Salaries and Wages</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Prepaid Insurance Premiums</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Inventory</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Legal and Accounting</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Rent Deposits</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Utility Deposits</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Supplies</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Advertising and Promotions</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Licenses</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Other Initial Startup Costs</button>
-</div>
+{{ template "suggestion-pills" .Suggestions }}
 
 {{ else if eq .Step "amount" }}
 <label for="amount" class="form-label fw-bold fs-5">How much will it cost?</label>

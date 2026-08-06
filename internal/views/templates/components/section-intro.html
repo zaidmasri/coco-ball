@@ -1,6 +1,7 @@
-{{ template "base" . }}
-
-{{ define "content" }}
+<!-- SECTION INTRO: the shared landing/description page shown when a user
+     clicks "Get Started" on a not-yet-started section, used across all
+     four hubs. Expects "." to be a views.SectionIntroPage. -->
+{{ define "section-intro" }}
 <div class="container-fluid container mx-auto" style="max-width: 640px">
   <div class="card shadow-sm border-0 rounded-3">
     <div class="card-body p-4 p-md-5 text-center">
@@ -10,12 +11,12 @@
       >
         <i class="bi {{ .SectionIcon }}" style="font-size: 1.75rem"></i>
       </div>
-      <span class="badge bg-primary bg-opacity-10 text-primary mb-2">Starting Point</span>
+      <span class="badge bg-primary bg-opacity-10 text-primary mb-2">{{ .HubBadge }}</span>
       <h2 class="fw-bold mb-3">{{ .SectionTitle }}</h2>
       <p class="text-secondary text-start" style="font-size: 1.05rem">{{ .Description }}</p>
 
       <div class="d-flex justify-content-center gap-3 mt-4">
-        <a href="/plan/{{ .Plan.ID }}/starting-point" class="btn btn-outline-secondary px-4 py-2 text-uppercase fw-bold" style="font-size: 0.85rem">
+        <a href="{{ .HubSummaryURL }}" class="btn btn-outline-secondary px-4 py-2 text-uppercase fw-bold" style="font-size: 0.85rem">
           <i class="bi bi-arrow-left me-1"></i> Back
         </a>
         <a href="{{ .ContinueURL }}" class="btn btn-primary px-5 py-2 text-uppercase fw-bold shadow-sm" style="font-size: 0.85rem">

@@ -17,22 +17,22 @@
     <!-- 3. Payroll (With sub-items) -->
 <a class="nav-link {{ if eq .Path (printf "/plan/%s/payroll" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
    href="/plan/{{ .Plan.ID }}/payroll">
-    <i class="bi bi-3-circle me-2"></i> Payroll
+    <i class="bi {{ if .PayrollComplete }}bi-3-circle-fill{{ else }}bi-3-circle{{ end }} me-2"></i> Payroll
     </a>
     <!-- 4. Sales Forecast -->
 <a class="nav-link {{ if eq .Path (printf "/plan/%s/sales-forecast" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
    href="/plan/{{ .Plan.ID }}/sales-forecast">
-    <i class="bi bi-4-circle me-2"></i> Sales Forecast
+    <i class="bi {{ if .SalesForecastComplete }}bi-4-circle-fill{{ else }}bi-4-circle{{ end }} me-2"></i> Sales Forecast
     </a>
     <!-- 5. Operating Expenses -->
 <a class="nav-link {{ if eq .Path (printf "/plan/%s/operating-expenses" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
    href="/plan/{{ .Plan.ID }}/operating-expenses">
-    <i class="bi bi-5-circle me-2"></i> Operating Expenses
+    <i class="bi {{ if .OperatingExpensesComplete }}bi-5-circle-fill{{ else }}bi-5-circle{{ end }} me-2"></i> Operating Expenses
     </a>
     <!-- 6. Cash Flow -->
 <a class="nav-link {{ if eq .Path (printf "/plan/%s/cash-flow" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"
    href="/plan/{{ .Plan.ID }}/cash-flow">
-    <i class="bi bi-6-circle me-2"></i> Cash Flow
+    <i class="bi {{ if .CashFlowComplete }}bi-6-circle-fill{{ else }}bi-6-circle{{ end }} me-2"></i> Cash Flow
     </a>
     <!-- 7. Income Statement -->
 <a class="nav-link {{ if eq .Path (printf "/plan/%s/income-statement" .Plan.ID) }} active text-primary {{else}} text-dark {{end}} py-2 px-3"

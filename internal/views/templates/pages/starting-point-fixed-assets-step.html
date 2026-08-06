@@ -5,14 +5,7 @@
 <label for="name" class="form-label fw-bold fs-5">What is this asset called?</label>
 <input type="text" class="form-control form-control-lg" id="name" name="name"
        value="{{ .Asset.Name }}" autofocus required  />
-<div class="d-flex flex-wrap gap-2 mt-2 mb-3">
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Real Estate-Land</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Real Estate-Buildings</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Leasehold Improvements</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Equipment</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Furniture and Fixtures</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Vehicles</button>
-</div>
+{{ template "suggestion-pills" .Suggestions }}
 
 {{ else if eq .Step "cost" }}
 <label for="cost" class="form-label fw-bold fs-5">What will it cost to purchase?</label>

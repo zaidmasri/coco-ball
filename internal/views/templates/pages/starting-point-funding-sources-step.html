@@ -5,15 +5,7 @@
 <label for="name" class="form-label fw-bold fs-5">What is this funding source?</label>
 <input type="text" class="form-control form-control-lg" id="name" name="name"
        value="{{ .Funding.Name }}" autofocus required />
-<div class="d-flex flex-wrap gap-2 mt-2 mb-3">
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Owners Equity</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Outside Investors</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Commercial Loan</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Commercial Mortgage</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Credit Card Debt</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Vehicle Loans</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill suggestion-pill">Other Bank Debt</button>
-</div>
+{{ template "suggestion-pills" .Suggestions }}
 
 {{ else if eq .Step "amount" }}
 <label for="amount" class="form-label fw-bold fs-5">How much funding will this provide?</label>

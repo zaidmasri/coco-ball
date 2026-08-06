@@ -32,7 +32,7 @@ var (
 // complete for planID. Used to drive the sidebar's Starting Point nav icon,
 // which is shown on every page, not just Starting Point's own.
 func (app *App) startingPointComplete(planID uuid.UUID) bool {
-	status, err := app.Store.GetStartingPointSectionStatus(planID)
+	status, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
 	if err != nil {
 		log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		return false
@@ -122,7 +122,7 @@ func (app *App) GetStartingPointSectionIntro() http.HandlerFunc {
 		}
 
 		page := views.BuildStartingPointSectionIntroPage(r, user, plan, section, app.startingPointComplete(planID))
-		views.RenderStartingPointSectionIntroPage(w, app.TemplateCache, page)
+		views.RenderSectionIntroPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -142,7 +142,7 @@ func (app *App) GetStartingPointSummary() http.HandlerFunc {
 			return
 		}
 
-		sectionStatus, err := app.Store.GetStartingPointSectionStatus(planID)
+		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 			sectionStatus = map[string]bool{}
@@ -162,7 +162,7 @@ func (app *App) GetStartingPointSummary() http.HandlerFunc {
 		}
 
 		page := views.BuildStartingPointSummaryPage(r, user, plan, sectionStatus, len(fixedAssets), len(startupCosts), len(fundingSources))
-		views.RenderStartingPointSummaryPage(w, app.TemplateCache, page)
+		views.RenderHubSummaryPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -192,7 +192,7 @@ func (app *App) GetFixedAssetList() http.HandlerFunc {
 			items[i] = views.StartingPointFixedAssetItem{ID: it.ID, Asset: it.Asset}
 		}
 
-		sectionStatus, err := app.Store.GetStartingPointSectionStatus(planID)
+		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		}
@@ -212,7 +212,7 @@ func (app *App) GetFixedAssetList() http.HandlerFunc {
 		}
 
 		page := views.BuildFixedAssetsListPage(r, user, plan, items, sectionStatus[domain.SectionFixedAssets], draftItemID, draftStep, views.IsStartingPointComplete(sectionStatus))
-		views.RenderFixedAssetsListPage(w, app.TemplateCache, page)
+		views.RenderSectionListPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -401,7 +401,7 @@ func (app *App) PostFixedAssetStep() http.HandlerFunc {
 		}
 
 		page := views.BuildFixedAssetsAddAnotherPage(r, user, plan, asset, app.startingPointComplete(planID))
-		views.RenderFixedAssetsAddAnotherPage(w, app.TemplateCache, page)
+		views.RenderAddAnotherPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -433,7 +433,7 @@ func (app *App) PostFixedAssetFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkStartingPointSectionComplete(planID, domain.SectionFixedAssets); err != nil {
+		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubStartingPoint, domain.SectionFixedAssets); err != nil {
 			log.Printf("Failed to mark fixed assets complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.StartingPointSummaryURL(planID), http.StatusSeeOther)
@@ -466,7 +466,7 @@ func (app *App) GetStartupCostList() http.HandlerFunc {
 			items[i] = views.StartingPointStartupCostItem{ID: it.ID, Cost: it.Cost}
 		}
 
-		sectionStatus, err := app.Store.GetStartingPointSectionStatus(planID)
+		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		}
@@ -486,7 +486,7 @@ func (app *App) GetStartupCostList() http.HandlerFunc {
 		}
 
 		page := views.BuildStartupCostsListPage(r, user, plan, items, sectionStatus[domain.SectionStartupCosts], draftItemID, draftStep, views.IsStartingPointComplete(sectionStatus))
-		views.RenderStartupCostsListPage(w, app.TemplateCache, page)
+		views.RenderSectionListPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -649,7 +649,7 @@ func (app *App) PostStartupCostStep() http.HandlerFunc {
 		}
 
 		page := views.BuildStartupCostsAddAnotherPage(r, user, plan, cost, app.startingPointComplete(planID))
-		views.RenderStartupCostsAddAnotherPage(w, app.TemplateCache, page)
+		views.RenderAddAnotherPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -681,7 +681,7 @@ func (app *App) PostStartupCostFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkStartingPointSectionComplete(planID, domain.SectionStartupCosts); err != nil {
+		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubStartingPoint, domain.SectionStartupCosts); err != nil {
 			log.Printf("Failed to mark startup costs complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.StartingPointSummaryURL(planID), http.StatusSeeOther)
@@ -714,7 +714,7 @@ func (app *App) GetFundingSourceList() http.HandlerFunc {
 			items[i] = views.StartingPointFundingSourceItem{ID: it.ID, Funding: it.Funding}
 		}
 
-		sectionStatus, err := app.Store.GetStartingPointSectionStatus(planID)
+		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		}
@@ -734,7 +734,7 @@ func (app *App) GetFundingSourceList() http.HandlerFunc {
 		}
 
 		page := views.BuildFundingSourcesListPage(r, user, plan, items, sectionStatus[domain.SectionFundingSources], draftItemID, draftStep, views.IsStartingPointComplete(sectionStatus))
-		views.RenderFundingSourcesListPage(w, app.TemplateCache, page)
+		views.RenderSectionListPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -911,7 +911,7 @@ func (app *App) PostFundingSourceStep() http.HandlerFunc {
 		}
 
 		page := views.BuildFundingSourcesAddAnotherPage(r, user, plan, funding, app.startingPointComplete(planID))
-		views.RenderFundingSourcesAddAnotherPage(w, app.TemplateCache, page)
+		views.RenderAddAnotherPage(w, app.TemplateCache, page)
 	}
 }
 
@@ -943,7 +943,7 @@ func (app *App) PostFundingSourceFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkStartingPointSectionComplete(planID, domain.SectionFundingSources); err != nil {
+		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubStartingPoint, domain.SectionFundingSources); err != nil {
 			log.Printf("Failed to mark funding sources complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.StartingPointSummaryURL(planID), http.StatusSeeOther)
@@ -982,7 +982,7 @@ func (app *App) GetCashOnHandEntry() http.HandlerFunc {
 			return
 		}
 
-		sectionStatus, err := app.Store.GetStartingPointSectionStatus(planID)
+		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		}
@@ -1099,7 +1099,7 @@ func (app *App) PostCashOnHandStep() http.HandlerFunc {
 
 		// Last step: Cash on Hand isn't repeatable, so finishing it marks
 		// the section complete directly and returns to the summary page.
-		if err := app.Store.MarkStartingPointSectionComplete(planID, domain.SectionCashOnHand); err != nil {
+		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubStartingPoint, domain.SectionCashOnHand); err != nil {
 			log.Printf("Failed to mark cash on hand complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.StartingPointSummaryURL(planID), http.StatusSeeOther)

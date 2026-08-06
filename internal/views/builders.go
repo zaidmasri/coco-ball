@@ -29,9 +29,9 @@ func BuildIndexPage(r *http.Request, user *domain.User, plans []*domain.Plan, pe
 }
 
 // BuildSetupPage creates a SetupPage
-func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan, invites []*domain.PlanInvite, isOwner bool, startingPointComplete bool) SetupPage {
+func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan, invites []*domain.PlanInvite, isOwner bool, completion HubCompletion) SetupPage {
 	base := BuildBasePage(r, "Edit Setup | Business Planning Tool", user)
-	base.StartingPointComplete = startingPointComplete
+	completion.applyTo(&base)
 	return SetupPage{
 		BasePage: base,
 		Plan:     plan,
@@ -40,52 +40,14 @@ func BuildSetupPage(r *http.Request, user *domain.User, plan *domain.Plan, invit
 	}
 }
 
-// Starting Point's builders/renderers live in starting_point.go.
-
-// BuildPayrollPage creates a PayrollPage
-func BuildPayrollPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) PayrollPage {
-	base := BuildBasePage(r, "Payroll | Business Planning Tool", user)
-	base.StartingPointComplete = startingPointComplete
-	return PayrollPage{
-		BasePage: base,
-		Plan:     plan,
-	}
-}
-
-// BuildSalesForecastPage creates a SalesForecastPage
-func BuildSalesForecastPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) SalesForecastPage {
-	base := BuildBasePage(r, "Sales Forecast | Business Planning Tool", user)
-	base.StartingPointComplete = startingPointComplete
-	return SalesForecastPage{
-		BasePage: base,
-		Plan:     plan,
-	}
-}
-
-// BuildOpExpensesPage creates an OpExpensesPage
-func BuildOpExpensesPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) OpExpensesPage {
-	base := BuildBasePage(r, "Operating Expenses | Business Planning Tool", user)
-	base.StartingPointComplete = startingPointComplete
-	return OpExpensesPage{
-		BasePage: base,
-		Plan:     plan,
-	}
-}
-
-// BuildCashFlowPage creates a CashFlowPage
-func BuildCashFlowPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) CashFlowPage {
-	base := BuildBasePage(r, "Cash Flow | Business Planning Tool", user)
-	base.StartingPointComplete = startingPointComplete
-	return CashFlowPage{
-		BasePage: base,
-		Plan:     plan,
-	}
-}
+// Starting Point/Payroll/Sales Forecast/Operating Expenses/Cash Flow's
+// builders/renderers live in their own files (starting_point.go,
+// payroll.go, sales_forecast.go, operating_expenses.go, cash_flow.go).
 
 // BuildIncomeStatementPage creates an IncomeStatementPage
-func BuildIncomeStatementPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) IncomeStatementPage {
+func BuildIncomeStatementPage(r *http.Request, user *domain.User, plan *domain.Plan, completion HubCompletion) IncomeStatementPage {
 	base := BuildBasePage(r, "Income Statement | Business Planning Tool", user)
-	base.StartingPointComplete = startingPointComplete
+	completion.applyTo(&base)
 	return IncomeStatementPage{
 		BasePage:  base,
 		Plan:      plan,
@@ -96,9 +58,9 @@ func BuildIncomeStatementPage(r *http.Request, user *domain.User, plan *domain.P
 }
 
 // BuildBalanceSheetPage creates a BalanceSheetPage
-func BuildBalanceSheetPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) BalanceSheetPage {
+func BuildBalanceSheetPage(r *http.Request, user *domain.User, plan *domain.Plan, completion HubCompletion) BalanceSheetPage {
 	base := BuildBasePage(r, "Balance Sheet | Business Planning Tool", user)
-	base.StartingPointComplete = startingPointComplete
+	completion.applyTo(&base)
 	years := plan.BalanceSheetSnapshots(domain.ProjectionYears)
 
 	balances := true
@@ -119,9 +81,9 @@ func BuildBalanceSheetPage(r *http.Request, user *domain.User, plan *domain.Plan
 }
 
 // BuildAnalyticsPage creates an AnalyticsPage
-func BuildAnalyticsPage(r *http.Request, user *domain.User, plan *domain.Plan, startingPointComplete bool) AnalyticsPage {
+func BuildAnalyticsPage(r *http.Request, user *domain.User, plan *domain.Plan, completion HubCompletion) AnalyticsPage {
 	base := BuildBasePage(r, "Analytics | Business Planning Tool", user)
-	base.StartingPointComplete = startingPointComplete
+	completion.applyTo(&base)
 
 	years := plan.BalanceSheetSnapshots(domain.ProjectionYears)
 	balances := true
@@ -237,26 +199,6 @@ func RenderIndexPage(w http.ResponseWriter, tc map[string]*template.Template, pa
 // RenderSetupPage renders the setup page
 func RenderSetupPage(w http.ResponseWriter, tc map[string]*template.Template, page SetupPage) {
 	renderTemplate(w, tc, "setup.html", "base", page)
-}
-
-// RenderPayrollPage renders the payroll page
-func RenderPayrollPage(w http.ResponseWriter, tc map[string]*template.Template, page PayrollPage) {
-	renderTemplate(w, tc, "payroll.html", "base", page)
-}
-
-// RenderSalesForecastPage renders the sales forecast page
-func RenderSalesForecastPage(w http.ResponseWriter, tc map[string]*template.Template, page SalesForecastPage) {
-	renderTemplate(w, tc, "sales-forecast.html", "base", page)
-}
-
-// RenderOpExpensesPage renders the operating expenses page
-func RenderOpExpensesPage(w http.ResponseWriter, tc map[string]*template.Template, page OpExpensesPage) {
-	renderTemplate(w, tc, "op-expenses.html", "base", page)
-}
-
-// RenderCashFlowPage renders the cash flow page
-func RenderCashFlowPage(w http.ResponseWriter, tc map[string]*template.Template, page CashFlowPage) {
-	renderTemplate(w, tc, "cash-flow.html", "base", page)
 }
 
 // RenderIncomeStatementPage renders the income statement page

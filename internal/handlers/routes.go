@@ -129,36 +129,184 @@ func (app *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /invites/{id}/accept", app.PostAcceptInvite())
 	mux.HandleFunc("POST /invites/{id}/reject", app.PostRejectInvite())
 
-	// Payroll - requires viewer access for GET, editor for POST
+	// Payroll - summary page, requires viewer access
 	mux.Handle("GET /plan/{id}/payroll", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.GetPayroll()(w, r)
-	})))
-	mux.Handle("POST /plan/{id}/payroll", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.PostPayroll()(w, r)
+		app.GetPayrollSummary()(w, r)
 	})))
 
-	// Sales Forecast - requires viewer access for GET, editor for POST
+	// Payroll - section landing/description page. "intro" comes before
+	// {section} for the same reason as Starting Point's equivalent route
+	// (see the comment above it): avoids a genuine ambiguity with
+	// .../payroll-tax-rates/{step} that net/http's mux rejects at startup.
+	mux.Handle("GET /plan/{id}/payroll/intro/{section}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetPayrollSectionIntro()(w, r)
+	})))
+
+	// Payroll: Salary Roles wizard
+	mux.Handle("GET /plan/{id}/payroll/salary-roles", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetSalaryRoleList()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/salary-roles/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostSalaryRoleNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/salary-roles/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostSalaryRoleFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/payroll/salary-roles/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetSalaryRoleStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/salary-roles/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostSalaryRoleStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/salary-roles/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostSalaryRoleDelete()(w, r)
+	})))
+
+	// Payroll: Benefits wizard
+	mux.Handle("GET /plan/{id}/payroll/benefits", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetBenefitList()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/benefits/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostBenefitNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/benefits/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostBenefitFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/payroll/benefits/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetBenefitStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/benefits/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostBenefitStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/benefits/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostBenefitDelete()(w, r)
+	})))
+
+	// Payroll: Payroll Tax Rates wizard (singleton per plan, no item ID)
+	mux.Handle("GET /plan/{id}/payroll/payroll-tax-rates", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetPayrollTaxRatesEntry()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/payroll/payroll-tax-rates/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetPayrollTaxRatesStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/payroll/payroll-tax-rates/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostPayrollTaxRatesStep()(w, r)
+	})))
+
+	// Sales Forecast - summary page, requires viewer access
 	mux.Handle("GET /plan/{id}/sales-forecast", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.GetSalesForecast()(w, r)
-	})))
-	mux.Handle("POST /plan/{id}/sales-forecast", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.PostSalesForecast()(w, r)
+		app.GetSalesForecastSummary()(w, r)
 	})))
 
-	// Operating Expenses - requires viewer access for GET, editor for POST
+	// Sales Forecast - section landing/description page (see Payroll's
+	// equivalent route above for why "intro" is placed before {section}).
+	mux.Handle("GET /plan/{id}/sales-forecast/intro/{section}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetSalesForecastSectionIntro()(w, r)
+	})))
+
+	// Sales Forecast: Products wizard
+	mux.Handle("GET /plan/{id}/sales-forecast/products", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetProductList()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/sales-forecast/products/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostProductNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/sales-forecast/products/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostProductFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/sales-forecast/products/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetProductStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/sales-forecast/products/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostProductStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/sales-forecast/products/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostProductDelete()(w, r)
+	})))
+
+	// Sales Forecast: Sales Growth Curve wizard (singleton per plan, no item ID)
+	mux.Handle("GET /plan/{id}/sales-forecast/sales-growth-curve", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetSalesGrowthCurveEntry()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/sales-forecast/sales-growth-curve/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetSalesGrowthCurveStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/sales-forecast/sales-growth-curve/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostSalesGrowthCurveStep()(w, r)
+	})))
+
+	// Operating Expenses wizard - a single repeatable section, so
+	// /plan/{id}/operating-expenses is directly the list page (no
+	// multi-section summary/intro layer, unlike Payroll/Sales Forecast/
+	// Cash Flow).
 	mux.Handle("GET /plan/{id}/operating-expenses", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.GetOpExpenses()(w, r)
+		app.GetOperatingExpenseList()(w, r)
 	})))
-	mux.Handle("POST /plan/{id}/operating-expenses", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.PostOpExpenses()(w, r)
+	mux.Handle("POST /plan/{id}/operating-expenses/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostOperatingExpenseNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/operating-expenses/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostOperatingExpenseFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/operating-expenses/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetOperatingExpenseStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/operating-expenses/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostOperatingExpenseStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/operating-expenses/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostOperatingExpenseDelete()(w, r)
 	})))
 
-	// Cash Flow - requires viewer access for GET, editor for POST
+	// Cash Flow - summary page, requires viewer access
 	mux.Handle("GET /plan/{id}/cash-flow", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.GetCashFlow()(w, r)
+		app.GetCashFlowSummary()(w, r)
 	})))
-	mux.Handle("POST /plan/{id}/cash-flow", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.PostCashFlow()(w, r)
+
+	// Cash Flow - section landing/description page (see Payroll's
+	// equivalent route above for why "intro" is placed before {section}).
+	mux.Handle("GET /plan/{id}/cash-flow/intro/{section}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetCashFlowSectionIntro()(w, r)
+	})))
+
+	// Cash Flow: Inventory Purchases wizard
+	mux.Handle("GET /plan/{id}/cash-flow/inventory-purchases", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetInventoryPurchaseList()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow/inventory-purchases/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostInventoryPurchaseNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow/inventory-purchases/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostInventoryPurchaseFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/cash-flow/inventory-purchases/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetInventoryPurchaseStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow/inventory-purchases/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostInventoryPurchaseStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow/inventory-purchases/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostInventoryPurchaseDelete()(w, r)
+	})))
+
+	// Cash Flow: Distributions wizard
+	mux.Handle("GET /plan/{id}/cash-flow/distributions", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetDistributionList()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow/distributions/new", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostDistributionNew()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow/distributions/finish", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostDistributionFinish()(w, r)
+	})))
+	mux.Handle("GET /plan/{id}/cash-flow/distributions/{itemID}/{step}", app.RequireAccess(domain.Viewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.GetDistributionStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow/distributions/{itemID}/{step}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostDistributionStep()(w, r)
+	})))
+	mux.Handle("POST /plan/{id}/cash-flow/distributions/{itemID}", app.RequireAccess(domain.Editor)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.PostDistributionDelete()(w, r)
 	})))
 
 	// Income Statement - requires viewer access
