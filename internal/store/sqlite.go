@@ -11,9 +11,32 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
-// SQLiteStore implements PlanStore using SQLite database
+// Compile-time assertions: SQLiteStore must satisfy all repository interfaces.
+var (
+	_ repositories.PlanRepository             = (*SQLiteStore)(nil)
+	_ repositories.UserRepository             = (*SQLiteStore)(nil)
+	_ repositories.SessionRepository          = (*SQLiteStore)(nil)
+	_ repositories.AccessRepository           = (*SQLiteStore)(nil)
+	_ repositories.InviteRepository           = (*SQLiteStore)(nil)
+	_ repositories.WizardProgressRepository   = (*SQLiteStore)(nil)
+	_ repositories.CapitalAssetRepository     = (*SQLiteStore)(nil)
+	_ repositories.StartupCostRepository      = (*SQLiteStore)(nil)
+	_ repositories.FundingSourceRepository    = (*SQLiteStore)(nil)
+	_ repositories.StartingBalancesRepository = (*SQLiteStore)(nil)
+	_ repositories.SalaryRoleRepository       = (*SQLiteStore)(nil)
+	_ repositories.BenefitRepository          = (*SQLiteStore)(nil)
+	_ repositories.PayrollTaxRatesRepository  = (*SQLiteStore)(nil)
+	_ repositories.ProductRepository          = (*SQLiteStore)(nil)
+	_ repositories.SalesGrowthCurveRepository = (*SQLiteStore)(nil)
+	_ repositories.InventoryPurchaseRepository = (*SQLiteStore)(nil)
+	_ repositories.DistributionRepository     = (*SQLiteStore)(nil)
+	_ repositories.OperatingExpenseRepository = (*SQLiteStore)(nil)
+)
+
+// SQLiteStore implements all repository interfaces defined in domain/repositories.
 type SQLiteStore struct {
 	db *sql.DB
 }

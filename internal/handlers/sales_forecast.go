@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
-	"github.com/zaidmasri/business-planning-tool/internal/store"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
@@ -25,7 +25,7 @@ var (
 // is complete for planID. Used to drive the sidebar's Sales Forecast nav
 // icon, which is shown on every page, not just Sales Forecast's own.
 func (app *App) salesForecastComplete(planID uuid.UUID) bool {
-	status, err := app.Store.GetWizardSectionStatus(planID, domain.HubSalesForecast)
+	status, err := app.SalesForecastSvc.GetHubStatus(planID)
 	if err != nil {
 		log.Printf("Failed to load sales forecast section status for plan %s: %v", planID, err)
 		return false
@@ -51,7 +51,7 @@ func (app *App) GetSalesForecastSectionIntro() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -77,19 +77,19 @@ func (app *App) GetSalesForecastSummary() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubSalesForecast)
+		sectionStatus, err := app.SalesForecastSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load sales forecast section status for plan %s: %v", planID, err)
 			sectionStatus = map[string]bool{}
 		}
 
-		products, err := app.Store.ListCompleteProducts(planID)
+		products, err := app.SalesForecastSvc.ListCompleteProducts(planID)
 		if err != nil {
 			log.Printf("Failed to load products for plan %s: %v", planID, err)
 		}
@@ -110,13 +110,13 @@ func (app *App) GetProductList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteProducts(planID)
+		completeItems, err := app.SalesForecastSvc.ListCompleteProducts(planID)
 		if err != nil {
 			log.Printf("Failed to load products for plan %s: %v", planID, err)
 		}
@@ -125,14 +125,14 @@ func (app *App) GetProductList() http.HandlerFunc {
 			items[i] = views.ProductItem{ID: it.ID, Product: it.Product}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubSalesForecast)
+		sectionStatus, err := app.SalesForecastSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load sales forecast section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetProductDraft(planID); err != nil {
+		if draft, err := app.SalesForecastSvc.GetProductDraft(planID); err != nil {
 			log.Printf("Failed to load product draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -158,7 +158,7 @@ func (app *App) PostProductNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateProductDraft(planID)
+		itemID, err := app.SalesForecastSvc.CreateProductDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create product draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new product. Please try again.")
@@ -178,7 +178,7 @@ func (app *App) GetProductStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -195,7 +195,7 @@ func (app *App) GetProductStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetProduct(itemID)
+		item, err := app.SalesForecastSvc.GetProduct(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -224,7 +224,7 @@ func (app *App) PostProductStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -241,13 +241,13 @@ func (app *App) PostProductStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetProduct(itemID)
+		item, err := app.SalesForecastSvc.GetProduct(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		product := item.Product
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -297,14 +297,14 @@ func (app *App) PostProductStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 			newCurrentStep = len(productSteps)
 		}
 
-		if err := app.Store.SaveProductStep(itemID, product, newCurrentStep, newStatus); err != nil {
+		if err := app.SalesForecastSvc.SaveProductStep(itemID, product, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save product step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -338,7 +338,7 @@ func (app *App) PostProductDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteProduct(itemID); err != nil {
+		if err := app.SalesForecastSvc.DeleteProduct(itemID); err != nil {
 			log.Printf("Failed to delete product %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.SalesForecastSectionListURL(planID, domain.SectionProducts), http.StatusSeeOther)
@@ -353,7 +353,7 @@ func (app *App) PostProductFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubSalesForecast, domain.SectionProducts); err != nil {
+		if err := app.SalesForecastSvc.MarkWizardSectionComplete(planID, domain.SectionProducts); err != nil {
 			log.Printf("Failed to mark products complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.SalesForecastSummaryURL(planID), http.StatusSeeOther)
@@ -373,14 +373,14 @@ func (app *App) GetSalesGrowthCurveEntry() http.HandlerFunc {
 			return
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubSalesForecast)
+		sectionStatus, err := app.SalesForecastSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load sales forecast section status for plan %s: %v", planID, err)
 		}
 
 		step := salesGrowthCurveSteps[0]
 		if !sectionStatus[domain.SectionSalesGrowthCurve] {
-			if row, err := app.Store.GetSalesGrowthCurveRow(planID); err != nil {
+			if row, err := app.SalesForecastSvc.GetSalesGrowthCurveRow(planID); err != nil {
 				log.Printf("Failed to load sales growth curve for plan %s: %v", planID, err)
 			} else if row.CurrentStep > 0 && row.CurrentStep < len(salesGrowthCurveSteps) {
 				step = salesGrowthCurveSteps[row.CurrentStep]
@@ -400,7 +400,7 @@ func (app *App) GetSalesGrowthCurveStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -412,10 +412,10 @@ func (app *App) GetSalesGrowthCurveStep() http.HandlerFunc {
 			return
 		}
 
-		row, err := app.Store.GetSalesGrowthCurveRow(planID)
+		row, err := app.SalesForecastSvc.GetSalesGrowthCurveRow(planID)
 		if err != nil {
 			log.Printf("Failed to load sales growth curve for plan %s: %v", planID, err)
-			row = &store.SalesGrowthCurveRow{}
+			row = &repositories.SalesGrowthCurveRow{}
 		}
 
 		backURL := ""
@@ -450,7 +450,7 @@ func (app *App) PostSalesGrowthCurveStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -462,10 +462,10 @@ func (app *App) PostSalesGrowthCurveStep() http.HandlerFunc {
 			return
 		}
 
-		row, err := app.Store.GetSalesGrowthCurveRow(planID)
+		row, err := app.SalesForecastSvc.GetSalesGrowthCurveRow(planID)
 		if err != nil {
 			log.Printf("Failed to load sales growth curve for plan %s: %v", planID, err)
-			row = &store.SalesGrowthCurveRow{}
+			row = &repositories.SalesGrowthCurveRow{}
 		}
 		curve := row.Curve
 
@@ -504,7 +504,7 @@ func (app *App) PostSalesGrowthCurveStep() http.HandlerFunc {
 		}
 
 		newCurrentStep := idx + 1
-		if err := app.Store.SaveSalesGrowthCurveStep(planID, curve, newCurrentStep); err != nil {
+		if err := app.SalesForecastSvc.SaveSalesGrowthCurveStep(planID, curve, newCurrentStep); err != nil {
 			log.Printf("Failed to save sales growth curve step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -517,7 +517,7 @@ func (app *App) PostSalesGrowthCurveStep() http.HandlerFunc {
 
 		// Last step: Sales Growth Curve isn't repeatable, so finishing it
 		// marks the section complete directly and returns to the summary.
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubSalesForecast, domain.SectionSalesGrowthCurve); err != nil {
+		if err := app.SalesForecastSvc.MarkWizardSectionComplete(planID, domain.SectionSalesGrowthCurve); err != nil {
 			log.Printf("Failed to mark sales growth curve complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.SalesForecastSummaryURL(planID), http.StatusSeeOther)

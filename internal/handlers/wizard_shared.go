@@ -3,12 +3,10 @@
 package handlers
 
 import (
-	"log"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
@@ -30,42 +28,9 @@ func parseStepPercent(raw string) (float64, bool) {
 	return val / 100.0, true
 }
 
-// hubCompletion computes all five wizard hubs' completion state for
-// planID at once, for pages that sit outside any single hub (Setup,
-// Income Statement, Balance Sheet, Analytics) but whose sidebar still
-// needs every icon's fill state to be accurate.
+// hubCompletion returns the completion state of all five wizard hubs for
+// pages that sit outside any single hub (Setup, Income Statement, Balance
+// Sheet, Analytics) but whose sidebar still needs every icon's fill state.
 func (app *App) hubCompletion(planID uuid.UUID) views.HubCompletion {
-	sp, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
-	if err != nil {
-		log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
-		sp = map[string]bool{}
-	}
-	pr, err := app.Store.GetWizardSectionStatus(planID, domain.HubPayroll)
-	if err != nil {
-		log.Printf("Failed to load payroll section status for plan %s: %v", planID, err)
-		pr = map[string]bool{}
-	}
-	sf, err := app.Store.GetWizardSectionStatus(planID, domain.HubSalesForecast)
-	if err != nil {
-		log.Printf("Failed to load sales forecast section status for plan %s: %v", planID, err)
-		sf = map[string]bool{}
-	}
-	oe, err := app.Store.GetWizardSectionStatus(planID, domain.HubOperatingExpenses)
-	if err != nil {
-		log.Printf("Failed to load operating expenses section status for plan %s: %v", planID, err)
-		oe = map[string]bool{}
-	}
-	cf, err := app.Store.GetWizardSectionStatus(planID, domain.HubCashFlow)
-	if err != nil {
-		log.Printf("Failed to load cash flow section status for plan %s: %v", planID, err)
-		cf = map[string]bool{}
-	}
-
-	return views.HubCompletion{
-		StartingPoint:     views.IsStartingPointComplete(sp),
-		Payroll:           views.IsPayrollComplete(pr),
-		SalesForecast:     views.IsSalesForecastComplete(sf),
-		OperatingExpenses: views.IsOperatingExpensesComplete(oe),
-		CashFlow:          views.IsCashFlowComplete(cf),
-	}
+	return toViewsHubCompletion(app.HubSvc.Get(planID))
 }

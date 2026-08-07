@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
-	"github.com/zaidmasri/business-planning-tool/internal/store"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
@@ -24,7 +24,7 @@ var operatingExpenseSteps = []string{"name", "amount", "growth"}
 // Expenses nav icon, which is shown on every page, not just Operating
 // Expenses' own.
 func (app *App) operatingExpensesComplete(planID uuid.UUID) bool {
-	status, err := app.Store.GetWizardSectionStatus(planID, domain.HubOperatingExpenses)
+	status, err := app.OpExSvc.GetHubStatus(planID)
 	if err != nil {
 		log.Printf("Failed to load operating expenses section status for plan %s: %v", planID, err)
 		return false
@@ -41,13 +41,13 @@ func (app *App) GetOperatingExpenseList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteOperatingExpenses(planID)
+		completeItems, err := app.OpExSvc.ListCompleteOperatingExpenses(planID)
 		if err != nil {
 			log.Printf("Failed to load operating expenses for plan %s: %v", planID, err)
 		}
@@ -56,14 +56,14 @@ func (app *App) GetOperatingExpenseList() http.HandlerFunc {
 			items[i] = views.OpExpenseItem{ID: it.ID, Cost: it.Cost}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubOperatingExpenses)
+		sectionStatus, err := app.OpExSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load operating expenses section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetOperatingExpenseDraft(planID); err != nil {
+		if draft, err := app.OpExSvc.GetOperatingExpenseDraft(planID); err != nil {
 			log.Printf("Failed to load operating expense draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -89,7 +89,7 @@ func (app *App) PostOperatingExpenseNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateOperatingExpenseDraft(planID)
+		itemID, err := app.OpExSvc.CreateOperatingExpenseDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create operating expense draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new operating expense. Please try again.")
@@ -109,7 +109,7 @@ func (app *App) GetOperatingExpenseStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -126,7 +126,7 @@ func (app *App) GetOperatingExpenseStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetOperatingExpense(itemID)
+		item, err := app.OpExSvc.GetOperatingExpense(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -155,7 +155,7 @@ func (app *App) PostOperatingExpenseStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -172,13 +172,13 @@ func (app *App) PostOperatingExpenseStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetOperatingExpense(itemID)
+		item, err := app.OpExSvc.GetOperatingExpense(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		cost := item.Cost
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -229,14 +229,14 @@ func (app *App) PostOperatingExpenseStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 			newCurrentStep = len(operatingExpenseSteps)
 		}
 
-		if err := app.Store.SaveOperatingExpenseStep(itemID, cost, newCurrentStep, newStatus); err != nil {
+		if err := app.OpExSvc.SaveOperatingExpenseStep(itemID, cost, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save operating expense step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -270,7 +270,7 @@ func (app *App) PostOperatingExpenseDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteOperatingExpense(itemID); err != nil {
+		if err := app.OpExSvc.DeleteOperatingExpense(itemID); err != nil {
 			log.Printf("Failed to delete operating expense %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.OperatingExpensesListURL(planID), http.StatusSeeOther)
@@ -285,7 +285,7 @@ func (app *App) PostOperatingExpenseFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubOperatingExpenses, domain.SectionOperatingExpenses); err != nil {
+		if err := app.OpExSvc.MarkWizardSectionComplete(planID, domain.SectionOperatingExpenses); err != nil {
 			log.Printf("Failed to mark operating expenses complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, "/plan/"+planID.String()+"/cash-flow", http.StatusSeeOther)

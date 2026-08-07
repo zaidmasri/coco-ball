@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
 // loadCashFlowInto populates a Plan's discretionary Cash Flow fields
@@ -40,7 +41,7 @@ func (s *SQLiteStore) loadCashFlowInto(plan *domain.Plan) error {
 
 // --- Inventory Purchases ---
 
-func scanInventoryPurchaseItem(row rowScanner) (*InventoryPurchaseItem, error) {
+func scanInventoryPurchaseItem(row rowScanner) (*repositories.InventoryPurchaseItem, error) {
 	var idStr, category, status string
 	var monthlyAmount int64
 	var growthYr2, growthYr3 float64
@@ -55,14 +56,14 @@ func scanInventoryPurchaseItem(row rowScanner) (*InventoryPurchaseItem, error) {
 		return nil, fmt.Errorf("invalid inventory purchase id: %w", err)
 	}
 
-	return &InventoryPurchaseItem{
+	return &repositories.InventoryPurchaseItem{
 		ID: id,
 		Purchase: domain.InventoryPurchase{
 			Category:       category,
 			MonthlyAmount:  domain.Money(monthlyAmount),
 			GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 		},
-		Status:      ItemStatus(status),
+		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
 	}, nil
 }
@@ -91,7 +92,7 @@ func (s *SQLiteStore) CreateInventoryPurchaseDraft(planID uuid.UUID) (uuid.UUID,
 	if _, err := s.db.Exec(
 		`INSERT INTO inventory_purchases (id, plan_id, status, current_step, sort_order, created_at, updated_at)
 		 VALUES (?, ?, ?, 0, ?, ?, ?)`,
-		id.String(), planID.String(), string(StatusDraft), sortOrder, now, now,
+		id.String(), planID.String(), string(repositories.StatusDraft), sortOrder, now, now,
 	); err != nil {
 		return uuid.Nil, fmt.Errorf("failed to create inventory purchase draft: %w", err)
 	}
@@ -100,10 +101,10 @@ func (s *SQLiteStore) CreateInventoryPurchaseDraft(planID uuid.UUID) (uuid.UUID,
 
 // GetInventoryPurchaseDraft returns the plan's in-progress Inventory
 // Purchase draft, if any, without creating one.
-func (s *SQLiteStore) GetInventoryPurchaseDraft(planID uuid.UUID) (*InventoryPurchaseItem, error) {
+func (s *SQLiteStore) GetInventoryPurchaseDraft(planID uuid.UUID) (*repositories.InventoryPurchaseItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE plan_id = ? AND status = ? LIMIT 1",
-		planID.String(), string(StatusDraft),
+		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanInventoryPurchaseItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -117,7 +118,7 @@ func (s *SQLiteStore) GetInventoryPurchaseDraft(planID uuid.UUID) (*InventoryPur
 
 // GetInventoryPurchase retrieves a single Inventory Purchase wizard item by
 // its own ID.
-func (s *SQLiteStore) GetInventoryPurchase(itemID uuid.UUID) (*InventoryPurchaseItem, error) {
+func (s *SQLiteStore) GetInventoryPurchase(itemID uuid.UUID) (*repositories.InventoryPurchaseItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE id = ?",
 		itemID.String(),
@@ -134,7 +135,7 @@ func (s *SQLiteStore) GetInventoryPurchase(itemID uuid.UUID) (*InventoryPurchase
 
 // SaveInventoryPurchaseStep persists the wizard's current answer for an
 // Inventory Purchase item, advancing its step/status.
-func (s *SQLiteStore) SaveInventoryPurchaseStep(itemID uuid.UUID, inv domain.InventoryPurchase, currentStep int, status ItemStatus) error {
+func (s *SQLiteStore) SaveInventoryPurchaseStep(itemID uuid.UUID, inv domain.InventoryPurchase, currentStep int, status repositories.ItemStatus) error {
 	now := time.Now().Unix()
 	growthYr2 := inv.GrowthAfterYr1.GrowthRatePercent(0) / 100
 	growthYr3 := inv.GrowthAfterYr1.GrowthRatePercent(1) / 100
@@ -150,17 +151,17 @@ func (s *SQLiteStore) SaveInventoryPurchaseStep(itemID uuid.UUID, inv domain.Inv
 
 // ListCompleteInventoryPurchases returns every finished Inventory Purchase
 // for a plan, in the order they were added.
-func (s *SQLiteStore) ListCompleteInventoryPurchases(planID uuid.UUID) ([]InventoryPurchaseItem, error) {
+func (s *SQLiteStore) ListCompleteInventoryPurchases(planID uuid.UUID) ([]repositories.InventoryPurchaseItem, error) {
 	rows, err := s.db.Query(
 		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
-		planID.String(), string(StatusComplete),
+		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query inventory purchases: %w", err)
 	}
 	defer rows.Close()
 
-	var items []InventoryPurchaseItem
+	var items []repositories.InventoryPurchaseItem
 	for rows.Next() {
 		item, err := scanInventoryPurchaseItem(rows)
 		if err != nil {
@@ -185,7 +186,7 @@ func (s *SQLiteStore) DeleteInventoryPurchase(itemID uuid.UUID) error {
 
 // --- Distributions ---
 
-func scanDistributionItem(row rowScanner) (*DistributionItem, error) {
+func scanDistributionItem(row rowScanner) (*repositories.DistributionItem, error) {
 	var idStr, name, status string
 	var monthlyAmount int64
 	var growthYr2, growthYr3 float64
@@ -200,14 +201,14 @@ func scanDistributionItem(row rowScanner) (*DistributionItem, error) {
 		return nil, fmt.Errorf("invalid distribution id: %w", err)
 	}
 
-	return &DistributionItem{
+	return &repositories.DistributionItem{
 		ID: id,
 		Distribution: domain.Distribution{
 			Name:           name,
 			MonthlyAmount:  domain.Money(monthlyAmount),
 			GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 		},
-		Status:      ItemStatus(status),
+		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
 	}, nil
 }
@@ -235,7 +236,7 @@ func (s *SQLiteStore) CreateDistributionDraft(planID uuid.UUID) (uuid.UUID, erro
 	if _, err := s.db.Exec(
 		`INSERT INTO distributions (id, plan_id, status, current_step, sort_order, created_at, updated_at)
 		 VALUES (?, ?, ?, 0, ?, ?, ?)`,
-		id.String(), planID.String(), string(StatusDraft), sortOrder, now, now,
+		id.String(), planID.String(), string(repositories.StatusDraft), sortOrder, now, now,
 	); err != nil {
 		return uuid.Nil, fmt.Errorf("failed to create distribution draft: %w", err)
 	}
@@ -244,10 +245,10 @@ func (s *SQLiteStore) CreateDistributionDraft(planID uuid.UUID) (uuid.UUID, erro
 
 // GetDistributionDraft returns the plan's in-progress Distribution draft,
 // if any, without creating one.
-func (s *SQLiteStore) GetDistributionDraft(planID uuid.UUID) (*DistributionItem, error) {
+func (s *SQLiteStore) GetDistributionDraft(planID uuid.UUID) (*repositories.DistributionItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+distributionColumns+" FROM distributions WHERE plan_id = ? AND status = ? LIMIT 1",
-		planID.String(), string(StatusDraft),
+		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanDistributionItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -261,7 +262,7 @@ func (s *SQLiteStore) GetDistributionDraft(planID uuid.UUID) (*DistributionItem,
 
 // GetDistribution retrieves a single Distribution wizard item by its own
 // ID.
-func (s *SQLiteStore) GetDistribution(itemID uuid.UUID) (*DistributionItem, error) {
+func (s *SQLiteStore) GetDistribution(itemID uuid.UUID) (*repositories.DistributionItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+distributionColumns+" FROM distributions WHERE id = ?",
 		itemID.String(),
@@ -278,7 +279,7 @@ func (s *SQLiteStore) GetDistribution(itemID uuid.UUID) (*DistributionItem, erro
 
 // SaveDistributionStep persists the wizard's current answer for a
 // Distribution item, advancing its step/status.
-func (s *SQLiteStore) SaveDistributionStep(itemID uuid.UUID, dist domain.Distribution, currentStep int, status ItemStatus) error {
+func (s *SQLiteStore) SaveDistributionStep(itemID uuid.UUID, dist domain.Distribution, currentStep int, status repositories.ItemStatus) error {
 	now := time.Now().Unix()
 	growthYr2 := dist.GrowthAfterYr1.GrowthRatePercent(0) / 100
 	growthYr3 := dist.GrowthAfterYr1.GrowthRatePercent(1) / 100
@@ -294,17 +295,17 @@ func (s *SQLiteStore) SaveDistributionStep(itemID uuid.UUID, dist domain.Distrib
 
 // ListCompleteDistributions returns every finished Distribution for a
 // plan, in the order they were added.
-func (s *SQLiteStore) ListCompleteDistributions(planID uuid.UUID) ([]DistributionItem, error) {
+func (s *SQLiteStore) ListCompleteDistributions(planID uuid.UUID) ([]repositories.DistributionItem, error) {
 	rows, err := s.db.Query(
 		"SELECT "+distributionColumns+" FROM distributions WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
-		planID.String(), string(StatusComplete),
+		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query distributions: %w", err)
 	}
 	defer rows.Close()
 
-	var items []DistributionItem
+	var items []repositories.DistributionItem
 	for rows.Next() {
 		item, err := scanDistributionItem(rows)
 		if err != nil {

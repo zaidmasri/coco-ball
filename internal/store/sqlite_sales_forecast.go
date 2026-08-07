@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
 // loadSalesForecastInto populates a Plan's Sales Forecast fields (Products,
@@ -36,7 +37,7 @@ func (s *SQLiteStore) loadSalesForecastInto(plan *domain.Plan) error {
 
 // --- Products ---
 
-func scanProductItem(row rowScanner) (*ProductItem, error) {
+func scanProductItem(row rowScanner) (*repositories.ProductItem, error) {
 	var idStr, name, status string
 	var month1Units, currentStep int
 	var pricePerUnit, costPerUnit int64
@@ -50,7 +51,7 @@ func scanProductItem(row rowScanner) (*ProductItem, error) {
 		return nil, fmt.Errorf("invalid product id: %w", err)
 	}
 
-	return &ProductItem{
+	return &repositories.ProductItem{
 		ID: id,
 		Product: domain.Product{
 			Name:         name,
@@ -58,7 +59,7 @@ func scanProductItem(row rowScanner) (*ProductItem, error) {
 			PricePerUnit: domain.Money(pricePerUnit),
 			CostPerUnit:  domain.Money(costPerUnit),
 		},
-		Status:      ItemStatus(status),
+		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
 	}, nil
 }
@@ -86,7 +87,7 @@ func (s *SQLiteStore) CreateProductDraft(planID uuid.UUID) (uuid.UUID, error) {
 	if _, err := s.db.Exec(
 		`INSERT INTO products (id, plan_id, status, current_step, sort_order, created_at, updated_at)
 		 VALUES (?, ?, ?, 0, ?, ?, ?)`,
-		id.String(), planID.String(), string(StatusDraft), sortOrder, now, now,
+		id.String(), planID.String(), string(repositories.StatusDraft), sortOrder, now, now,
 	); err != nil {
 		return uuid.Nil, fmt.Errorf("failed to create product draft: %w", err)
 	}
@@ -95,10 +96,10 @@ func (s *SQLiteStore) CreateProductDraft(planID uuid.UUID) (uuid.UUID, error) {
 
 // GetProductDraft returns the plan's in-progress Product draft, if any,
 // without creating one.
-func (s *SQLiteStore) GetProductDraft(planID uuid.UUID) (*ProductItem, error) {
+func (s *SQLiteStore) GetProductDraft(planID uuid.UUID) (*repositories.ProductItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+productColumns+" FROM products WHERE plan_id = ? AND status = ? LIMIT 1",
-		planID.String(), string(StatusDraft),
+		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanProductItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -111,7 +112,7 @@ func (s *SQLiteStore) GetProductDraft(planID uuid.UUID) (*ProductItem, error) {
 }
 
 // GetProduct retrieves a single Product wizard item by its own ID.
-func (s *SQLiteStore) GetProduct(itemID uuid.UUID) (*ProductItem, error) {
+func (s *SQLiteStore) GetProduct(itemID uuid.UUID) (*repositories.ProductItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+productColumns+" FROM products WHERE id = ?",
 		itemID.String(),
@@ -128,7 +129,7 @@ func (s *SQLiteStore) GetProduct(itemID uuid.UUID) (*ProductItem, error) {
 
 // SaveProductStep persists the wizard's current answer for a Product item,
 // advancing its step/status.
-func (s *SQLiteStore) SaveProductStep(itemID uuid.UUID, product domain.Product, currentStep int, status ItemStatus) error {
+func (s *SQLiteStore) SaveProductStep(itemID uuid.UUID, product domain.Product, currentStep int, status repositories.ItemStatus) error {
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE products SET name=?, month1_units=?, price_per_unit=?, cost_per_unit=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
@@ -142,17 +143,17 @@ func (s *SQLiteStore) SaveProductStep(itemID uuid.UUID, product domain.Product, 
 
 // ListCompleteProducts returns every finished Product for a plan, in the
 // order they were added.
-func (s *SQLiteStore) ListCompleteProducts(planID uuid.UUID) ([]ProductItem, error) {
+func (s *SQLiteStore) ListCompleteProducts(planID uuid.UUID) ([]repositories.ProductItem, error) {
 	rows, err := s.db.Query(
 		"SELECT "+productColumns+" FROM products WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
-		planID.String(), string(StatusComplete),
+		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query products: %w", err)
 	}
 	defer rows.Close()
 
-	var items []ProductItem
+	var items []repositories.ProductItem
 	for rows.Next() {
 		item, err := scanProductItem(rows)
 		if err != nil {
@@ -182,7 +183,7 @@ func (s *SQLiteStore) DeleteProduct(itemID uuid.UUID) error {
 // zero-value SalesGrowthCurveRow (CurrentStep 0) rather than creating one,
 // since reads shouldn't have write side effects - the first
 // SaveSalesGrowthCurveStep call creates the row via upsert.
-func (s *SQLiteStore) GetSalesGrowthCurveRow(planID uuid.UUID) (*SalesGrowthCurveRow, error) {
+func (s *SQLiteStore) GetSalesGrowthCurveRow(planID uuid.UUID) (*repositories.SalesGrowthCurveRow, error) {
 	var q1, q2, q3, q4, growthYr2, growthYr3 float64
 	var currentStep int
 
@@ -193,13 +194,13 @@ func (s *SQLiteStore) GetSalesGrowthCurveRow(planID uuid.UUID) (*SalesGrowthCurv
 	).Scan(&q1, &q2, &q3, &q4, &growthYr2, &growthYr3, &currentStep)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		return &SalesGrowthCurveRow{Curve: domain.SalesGrowthCurve{}, CurrentStep: 0}, nil
+		return &repositories.SalesGrowthCurveRow{Curve: domain.SalesGrowthCurve{}, CurrentStep: 0}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query sales growth curve: %w", err)
 	}
 
-	return &SalesGrowthCurveRow{
+	return &repositories.SalesGrowthCurveRow{
 		Curve: domain.SalesGrowthCurve{
 			Year1QuarterlyRates: [4]float64{q1, q2, q3, q4},
 			FutureYearRates:     []float64{growthYr2, growthYr3},

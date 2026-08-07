@@ -10,11 +10,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	appservices "github.com/zaidmasri/business-planning-tool/internal/application/services"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
 	"github.com/zaidmasri/business-planning-tool/internal/store"
 )
 
-func setupTestApp(t *testing.T) (*App, func()) {
+func setupTestApp(t *testing.T) (*App, *store.SQLiteStore, func()) {
 	tmpDir := filepath.Join(os.TempDir(), "northbasis_auth_test")
 	os.MkdirAll(tmpDir, 0755)
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -24,23 +25,36 @@ func setupTestApp(t *testing.T) (*App, func()) {
 		t.Fatalf("Failed to initialize store: %v", err)
 	}
 
+	planSvc := appservices.NewPlanService(s)
+	authSvc := appservices.NewAuthService(s, s)
+	accessSvc := appservices.NewAccessService(s)
+	inviteSvc := appservices.NewInviteService(s)
+	startingPointSvc := appservices.NewStartingPointService(s, s, s, s, s)
+	payrollSvc := appservices.NewPayrollService(s, s, s, s)
+	salesForecastSvc := appservices.NewSalesForecastService(s, s, s)
+	cashFlowSvc := appservices.NewCashFlowService(s, s, s)
+	opExSvc := appservices.NewOperatingExpensesService(s, s)
+	hubSvc := appservices.NewHubCompletionService(startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc)
+
 	// Create a minimal template cache with an error template
 	templateCache := make(map[string]*template.Template)
 	errorTmpl, _ := template.New("error.html").Parse("<html><body>Error: {{.Message}}</body></html>")
 	templateCache["error.html"] = errorTmpl
 
-	app := NewApp(s, templateCache)
+	app := NewApp(planSvc, authSvc, accessSvc, inviteSvc,
+		startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc, hubSvc,
+		templateCache)
 
 	cleanup := func() {
 		s.Close()
 		os.Remove(dbPath)
 	}
 
-	return app, cleanup
+	return app, s, cleanup
 }
 
 func TestUserAuthorizationFlow(t *testing.T) {
-	app, cleanup := setupTestApp(t)
+	app, s, cleanup := setupTestApp(t)
 	defer cleanup()
 
 	// Create two users
@@ -54,11 +68,11 @@ func TestUserAuthorizationFlow(t *testing.T) {
 		t.Fatalf("Failed to create user2: %v", err)
 	}
 
-	if err := app.Store.SaveUser(user1); err != nil {
+	if err := s.SaveUser(user1); err != nil {
 		t.Fatalf("Failed to save user1: %v", err)
 	}
 
-	if err := app.Store.SaveUser(user2); err != nil {
+	if err := s.SaveUser(user2); err != nil {
 		t.Fatalf("Failed to save user2: %v", err)
 	}
 
@@ -71,12 +85,12 @@ func TestUserAuthorizationFlow(t *testing.T) {
 		t.Fatalf("Failed to create plan: %v", err)
 	}
 
-	if err := app.Store.Save(plan); err != nil {
+	if err := s.Save(plan); err != nil {
 		t.Fatalf("Failed to save plan: %v", err)
 	}
 
 	// Grant user1 owner access
-	if err := app.Store.GrantAccess(planID, user1.ID(), domain.Owner); err != nil {
+	if err := s.GrantAccess(planID, user1.ID(), domain.Owner); err != nil {
 		t.Fatalf("Failed to grant user1 owner access: %v", err)
 	}
 
@@ -136,7 +150,7 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	// Test 4: User2 with Editor access can edit
 	t.Run("User with Editor access can edit", func(t *testing.T) {
 		// Grant user2 editor access
-		if err := app.Store.GrantAccess(planID, user2.ID(), domain.Editor); err != nil {
+		if err := s.GrantAccess(planID, user2.ID(), domain.Editor); err != nil {
 			t.Fatalf("Failed to grant user2 editor access: %v", err)
 		}
 
@@ -161,12 +175,12 @@ func TestUserAuthorizationFlow(t *testing.T) {
 			t.Fatalf("Failed to create viewer user: %v", err)
 		}
 
-		if err := app.Store.SaveUser(userViewer); err != nil {
+		if err := s.SaveUser(userViewer); err != nil {
 			t.Fatalf("Failed to save viewer user: %v", err)
 		}
 
 		// Grant viewer-only access
-		if err := app.Store.GrantAccess(planID, userViewer.ID(), domain.Viewer); err != nil {
+		if err := s.GrantAccess(planID, userViewer.ID(), domain.Viewer); err != nil {
 			t.Fatalf("Failed to grant viewer access: %v", err)
 		}
 

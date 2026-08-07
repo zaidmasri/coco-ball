@@ -8,22 +8,53 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
+	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
-	"github.com/zaidmasri/business-planning-tool/internal/store"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
 // App holds the dependencies for all handlers
 type App struct {
-	Store         store.PlanStore
-	TemplateCache map[string]*template.Template
+	PlanSvc          ifaces.PlanService
+	AuthSvc          ifaces.AuthService
+	AccessSvc        ifaces.AccessService
+	InviteSvc        ifaces.InviteService
+	StartingPointSvc ifaces.StartingPointService
+	PayrollSvc       ifaces.PayrollService
+	SalesForecastSvc ifaces.SalesForecastService
+	CashFlowSvc      ifaces.CashFlowService
+	OpExSvc          ifaces.OperatingExpensesService
+	HubSvc           ifaces.HubCompletionService
+	TemplateCache    map[string]*template.Template
 }
 
-// NewApp is the constructor to inject dependencies from main.go
-func NewApp(s store.PlanStore, tc map[string]*template.Template) *App {
+// NewApp constructs the App with all service dependencies.
+func NewApp(
+	planSvc ifaces.PlanService,
+	authSvc ifaces.AuthService,
+	accessSvc ifaces.AccessService,
+	inviteSvc ifaces.InviteService,
+	startingPointSvc ifaces.StartingPointService,
+	payrollSvc ifaces.PayrollService,
+	salesForecastSvc ifaces.SalesForecastService,
+	cashFlowSvc ifaces.CashFlowService,
+	opExSvc ifaces.OperatingExpensesService,
+	hubSvc ifaces.HubCompletionService,
+	tc map[string]*template.Template,
+) *App {
 	return &App{
-		Store:         s,
-		TemplateCache: tc,
+		PlanSvc:          planSvc,
+		AuthSvc:          authSvc,
+		AccessSvc:        accessSvc,
+		InviteSvc:        inviteSvc,
+		StartingPointSvc: startingPointSvc,
+		PayrollSvc:       payrollSvc,
+		SalesForecastSvc: salesForecastSvc,
+		CashFlowSvc:      cashFlowSvc,
+		OpExSvc:          opExSvc,
+		HubSvc:           hubSvc,
+		TemplateCache:    tc,
 	}
 }
 
@@ -33,7 +64,19 @@ func (app *App) renderErrorPage(w http.ResponseWriter, r *http.Request, statusCo
 	views.RenderErrorPageWithStatus(w, app.TemplateCache, page, statusCode)
 }
 
-// NotFound is user for GET requests (Custom 404 Catch-All for bad URLs)
+// toViewsHubCompletion translates the application-layer HubCompletion to the
+// views-layer equivalent (same fields, different package).
+func toViewsHubCompletion(c interfaces.HubCompletion) views.HubCompletion {
+	return views.HubCompletion{
+		StartingPoint:     c.StartingPoint,
+		Payroll:           c.Payroll,
+		SalesForecast:     c.SalesForecast,
+		OperatingExpenses: c.OperatingExpenses,
+		CashFlow:          c.CashFlow,
+	}
+}
+
+// NotFound is used for GET requests (Custom 404 Catch-All for bad URLs)
 func (app *App) NotFound() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		app.renderErrorPage(w, r, http.StatusNotFound, "The URL you entered does not exist. Please check the address and try again.")
@@ -44,7 +87,6 @@ func (app *App) GetRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := GetUserFromContext(r)
 		if user == nil {
-			// Unauthenticated access
 			page := views.IndexPage{
 				BasePage: views.BasePage{
 					Title: "Business Planning Tool",
@@ -57,8 +99,7 @@ func (app *App) GetRoot() http.HandlerFunc {
 			return
 		}
 
-		// Fetch plans the user has access to
-		plans, err := app.Store.GetUserPlans(user.ID())
+		plans, err := app.PlanSvc.GetUserPlans(user.ID())
 		if err != nil {
 			plans = []*domain.Plan{}
 		}
@@ -70,11 +111,10 @@ func (app *App) GetRoot() http.HandlerFunc {
 	}
 }
 
-// pendingInvitesForUser loads the pending invites addressed to a user's
-// email and enriches each with the plan name and inviter's name for
-// display in the landing page onboarding section.
+// pendingInvitesForUser loads pending invites for the user and enriches each
+// with the plan name and inviter name for the landing page onboarding section.
 func (app *App) pendingInvitesForUser(user *domain.User) []views.InviteSummary {
-	invites, err := app.Store.GetPendingInvitesForEmail(user.Email())
+	invites, err := app.InviteSvc.GetPendingInvitesForEmail(user.Email())
 	if err != nil {
 		log.Printf("Failed to load pending invites for %s: %v", user.Email(), err)
 		return nil
@@ -84,13 +124,13 @@ func (app *App) pendingInvitesForUser(user *domain.User) []views.InviteSummary {
 	for _, invite := range invites {
 		summary := views.InviteSummary{Invite: invite}
 
-		if plan, err := app.Store.Get(invite.PlanID); err == nil {
+		if plan, err := app.PlanSvc.Get(invite.PlanID); err == nil {
 			summary.PlanName = plan.Name()
 		} else {
 			summary.PlanName = "Unknown Plan"
 		}
 
-		if inviter, err := app.Store.GetUser(invite.InvitedBy); err == nil {
+		if inviter, err := app.AuthSvc.GetUser(invite.InvitedBy); err == nil {
 			summary.InviterName = inviter.FullName()
 		} else {
 			summary.InviterName = "a collaborator"
@@ -128,14 +168,12 @@ func (app *App) PostSetup() http.HandlerFunc {
 			return
 		}
 
-		err = app.Store.Save(plan)
-		if err != nil {
+		if err = app.PlanSvc.Save(plan); err != nil {
 			http.Error(w, "Failed to save plan", http.StatusInternalServerError)
 			return
 		}
 
-		// Grant owner access to the creator
-		if err := app.Store.GrantAccess(newID, user.ID(), domain.Owner); err != nil {
+		if err := app.AccessSvc.GrantAccess(newID, user.ID(), domain.Owner); err != nil {
 			log.Printf("Failed to grant owner access: %v", err)
 			http.Error(w, "Failed to setup plan access", http.StatusInternalServerError)
 			return
@@ -159,35 +197,31 @@ func (app *App) PostUpdateSetup() http.HandlerFunc {
 			return
 		}
 
-		plan, err := app.Store.Get(id)
+		plan, err := app.PlanSvc.Get(id)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		// Group extraction and type conversion together
 		companyName := r.PostForm.Get("companyName")
 		startMonth, errMonth := strconv.Atoi(r.PostForm.Get("startMonth"))
 		startYear, errYear := strconv.Atoi(r.PostForm.Get("startYear"))
 
-		// Combine the error checks for related fields
 		if errMonth != nil || errYear != nil {
 			http.Error(w, "Invalid month or year provided", http.StatusBadRequest)
 			return
 		}
 
-		// Use the error message directly from your domain logic
 		if err := plan.ChangeCoreDetails(companyName, startMonth, startYear); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		if err := app.Store.Save(plan); err != nil {
+		if err := app.PlanSvc.Save(plan); err != nil {
 			http.Error(w, "Failed to save plan", http.StatusInternalServerError)
 			return
 		}
 
-		// Redirect to the exact same URL, forcing a GET request
 		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 	}
 }
@@ -202,7 +236,7 @@ func (app *App) GetSetup() http.HandlerFunc {
 			return
 		}
 
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that business plan. It may have been deleted, or you might be using an old link.")
 			return
@@ -210,16 +244,15 @@ func (app *App) GetSetup() http.HandlerFunc {
 
 		invites, isOwner := app.invitesAndOwnerStatus(planID, user)
 
-		page := views.BuildSetupPage(r, user, plan, invites, isOwner, app.hubCompletion(planID))
+		page := views.BuildSetupPage(r, user, plan, invites, isOwner, toViewsHubCompletion(app.HubSvc.Get(planID)))
 		views.RenderSetupPage(w, app.TemplateCache, page)
 	}
 }
 
-// invitesAndOwnerStatus loads every invite sent for a plan (any status) and
-// reports whether the current user is the plan's Owner, so the template can
-// decide whether to show the "invite a collaborator" form.
+// invitesAndOwnerStatus loads every invite for a plan and reports whether the
+// current user is the plan's Owner.
 func (app *App) invitesAndOwnerStatus(planID uuid.UUID, user *domain.User) ([]*domain.PlanInvite, bool) {
-	invites, err := app.Store.GetInvitesForPlan(planID)
+	invites, err := app.InviteSvc.GetInvitesForPlan(planID)
 	if err != nil {
 		log.Printf("Failed to load invites for plan %s: %v", planID, err)
 		invites = nil
@@ -227,7 +260,7 @@ func (app *App) invitesAndOwnerStatus(planID uuid.UUID, user *domain.User) ([]*d
 
 	isOwner := false
 	if user != nil {
-		if access, err := app.Store.GetAccess(planID, user.ID()); err == nil {
+		if access, err := app.AccessSvc.GetAccess(planID, user.ID()); err == nil {
 			isOwner = access.AccessLevel == domain.Owner
 		}
 	}
@@ -243,13 +276,13 @@ func (app *App) GetIncomeStatement() http.HandlerFunc {
 			return
 		}
 
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		page := views.BuildIncomeStatementPage(r, GetUserFromContext(r), plan, app.hubCompletion(planID))
+		page := views.BuildIncomeStatementPage(r, GetUserFromContext(r), plan, toViewsHubCompletion(app.HubSvc.Get(planID)))
 		views.RenderIncomeStatementPage(w, app.TemplateCache, page)
 	}
 }
@@ -262,13 +295,13 @@ func (app *App) GetBalanceSheet() http.HandlerFunc {
 			return
 		}
 
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		page := views.BuildBalanceSheetPage(r, GetUserFromContext(r), plan, app.hubCompletion(planID))
+		page := views.BuildBalanceSheetPage(r, GetUserFromContext(r), plan, toViewsHubCompletion(app.HubSvc.Get(planID)))
 		views.RenderBalanceSheetPage(w, app.TemplateCache, page)
 	}
 }
@@ -281,13 +314,13 @@ func (app *App) GetAnalytics() http.HandlerFunc {
 			return
 		}
 
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		page := views.BuildAnalyticsPage(r, GetUserFromContext(r), plan, app.hubCompletion(planID))
+		page := views.BuildAnalyticsPage(r, GetUserFromContext(r), plan, toViewsHubCompletion(app.HubSvc.Get(planID)))
 		views.RenderAnalyticsPage(w, app.TemplateCache, page)
 	}
 }
@@ -301,8 +334,8 @@ func (app *App) PostDeletePlan() http.HandlerFunc {
 			return
 		}
 
-		if err := app.Store.Delete(id); err != nil {
-			log.Printf("Store Delete Error: %v", err)
+		if err := app.PlanSvc.Delete(id); err != nil {
+			log.Printf("PlanSvc Delete Error: %v", err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to delete plan")
 			return
 		}

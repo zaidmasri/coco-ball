@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
 // loadOperatingExpensesInto populates a Plan's Operating Expenses field
@@ -27,7 +28,7 @@ func (s *SQLiteStore) loadOperatingExpensesInto(plan *domain.Plan) error {
 	return nil
 }
 
-func scanOperatingExpenseItem(row rowScanner) (*OperatingExpenseItem, error) {
+func scanOperatingExpenseItem(row rowScanner) (*repositories.OperatingExpenseItem, error) {
 	var idStr, name, growthType, status string
 	var monthlyAmount int64
 	var annualRate float64
@@ -42,7 +43,7 @@ func scanOperatingExpenseItem(row rowScanner) (*OperatingExpenseItem, error) {
 		return nil, fmt.Errorf("invalid operating expense id: %w", err)
 	}
 
-	return &OperatingExpenseItem{
+	return &repositories.OperatingExpenseItem{
 		ID: id,
 		Cost: domain.Cost{
 			Name:               name,
@@ -52,7 +53,7 @@ func scanOperatingExpenseItem(row rowScanner) (*OperatingExpenseItem, error) {
 				AnnualRate: annualRate,
 			},
 		},
-		Status:      ItemStatus(status),
+		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
 	}, nil
 }
@@ -81,7 +82,7 @@ func (s *SQLiteStore) CreateOperatingExpenseDraft(planID uuid.UUID) (uuid.UUID, 
 	if _, err := s.db.Exec(
 		`INSERT INTO operating_expenses (id, plan_id, status, current_step, sort_order, created_at, updated_at)
 		 VALUES (?, ?, ?, 0, ?, ?, ?)`,
-		id.String(), planID.String(), string(StatusDraft), sortOrder, now, now,
+		id.String(), planID.String(), string(repositories.StatusDraft), sortOrder, now, now,
 	); err != nil {
 		return uuid.Nil, fmt.Errorf("failed to create operating expense draft: %w", err)
 	}
@@ -90,10 +91,10 @@ func (s *SQLiteStore) CreateOperatingExpenseDraft(planID uuid.UUID) (uuid.UUID, 
 
 // GetOperatingExpenseDraft returns the plan's in-progress Operating
 // Expense draft, if any, without creating one.
-func (s *SQLiteStore) GetOperatingExpenseDraft(planID uuid.UUID) (*OperatingExpenseItem, error) {
+func (s *SQLiteStore) GetOperatingExpenseDraft(planID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE plan_id = ? AND status = ? LIMIT 1",
-		planID.String(), string(StatusDraft),
+		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanOperatingExpenseItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -107,7 +108,7 @@ func (s *SQLiteStore) GetOperatingExpenseDraft(planID uuid.UUID) (*OperatingExpe
 
 // GetOperatingExpense retrieves a single Operating Expense wizard item by
 // its own ID.
-func (s *SQLiteStore) GetOperatingExpense(itemID uuid.UUID) (*OperatingExpenseItem, error) {
+func (s *SQLiteStore) GetOperatingExpense(itemID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE id = ?",
 		itemID.String(),
@@ -124,7 +125,7 @@ func (s *SQLiteStore) GetOperatingExpense(itemID uuid.UUID) (*OperatingExpenseIt
 
 // SaveOperatingExpenseStep persists the wizard's current answer for an
 // Operating Expense item, advancing its step/status.
-func (s *SQLiteStore) SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status ItemStatus) error {
+func (s *SQLiteStore) SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status repositories.ItemStatus) error {
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE operating_expenses SET name=?, monthly_amount=?, growth_type=?, annual_rate=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
@@ -138,17 +139,17 @@ func (s *SQLiteStore) SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cos
 
 // ListCompleteOperatingExpenses returns every finished Operating Expense
 // for a plan, in the order they were added.
-func (s *SQLiteStore) ListCompleteOperatingExpenses(planID uuid.UUID) ([]OperatingExpenseItem, error) {
+func (s *SQLiteStore) ListCompleteOperatingExpenses(planID uuid.UUID) ([]repositories.OperatingExpenseItem, error) {
 	rows, err := s.db.Query(
 		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
-		planID.String(), string(StatusComplete),
+		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query operating expenses: %w", err)
 	}
 	defer rows.Close()
 
-	var items []OperatingExpenseItem
+	var items []repositories.OperatingExpenseItem
 	for rows.Next() {
 		item, err := scanOperatingExpenseItem(rows)
 		if err != nil {

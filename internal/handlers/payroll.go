@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
-	"github.com/zaidmasri/business-planning-tool/internal/store"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
@@ -26,7 +26,7 @@ var (
 // for planID. Used to drive the sidebar's Payroll nav icon, which is
 // shown on every page, not just Payroll's own.
 func (app *App) payrollComplete(planID uuid.UUID) bool {
-	status, err := app.Store.GetWizardSectionStatus(planID, domain.HubPayroll)
+	status, err := app.PayrollSvc.GetHubStatus(planID)
 	if err != nil {
 		log.Printf("Failed to load payroll section status for plan %s: %v", planID, err)
 		return false
@@ -52,7 +52,7 @@ func (app *App) GetPayrollSectionIntro() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -78,23 +78,23 @@ func (app *App) GetPayrollSummary() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubPayroll)
+		sectionStatus, err := app.PayrollSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load payroll section status for plan %s: %v", planID, err)
 			sectionStatus = map[string]bool{}
 		}
 
-		salaryRoles, err := app.Store.ListCompleteSalaryRoles(planID)
+		salaryRoles, err := app.PayrollSvc.ListCompleteSalaryRoles(planID)
 		if err != nil {
 			log.Printf("Failed to load salary roles for plan %s: %v", planID, err)
 		}
-		benefits, err := app.Store.ListCompleteBenefits(planID)
+		benefits, err := app.PayrollSvc.ListCompleteBenefits(planID)
 		if err != nil {
 			log.Printf("Failed to load benefits for plan %s: %v", planID, err)
 		}
@@ -115,13 +115,13 @@ func (app *App) GetSalaryRoleList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteSalaryRoles(planID)
+		completeItems, err := app.PayrollSvc.ListCompleteSalaryRoles(planID)
 		if err != nil {
 			log.Printf("Failed to load salary roles for plan %s: %v", planID, err)
 		}
@@ -130,14 +130,14 @@ func (app *App) GetSalaryRoleList() http.HandlerFunc {
 			items[i] = views.SalaryRoleItem{ID: it.ID, Role: it.Role}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubPayroll)
+		sectionStatus, err := app.PayrollSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load payroll section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetSalaryRoleDraft(planID); err != nil {
+		if draft, err := app.PayrollSvc.GetSalaryRoleDraft(planID); err != nil {
 			log.Printf("Failed to load salary role draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -163,7 +163,7 @@ func (app *App) PostSalaryRoleNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateSalaryRoleDraft(planID)
+		itemID, err := app.PayrollSvc.CreateSalaryRoleDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create salary role draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new salary role. Please try again.")
@@ -183,7 +183,7 @@ func (app *App) GetSalaryRoleStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -200,7 +200,7 @@ func (app *App) GetSalaryRoleStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetSalaryRole(itemID)
+		item, err := app.PayrollSvc.GetSalaryRole(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -229,7 +229,7 @@ func (app *App) PostSalaryRoleStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -246,13 +246,13 @@ func (app *App) PostSalaryRoleStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetSalaryRole(itemID)
+		item, err := app.PayrollSvc.GetSalaryRole(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		role := item.Role
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -311,14 +311,14 @@ func (app *App) PostSalaryRoleStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 			newCurrentStep = len(salaryRoleSteps)
 		}
 
-		if err := app.Store.SaveSalaryRoleStep(itemID, role, newCurrentStep, newStatus); err != nil {
+		if err := app.PayrollSvc.SaveSalaryRoleStep(itemID, role, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save salary role step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -352,7 +352,7 @@ func (app *App) PostSalaryRoleDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteSalaryRole(itemID); err != nil {
+		if err := app.PayrollSvc.DeleteSalaryRole(itemID); err != nil {
 			log.Printf("Failed to delete salary role %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.PayrollSectionListURL(planID, domain.SectionSalaryRoles), http.StatusSeeOther)
@@ -367,7 +367,7 @@ func (app *App) PostSalaryRoleFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubPayroll, domain.SectionSalaryRoles); err != nil {
+		if err := app.PayrollSvc.MarkWizardSectionComplete(planID, domain.SectionSalaryRoles); err != nil {
 			log.Printf("Failed to mark salary roles complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.PayrollSummaryURL(planID), http.StatusSeeOther)
@@ -385,13 +385,13 @@ func (app *App) GetBenefitList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteBenefits(planID)
+		completeItems, err := app.PayrollSvc.ListCompleteBenefits(planID)
 		if err != nil {
 			log.Printf("Failed to load benefits for plan %s: %v", planID, err)
 		}
@@ -400,14 +400,14 @@ func (app *App) GetBenefitList() http.HandlerFunc {
 			items[i] = views.BenefitItem{ID: it.ID, Benefit: it.Benefit}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubPayroll)
+		sectionStatus, err := app.PayrollSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load payroll section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetBenefitDraft(planID); err != nil {
+		if draft, err := app.PayrollSvc.GetBenefitDraft(planID); err != nil {
 			log.Printf("Failed to load benefit draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -433,7 +433,7 @@ func (app *App) PostBenefitNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateBenefitDraft(planID)
+		itemID, err := app.PayrollSvc.CreateBenefitDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create benefit draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new benefit. Please try again.")
@@ -453,7 +453,7 @@ func (app *App) GetBenefitStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -470,7 +470,7 @@ func (app *App) GetBenefitStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetBenefit(itemID)
+		item, err := app.PayrollSvc.GetBenefit(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -499,7 +499,7 @@ func (app *App) PostBenefitStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -516,13 +516,13 @@ func (app *App) PostBenefitStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetBenefit(itemID)
+		item, err := app.PayrollSvc.GetBenefit(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		benefit := item.Benefit
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -572,14 +572,14 @@ func (app *App) PostBenefitStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 			newCurrentStep = len(benefitSteps)
 		}
 
-		if err := app.Store.SaveBenefitStep(itemID, benefit, newCurrentStep, newStatus); err != nil {
+		if err := app.PayrollSvc.SaveBenefitStep(itemID, benefit, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save benefit step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -613,7 +613,7 @@ func (app *App) PostBenefitDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteBenefit(itemID); err != nil {
+		if err := app.PayrollSvc.DeleteBenefit(itemID); err != nil {
 			log.Printf("Failed to delete benefit %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.PayrollSectionListURL(planID, domain.SectionBenefits), http.StatusSeeOther)
@@ -628,7 +628,7 @@ func (app *App) PostBenefitFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubPayroll, domain.SectionBenefits); err != nil {
+		if err := app.PayrollSvc.MarkWizardSectionComplete(planID, domain.SectionBenefits); err != nil {
 			log.Printf("Failed to mark benefits complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.PayrollSummaryURL(planID), http.StatusSeeOther)
@@ -648,14 +648,14 @@ func (app *App) GetPayrollTaxRatesEntry() http.HandlerFunc {
 			return
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubPayroll)
+		sectionStatus, err := app.PayrollSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load payroll section status for plan %s: %v", planID, err)
 		}
 
 		step := payrollTaxRateSteps[0]
 		if !sectionStatus[domain.SectionPayrollTaxRates] {
-			if row, err := app.Store.GetPayrollTaxRatesRow(planID); err != nil {
+			if row, err := app.PayrollSvc.GetPayrollTaxRatesRow(planID); err != nil {
 				log.Printf("Failed to load payroll tax rates for plan %s: %v", planID, err)
 			} else if row.CurrentStep > 0 && row.CurrentStep < len(payrollTaxRateSteps) {
 				step = payrollTaxRateSteps[row.CurrentStep]
@@ -675,7 +675,7 @@ func (app *App) GetPayrollTaxRatesStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -687,10 +687,10 @@ func (app *App) GetPayrollTaxRatesStep() http.HandlerFunc {
 			return
 		}
 
-		row, err := app.Store.GetPayrollTaxRatesRow(planID)
+		row, err := app.PayrollSvc.GetPayrollTaxRatesRow(planID)
 		if err != nil {
 			log.Printf("Failed to load payroll tax rates for plan %s: %v", planID, err)
-			row = &store.PayrollTaxRatesRow{}
+			row = &repositories.PayrollTaxRatesRow{}
 		}
 
 		backURL := ""
@@ -726,7 +726,7 @@ func (app *App) PostPayrollTaxRatesStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -738,10 +738,10 @@ func (app *App) PostPayrollTaxRatesStep() http.HandlerFunc {
 			return
 		}
 
-		row, err := app.Store.GetPayrollTaxRatesRow(planID)
+		row, err := app.PayrollSvc.GetPayrollTaxRatesRow(planID)
 		if err != nil {
 			log.Printf("Failed to load payroll tax rates for plan %s: %v", planID, err)
-			row = &store.PayrollTaxRatesRow{}
+			row = &repositories.PayrollTaxRatesRow{}
 		}
 		rates := row.Rates
 
@@ -772,7 +772,7 @@ func (app *App) PostPayrollTaxRatesStep() http.HandlerFunc {
 		}
 
 		newCurrentStep := idx + 1
-		if err := app.Store.SavePayrollTaxRatesStep(planID, rates, newCurrentStep); err != nil {
+		if err := app.PayrollSvc.SavePayrollTaxRatesStep(planID, rates, newCurrentStep); err != nil {
 			log.Printf("Failed to save payroll tax rates step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -785,7 +785,7 @@ func (app *App) PostPayrollTaxRatesStep() http.HandlerFunc {
 
 		// Last step: Payroll Tax Rates isn't repeatable, so finishing it
 		// marks the section complete directly and returns to the summary.
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubPayroll, domain.SectionPayrollTaxRates); err != nil {
+		if err := app.PayrollSvc.MarkWizardSectionComplete(planID, domain.SectionPayrollTaxRates); err != nil {
 			log.Printf("Failed to mark payroll tax rates complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.PayrollSummaryURL(planID), http.StatusSeeOther)

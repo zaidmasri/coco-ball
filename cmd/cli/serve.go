@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	appservices "github.com/zaidmasri/business-planning-tool/internal/application/services"
 	"github.com/zaidmasri/business-planning-tool/internal/handlers"
 	"github.com/zaidmasri/business-planning-tool/internal/middleware"
 	"github.com/zaidmasri/business-planning-tool/internal/store"
@@ -15,18 +16,32 @@ import (
 )
 
 func serve(dbPath, port string) {
-	// Initialize the database store
+	// Infrastructure: SQLiteStore satisfies all repository interfaces.
 	sqliteStore, err := store.NewSQLiteStore(dbPath)
 	if err != nil {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
 	defer sqliteStore.Close()
 
+	// Application services
+	planSvc := appservices.NewPlanService(sqliteStore)
+	authSvc := appservices.NewAuthService(sqliteStore, sqliteStore)
+	accessSvc := appservices.NewAccessService(sqliteStore)
+	inviteSvc := appservices.NewInviteService(sqliteStore)
+	startingPointSvc := appservices.NewStartingPointService(sqliteStore, sqliteStore, sqliteStore, sqliteStore, sqliteStore)
+	payrollSvc := appservices.NewPayrollService(sqliteStore, sqliteStore, sqliteStore, sqliteStore)
+	salesForecastSvc := appservices.NewSalesForecastService(sqliteStore, sqliteStore, sqliteStore)
+	cashFlowSvc := appservices.NewCashFlowService(sqliteStore, sqliteStore, sqliteStore)
+	opExSvc := appservices.NewOperatingExpensesService(sqliteStore, sqliteStore)
+	hubSvc := appservices.NewHubCompletionService(startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc)
+
 	// Load templates
 	templateCache := loadTemplates()
 
-	// Initialize the handlers application struct with our dependencies
-	app := handlers.NewApp(sqliteStore, templateCache)
+	// HTTP layer
+	app := handlers.NewApp(planSvc, authSvc, accessSvc, inviteSvc,
+		startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc, hubSvc,
+		templateCache)
 
 	mux := http.NewServeMux()
 

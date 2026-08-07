@@ -195,7 +195,7 @@ func (c CapitalAsset) UsefulLifeYears() int {
 	return c.UsefulLifeMonths / 12
 }
 
-// The form takes 5.5%, but the domain stores 0.055. This converts it back for the form.
+// InterestRatePercent handles the form which takes 5.5%, but the domain stores 0.055. This converts it back for the form.
 func (f FundingSource) InterestRatePercent() float64 {
 	return f.InterestRate * 100
 }

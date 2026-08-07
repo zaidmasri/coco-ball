@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
 // rowScanner is satisfied by both *sql.Row and *sql.Rows, letting a single
@@ -62,7 +63,7 @@ func (s *SQLiteStore) loadStartingPointInto(plan *domain.Plan) error {
 
 // --- Fixed Assets ---
 
-func scanCapitalAssetItem(row rowScanner) (*CapitalAssetItem, error) {
+func scanCapitalAssetItem(row rowScanner) (*repositories.CapitalAssetItem, error) {
 	var idStr, name, deprMethod, status string
 	var purchaseCost, salvageValue int64
 	var usefulLifeMonths, purchaseMonthIndex, currentStep int
@@ -76,7 +77,7 @@ func scanCapitalAssetItem(row rowScanner) (*CapitalAssetItem, error) {
 		return nil, fmt.Errorf("invalid capital asset id: %w", err)
 	}
 
-	return &CapitalAssetItem{
+	return &repositories.CapitalAssetItem{
 		ID: id,
 		Asset: domain.CapitalAsset{
 			Name:               name,
@@ -86,7 +87,7 @@ func scanCapitalAssetItem(row rowScanner) (*CapitalAssetItem, error) {
 			PurchaseMonthIndex: domain.MonthIndex(purchaseMonthIndex),
 			DepreciationMethod: domain.DepreciationMethod(deprMethod),
 		},
-		Status:      ItemStatus(status),
+		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
 	}, nil
 }
@@ -115,7 +116,7 @@ func (s *SQLiteStore) CreateCapitalAssetDraft(planID uuid.UUID) (uuid.UUID, erro
 	if _, err := s.db.Exec(
 		`INSERT INTO capital_assets (id, plan_id, status, current_step, sort_order, created_at, updated_at)
 		 VALUES (?, ?, ?, 0, ?, ?, ?)`,
-		id.String(), planID.String(), string(StatusDraft), sortOrder, now, now,
+		id.String(), planID.String(), string(repositories.StatusDraft), sortOrder, now, now,
 	); err != nil {
 		return uuid.Nil, fmt.Errorf("failed to create capital asset draft: %w", err)
 	}
@@ -124,10 +125,10 @@ func (s *SQLiteStore) CreateCapitalAssetDraft(planID uuid.UUID) (uuid.UUID, erro
 
 // GetCapitalAssetDraft returns the plan's in-progress Fixed Asset draft, if
 // any, without creating one. Returns (nil, nil) when there is none.
-func (s *SQLiteStore) GetCapitalAssetDraft(planID uuid.UUID) (*CapitalAssetItem, error) {
+func (s *SQLiteStore) GetCapitalAssetDraft(planID uuid.UUID) (*repositories.CapitalAssetItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE plan_id = ? AND status = ? LIMIT 1",
-		planID.String(), string(StatusDraft),
+		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanCapitalAssetItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -140,7 +141,7 @@ func (s *SQLiteStore) GetCapitalAssetDraft(planID uuid.UUID) (*CapitalAssetItem,
 }
 
 // GetCapitalAsset retrieves a single Fixed Asset wizard item by its own ID.
-func (s *SQLiteStore) GetCapitalAsset(itemID uuid.UUID) (*CapitalAssetItem, error) {
+func (s *SQLiteStore) GetCapitalAsset(itemID uuid.UUID) (*repositories.CapitalAssetItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE id = ?",
 		itemID.String(),
@@ -157,7 +158,7 @@ func (s *SQLiteStore) GetCapitalAsset(itemID uuid.UUID) (*CapitalAssetItem, erro
 
 // SaveCapitalAssetStep persists the wizard's current answer for a Fixed
 // Asset item, advancing its step/status.
-func (s *SQLiteStore) SaveCapitalAssetStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int, status ItemStatus) error {
+func (s *SQLiteStore) SaveCapitalAssetStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int, status repositories.ItemStatus) error {
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE capital_assets
@@ -174,17 +175,17 @@ func (s *SQLiteStore) SaveCapitalAssetStep(itemID uuid.UUID, asset domain.Capita
 
 // ListCompleteCapitalAssets returns every finished Fixed Asset for a plan,
 // in the order they were added.
-func (s *SQLiteStore) ListCompleteCapitalAssets(planID uuid.UUID) ([]CapitalAssetItem, error) {
+func (s *SQLiteStore) ListCompleteCapitalAssets(planID uuid.UUID) ([]repositories.CapitalAssetItem, error) {
 	rows, err := s.db.Query(
 		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
-		planID.String(), string(StatusComplete),
+		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query capital assets: %w", err)
 	}
 	defer rows.Close()
 
-	var items []CapitalAssetItem
+	var items []repositories.CapitalAssetItem
 	for rows.Next() {
 		item, err := scanCapitalAssetItem(rows)
 		if err != nil {
@@ -209,7 +210,7 @@ func (s *SQLiteStore) DeleteCapitalAsset(itemID uuid.UUID) error {
 
 // --- Startup Costs ---
 
-func scanStartupCostItem(row rowScanner) (*StartupCostItem, error) {
+func scanStartupCostItem(row rowScanner) (*repositories.StartupCostItem, error) {
 	var idStr, name, status string
 	var amount int64
 	var currentStep int
@@ -223,10 +224,10 @@ func scanStartupCostItem(row rowScanner) (*StartupCostItem, error) {
 		return nil, fmt.Errorf("invalid startup cost id: %w", err)
 	}
 
-	return &StartupCostItem{
+	return &repositories.StartupCostItem{
 		ID:          id,
 		Cost:        domain.StartupCost{Name: name, Amount: domain.Money(amount)},
-		Status:      ItemStatus(status),
+		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
 	}, nil
 }
@@ -254,7 +255,7 @@ func (s *SQLiteStore) CreateStartupCostDraft(planID uuid.UUID) (uuid.UUID, error
 	if _, err := s.db.Exec(
 		`INSERT INTO startup_costs (id, plan_id, status, current_step, sort_order, created_at, updated_at)
 		 VALUES (?, ?, ?, 0, ?, ?, ?)`,
-		id.String(), planID.String(), string(StatusDraft), sortOrder, now, now,
+		id.String(), planID.String(), string(repositories.StatusDraft), sortOrder, now, now,
 	); err != nil {
 		return uuid.Nil, fmt.Errorf("failed to create startup cost draft: %w", err)
 	}
@@ -263,10 +264,10 @@ func (s *SQLiteStore) CreateStartupCostDraft(planID uuid.UUID) (uuid.UUID, error
 
 // GetStartupCostDraft returns the plan's in-progress Startup Cost draft, if
 // any, without creating one.
-func (s *SQLiteStore) GetStartupCostDraft(planID uuid.UUID) (*StartupCostItem, error) {
+func (s *SQLiteStore) GetStartupCostDraft(planID uuid.UUID) (*repositories.StartupCostItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+startupCostColumns+" FROM startup_costs WHERE plan_id = ? AND status = ? LIMIT 1",
-		planID.String(), string(StatusDraft),
+		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanStartupCostItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -279,7 +280,7 @@ func (s *SQLiteStore) GetStartupCostDraft(planID uuid.UUID) (*StartupCostItem, e
 }
 
 // GetStartupCost retrieves a single Startup Cost wizard item by its own ID.
-func (s *SQLiteStore) GetStartupCost(itemID uuid.UUID) (*StartupCostItem, error) {
+func (s *SQLiteStore) GetStartupCost(itemID uuid.UUID) (*repositories.StartupCostItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+startupCostColumns+" FROM startup_costs WHERE id = ?",
 		itemID.String(),
@@ -296,7 +297,7 @@ func (s *SQLiteStore) GetStartupCost(itemID uuid.UUID) (*StartupCostItem, error)
 
 // SaveStartupCostStep persists the wizard's current answer for a Startup
 // Cost item, advancing its step/status.
-func (s *SQLiteStore) SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int, status ItemStatus) error {
+func (s *SQLiteStore) SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int, status repositories.ItemStatus) error {
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE startup_costs SET name=?, amount=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
@@ -310,17 +311,17 @@ func (s *SQLiteStore) SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupC
 
 // ListCompleteStartupCosts returns every finished Startup Cost for a plan,
 // in the order they were added.
-func (s *SQLiteStore) ListCompleteStartupCosts(planID uuid.UUID) ([]StartupCostItem, error) {
+func (s *SQLiteStore) ListCompleteStartupCosts(planID uuid.UUID) ([]repositories.StartupCostItem, error) {
 	rows, err := s.db.Query(
 		"SELECT "+startupCostColumns+" FROM startup_costs WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
-		planID.String(), string(StatusComplete),
+		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query startup costs: %w", err)
 	}
 	defer rows.Close()
 
-	var items []StartupCostItem
+	var items []repositories.StartupCostItem
 	for rows.Next() {
 		item, err := scanStartupCostItem(rows)
 		if err != nil {
@@ -345,7 +346,7 @@ func (s *SQLiteStore) DeleteStartupCost(itemID uuid.UUID) error {
 
 // --- Funding Sources ---
 
-func scanFundingSourceItem(row rowScanner) (*FundingSourceItem, error) {
+func scanFundingSourceItem(row rowScanner) (*repositories.FundingSourceItem, error) {
 	var idStr, name, status string
 	var amount int64
 	var interestRate float64
@@ -360,7 +361,7 @@ func scanFundingSourceItem(row rowScanner) (*FundingSourceItem, error) {
 		return nil, fmt.Errorf("invalid funding source id: %w", err)
 	}
 
-	return &FundingSourceItem{
+	return &repositories.FundingSourceItem{
 		ID: id,
 		Funding: domain.FundingSource{
 			Name:         name,
@@ -368,7 +369,7 @@ func scanFundingSourceItem(row rowScanner) (*FundingSourceItem, error) {
 			InterestRate: interestRate,
 			TermMonths:   termMonths,
 		},
-		Status:      ItemStatus(status),
+		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
 	}, nil
 }
@@ -396,7 +397,7 @@ func (s *SQLiteStore) CreateFundingSourceDraft(planID uuid.UUID) (uuid.UUID, err
 	if _, err := s.db.Exec(
 		`INSERT INTO funding_sources (id, plan_id, status, current_step, sort_order, created_at, updated_at)
 		 VALUES (?, ?, ?, 0, ?, ?, ?)`,
-		id.String(), planID.String(), string(StatusDraft), sortOrder, now, now,
+		id.String(), planID.String(), string(repositories.StatusDraft), sortOrder, now, now,
 	); err != nil {
 		return uuid.Nil, fmt.Errorf("failed to create funding source draft: %w", err)
 	}
@@ -405,10 +406,10 @@ func (s *SQLiteStore) CreateFundingSourceDraft(planID uuid.UUID) (uuid.UUID, err
 
 // GetFundingSourceDraft returns the plan's in-progress Funding Source
 // draft, if any, without creating one.
-func (s *SQLiteStore) GetFundingSourceDraft(planID uuid.UUID) (*FundingSourceItem, error) {
+func (s *SQLiteStore) GetFundingSourceDraft(planID uuid.UUID) (*repositories.FundingSourceItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE plan_id = ? AND status = ? LIMIT 1",
-		planID.String(), string(StatusDraft),
+		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanFundingSourceItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -422,7 +423,7 @@ func (s *SQLiteStore) GetFundingSourceDraft(planID uuid.UUID) (*FundingSourceIte
 
 // GetFundingSource retrieves a single Funding Source wizard item by its own
 // ID.
-func (s *SQLiteStore) GetFundingSource(itemID uuid.UUID) (*FundingSourceItem, error) {
+func (s *SQLiteStore) GetFundingSource(itemID uuid.UUID) (*repositories.FundingSourceItem, error) {
 	row := s.db.QueryRow(
 		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE id = ?",
 		itemID.String(),
@@ -439,7 +440,7 @@ func (s *SQLiteStore) GetFundingSource(itemID uuid.UUID) (*FundingSourceItem, er
 
 // SaveFundingSourceStep persists the wizard's current answer for a Funding
 // Source item, advancing its step/status.
-func (s *SQLiteStore) SaveFundingSourceStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int, status ItemStatus) error {
+func (s *SQLiteStore) SaveFundingSourceStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int, status repositories.ItemStatus) error {
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE funding_sources SET name=?, amount=?, interest_rate=?, term_months=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
@@ -453,17 +454,17 @@ func (s *SQLiteStore) SaveFundingSourceStep(itemID uuid.UUID, funding domain.Fun
 
 // ListCompleteFundingSources returns every finished Funding Source for a
 // plan, in the order they were added.
-func (s *SQLiteStore) ListCompleteFundingSources(planID uuid.UUID) ([]FundingSourceItem, error) {
+func (s *SQLiteStore) ListCompleteFundingSources(planID uuid.UUID) ([]repositories.FundingSourceItem, error) {
 	rows, err := s.db.Query(
 		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
-		planID.String(), string(StatusComplete),
+		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query funding sources: %w", err)
 	}
 	defer rows.Close()
 
-	var items []FundingSourceItem
+	var items []repositories.FundingSourceItem
 	for rows.Next() {
 		item, err := scanFundingSourceItem(rows)
 		if err != nil {
@@ -493,7 +494,7 @@ func (s *SQLiteStore) DeleteFundingSource(itemID uuid.UUID) error {
 // returns a zero-value StartingBalancesRow (CurrentStep 0) rather than
 // creating one, since reads shouldn't have write side effects - the first
 // SaveStartingBalancesStep call creates the row via upsert.
-func (s *SQLiteStore) GetStartingBalancesRow(planID uuid.UUID) (*StartingBalancesRow, error) {
+func (s *SQLiteStore) GetStartingBalancesRow(planID uuid.UUID) (*repositories.StartingBalancesRow, error) {
 	var cash, ar, pe, ap, ae int64
 	var currentStep int
 
@@ -504,13 +505,13 @@ func (s *SQLiteStore) GetStartingBalancesRow(planID uuid.UUID) (*StartingBalance
 	).Scan(&cash, &ar, &pe, &ap, &ae, &currentStep)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		return &StartingBalancesRow{Balances: domain.StartingBalances{}, CurrentStep: 0}, nil
+		return &repositories.StartingBalancesRow{Balances: domain.StartingBalances{}, CurrentStep: 0}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query starting balances: %w", err)
 	}
 
-	return &StartingBalancesRow{
+	return &repositories.StartingBalancesRow{
 		Balances: domain.StartingBalances{
 			Cash:               domain.Money(cash),
 			AccountsReceivable: domain.Money(ar),

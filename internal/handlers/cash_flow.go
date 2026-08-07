@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
-	"github.com/zaidmasri/business-planning-tool/internal/store"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
@@ -24,7 +24,7 @@ var (
 // complete for planID. Used to drive the sidebar's Cash Flow nav icon,
 // which is shown on every page, not just Cash Flow's own.
 func (app *App) cashFlowComplete(planID uuid.UUID) bool {
-	status, err := app.Store.GetWizardSectionStatus(planID, domain.HubCashFlow)
+	status, err := app.CashFlowSvc.GetHubStatus(planID)
 	if err != nil {
 		log.Printf("Failed to load cash flow section status for plan %s: %v", planID, err)
 		return false
@@ -50,7 +50,7 @@ func (app *App) GetCashFlowSectionIntro() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -76,23 +76,23 @@ func (app *App) GetCashFlowSummary() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubCashFlow)
+		sectionStatus, err := app.CashFlowSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load cash flow section status for plan %s: %v", planID, err)
 			sectionStatus = map[string]bool{}
 		}
 
-		inventory, err := app.Store.ListCompleteInventoryPurchases(planID)
+		inventory, err := app.CashFlowSvc.ListCompleteInventoryPurchases(planID)
 		if err != nil {
 			log.Printf("Failed to load inventory purchases for plan %s: %v", planID, err)
 		}
-		distributions, err := app.Store.ListCompleteDistributions(planID)
+		distributions, err := app.CashFlowSvc.ListCompleteDistributions(planID)
 		if err != nil {
 			log.Printf("Failed to load distributions for plan %s: %v", planID, err)
 		}
@@ -113,13 +113,13 @@ func (app *App) GetInventoryPurchaseList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteInventoryPurchases(planID)
+		completeItems, err := app.CashFlowSvc.ListCompleteInventoryPurchases(planID)
 		if err != nil {
 			log.Printf("Failed to load inventory purchases for plan %s: %v", planID, err)
 		}
@@ -128,14 +128,14 @@ func (app *App) GetInventoryPurchaseList() http.HandlerFunc {
 			items[i] = views.InventoryPurchaseItem{ID: it.ID, Purchase: it.Purchase}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubCashFlow)
+		sectionStatus, err := app.CashFlowSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load cash flow section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetInventoryPurchaseDraft(planID); err != nil {
+		if draft, err := app.CashFlowSvc.GetInventoryPurchaseDraft(planID); err != nil {
 			log.Printf("Failed to load inventory purchase draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -161,7 +161,7 @@ func (app *App) PostInventoryPurchaseNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateInventoryPurchaseDraft(planID)
+		itemID, err := app.CashFlowSvc.CreateInventoryPurchaseDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create inventory purchase draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new inventory purchase. Please try again.")
@@ -181,7 +181,7 @@ func (app *App) GetInventoryPurchaseStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -198,7 +198,7 @@ func (app *App) GetInventoryPurchaseStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetInventoryPurchase(itemID)
+		item, err := app.CashFlowSvc.GetInventoryPurchase(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -227,7 +227,7 @@ func (app *App) PostInventoryPurchaseStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -244,13 +244,13 @@ func (app *App) PostInventoryPurchaseStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetInventoryPurchase(itemID)
+		item, err := app.CashFlowSvc.GetInventoryPurchase(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		purchase := item.Purchase
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -300,14 +300,14 @@ func (app *App) PostInventoryPurchaseStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 			newCurrentStep = len(inventoryPurchaseSteps)
 		}
 
-		if err := app.Store.SaveInventoryPurchaseStep(itemID, purchase, newCurrentStep, newStatus); err != nil {
+		if err := app.CashFlowSvc.SaveInventoryPurchaseStep(itemID, purchase, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save inventory purchase step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -341,7 +341,7 @@ func (app *App) PostInventoryPurchaseDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteInventoryPurchase(itemID); err != nil {
+		if err := app.CashFlowSvc.DeleteInventoryPurchase(itemID); err != nil {
 			log.Printf("Failed to delete inventory purchase %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.CashFlowSectionListURL(planID, domain.SectionInventoryPurchases), http.StatusSeeOther)
@@ -356,7 +356,7 @@ func (app *App) PostInventoryPurchaseFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubCashFlow, domain.SectionInventoryPurchases); err != nil {
+		if err := app.CashFlowSvc.MarkWizardSectionComplete(planID, domain.SectionInventoryPurchases); err != nil {
 			log.Printf("Failed to mark inventory purchases complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.CashFlowSummaryURL(planID), http.StatusSeeOther)
@@ -374,13 +374,13 @@ func (app *App) GetDistributionList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteDistributions(planID)
+		completeItems, err := app.CashFlowSvc.ListCompleteDistributions(planID)
 		if err != nil {
 			log.Printf("Failed to load distributions for plan %s: %v", planID, err)
 		}
@@ -389,14 +389,14 @@ func (app *App) GetDistributionList() http.HandlerFunc {
 			items[i] = views.DistributionItem{ID: it.ID, Distribution: it.Distribution}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubCashFlow)
+		sectionStatus, err := app.CashFlowSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load cash flow section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetDistributionDraft(planID); err != nil {
+		if draft, err := app.CashFlowSvc.GetDistributionDraft(planID); err != nil {
 			log.Printf("Failed to load distribution draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -422,7 +422,7 @@ func (app *App) PostDistributionNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateDistributionDraft(planID)
+		itemID, err := app.CashFlowSvc.CreateDistributionDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create distribution draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new distribution. Please try again.")
@@ -442,7 +442,7 @@ func (app *App) GetDistributionStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -459,7 +459,7 @@ func (app *App) GetDistributionStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetDistribution(itemID)
+		item, err := app.CashFlowSvc.GetDistribution(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -488,7 +488,7 @@ func (app *App) PostDistributionStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -505,13 +505,13 @@ func (app *App) PostDistributionStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetDistribution(itemID)
+		item, err := app.CashFlowSvc.GetDistribution(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		dist := item.Distribution
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -561,14 +561,14 @@ func (app *App) PostDistributionStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 			newCurrentStep = len(distributionSteps)
 		}
 
-		if err := app.Store.SaveDistributionStep(itemID, dist, newCurrentStep, newStatus); err != nil {
+		if err := app.CashFlowSvc.SaveDistributionStep(itemID, dist, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save distribution step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -602,7 +602,7 @@ func (app *App) PostDistributionDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteDistribution(itemID); err != nil {
+		if err := app.CashFlowSvc.DeleteDistribution(itemID); err != nil {
 			log.Printf("Failed to delete distribution %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.CashFlowSectionListURL(planID, domain.SectionDistributions), http.StatusSeeOther)
@@ -617,7 +617,7 @@ func (app *App) PostDistributionFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubCashFlow, domain.SectionDistributions); err != nil {
+		if err := app.CashFlowSvc.MarkWizardSectionComplete(planID, domain.SectionDistributions); err != nil {
 			log.Printf("Failed to mark distributions complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.CashFlowSummaryURL(planID), http.StatusSeeOther)

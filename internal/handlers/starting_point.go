@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/domain"
-	"github.com/zaidmasri/business-planning-tool/internal/store"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
@@ -32,12 +32,7 @@ var (
 // complete for planID. Used to drive the sidebar's Starting Point nav icon,
 // which is shown on every page, not just Starting Point's own.
 func (app *App) startingPointComplete(planID uuid.UUID) bool {
-	status, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
-	if err != nil {
-		log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
-		return false
-	}
-	return views.IsStartingPointComplete(status)
+	return app.HubSvc.Get(planID).StartingPoint
 }
 
 func stepIndex(steps []string, current string) int {
@@ -109,7 +104,7 @@ func (app *App) GetStartingPointSectionIntro() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -136,27 +131,27 @@ func (app *App) GetStartingPointSummary() http.HandlerFunc {
 			return
 		}
 
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that business plan. It may have been deleted, or you might be using an old link.")
 			return
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
+		sectionStatus, err := app.StartingPointSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 			sectionStatus = map[string]bool{}
 		}
 
-		fixedAssets, err := app.Store.ListCompleteCapitalAssets(planID)
+		fixedAssets, err := app.StartingPointSvc.ListCompleteCapitalAssets(planID)
 		if err != nil {
 			log.Printf("Failed to load capital assets for plan %s: %v", planID, err)
 		}
-		startupCosts, err := app.Store.ListCompleteStartupCosts(planID)
+		startupCosts, err := app.StartingPointSvc.ListCompleteStartupCosts(planID)
 		if err != nil {
 			log.Printf("Failed to load startup costs for plan %s: %v", planID, err)
 		}
-		fundingSources, err := app.Store.ListCompleteFundingSources(planID)
+		fundingSources, err := app.StartingPointSvc.ListCompleteFundingSources(planID)
 		if err != nil {
 			log.Printf("Failed to load funding sources for plan %s: %v", planID, err)
 		}
@@ -177,13 +172,13 @@ func (app *App) GetFixedAssetList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteCapitalAssets(planID)
+		completeItems, err := app.StartingPointSvc.ListCompleteCapitalAssets(planID)
 		if err != nil {
 			log.Printf("Failed to load capital assets for plan %s: %v", planID, err)
 		}
@@ -192,14 +187,14 @@ func (app *App) GetFixedAssetList() http.HandlerFunc {
 			items[i] = views.StartingPointFixedAssetItem{ID: it.ID, Asset: it.Asset}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
+		sectionStatus, err := app.StartingPointSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetCapitalAssetDraft(planID); err != nil {
+		if draft, err := app.StartingPointSvc.GetCapitalAssetDraft(planID); err != nil {
 			log.Printf("Failed to load capital asset draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -227,7 +222,7 @@ func (app *App) PostFixedAssetNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateCapitalAssetDraft(planID)
+		itemID, err := app.StartingPointSvc.CreateCapitalAssetDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create capital asset draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new fixed asset. Please try again.")
@@ -247,7 +242,7 @@ func (app *App) GetFixedAssetStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -264,7 +259,7 @@ func (app *App) GetFixedAssetStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetCapitalAsset(itemID)
+		item, err := app.StartingPointSvc.GetCapitalAsset(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -293,7 +288,7 @@ func (app *App) PostFixedAssetStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -310,13 +305,13 @@ func (app *App) PostFixedAssetStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetCapitalAsset(itemID)
+		item, err := app.StartingPointSvc.GetCapitalAsset(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		asset := item.Asset
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -376,14 +371,14 @@ func (app *App) PostFixedAssetStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 			newCurrentStep = len(fixedAssetSteps)
 		}
 
-		if err := app.Store.SaveCapitalAssetStep(itemID, asset, newCurrentStep, newStatus); err != nil {
+		if err := app.StartingPointSvc.SaveCapitalAssetStep(itemID, asset, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save fixed asset step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -418,7 +413,7 @@ func (app *App) PostFixedAssetDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteCapitalAsset(itemID); err != nil {
+		if err := app.StartingPointSvc.DeleteCapitalAsset(itemID); err != nil {
 			log.Printf("Failed to delete capital asset %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.SectionListURL(planID, domain.SectionFixedAssets), http.StatusSeeOther)
@@ -433,7 +428,7 @@ func (app *App) PostFixedAssetFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubStartingPoint, domain.SectionFixedAssets); err != nil {
+		if err := app.StartingPointSvc.MarkWizardSectionComplete(planID, domain.SectionFixedAssets); err != nil {
 			log.Printf("Failed to mark fixed assets complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.StartingPointSummaryURL(planID), http.StatusSeeOther)
@@ -451,13 +446,13 @@ func (app *App) GetStartupCostList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteStartupCosts(planID)
+		completeItems, err := app.StartingPointSvc.ListCompleteStartupCosts(planID)
 		if err != nil {
 			log.Printf("Failed to load startup costs for plan %s: %v", planID, err)
 		}
@@ -466,14 +461,14 @@ func (app *App) GetStartupCostList() http.HandlerFunc {
 			items[i] = views.StartingPointStartupCostItem{ID: it.ID, Cost: it.Cost}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
+		sectionStatus, err := app.StartingPointSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetStartupCostDraft(planID); err != nil {
+		if draft, err := app.StartingPointSvc.GetStartupCostDraft(planID); err != nil {
 			log.Printf("Failed to load startup cost draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -499,7 +494,7 @@ func (app *App) PostStartupCostNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateStartupCostDraft(planID)
+		itemID, err := app.StartingPointSvc.CreateStartupCostDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create startup cost draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new startup cost. Please try again.")
@@ -519,7 +514,7 @@ func (app *App) GetStartupCostStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -536,7 +531,7 @@ func (app *App) GetStartupCostStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetStartupCost(itemID)
+		item, err := app.StartingPointSvc.GetStartupCost(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -565,7 +560,7 @@ func (app *App) PostStartupCostStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -582,13 +577,13 @@ func (app *App) PostStartupCostStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetStartupCost(itemID)
+		item, err := app.StartingPointSvc.GetStartupCost(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		cost := item.Cost
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -626,13 +621,13 @@ func (app *App) PostStartupCostStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 		}
 
-		if err := app.Store.SaveStartupCostStep(itemID, cost, newCurrentStep, newStatus); err != nil {
+		if err := app.StartingPointSvc.SaveStartupCostStep(itemID, cost, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save startup cost step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -666,7 +661,7 @@ func (app *App) PostStartupCostDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteStartupCost(itemID); err != nil {
+		if err := app.StartingPointSvc.DeleteStartupCost(itemID); err != nil {
 			log.Printf("Failed to delete startup cost %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.SectionListURL(planID, domain.SectionStartupCosts), http.StatusSeeOther)
@@ -681,7 +676,7 @@ func (app *App) PostStartupCostFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubStartingPoint, domain.SectionStartupCosts); err != nil {
+		if err := app.StartingPointSvc.MarkWizardSectionComplete(planID, domain.SectionStartupCosts); err != nil {
 			log.Printf("Failed to mark startup costs complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.StartingPointSummaryURL(planID), http.StatusSeeOther)
@@ -699,13 +694,13 @@ func (app *App) GetFundingSourceList() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
 		}
 
-		completeItems, err := app.Store.ListCompleteFundingSources(planID)
+		completeItems, err := app.StartingPointSvc.ListCompleteFundingSources(planID)
 		if err != nil {
 			log.Printf("Failed to load funding sources for plan %s: %v", planID, err)
 		}
@@ -714,14 +709,14 @@ func (app *App) GetFundingSourceList() http.HandlerFunc {
 			items[i] = views.StartingPointFundingSourceItem{ID: it.ID, Funding: it.Funding}
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
+		sectionStatus, err := app.StartingPointSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		}
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.Store.GetFundingSourceDraft(planID); err != nil {
+		if draft, err := app.StartingPointSvc.GetFundingSourceDraft(planID); err != nil {
 			log.Printf("Failed to load funding source draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -747,7 +742,7 @@ func (app *App) PostFundingSourceNew() http.HandlerFunc {
 			return
 		}
 
-		itemID, err := app.Store.CreateFundingSourceDraft(planID)
+		itemID, err := app.StartingPointSvc.CreateFundingSourceDraft(planID)
 		if err != nil {
 			log.Printf("Failed to create funding source draft for plan %s: %v", planID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to start a new funding source. Please try again.")
@@ -767,7 +762,7 @@ func (app *App) GetFundingSourceStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -784,7 +779,7 @@ func (app *App) GetFundingSourceStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetFundingSource(itemID)
+		item, err := app.StartingPointSvc.GetFundingSource(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
@@ -813,7 +808,7 @@ func (app *App) PostFundingSourceStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -830,13 +825,13 @@ func (app *App) PostFundingSourceStep() http.HandlerFunc {
 			return
 		}
 
-		item, err := app.Store.GetFundingSource(itemID)
+		item, err := app.StartingPointSvc.GetFundingSource(itemID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that item. It may have been deleted.")
 			return
 		}
 		funding := item.Funding
-		wasComplete := item.Status == store.StatusComplete
+		wasComplete := item.Status == repositories.StatusComplete
 
 		renderStepError := func(errMsg string) {
 			backURL := ""
@@ -888,13 +883,13 @@ func (app *App) PostFundingSourceStep() http.HandlerFunc {
 			}
 		}
 
-		newStatus := store.StatusDraft
+		newStatus := repositories.StatusDraft
 		newCurrentStep := idx + 1
 		if finishNow {
-			newStatus = store.StatusComplete
+			newStatus = repositories.StatusComplete
 		}
 
-		if err := app.Store.SaveFundingSourceStep(itemID, funding, newCurrentStep, newStatus); err != nil {
+		if err := app.StartingPointSvc.SaveFundingSourceStep(itemID, funding, newCurrentStep, newStatus); err != nil {
 			log.Printf("Failed to save funding source step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -928,7 +923,7 @@ func (app *App) PostFundingSourceDelete() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid item ID")
 			return
 		}
-		if err := app.Store.DeleteFundingSource(itemID); err != nil {
+		if err := app.StartingPointSvc.DeleteFundingSource(itemID); err != nil {
 			log.Printf("Failed to delete funding source %s: %v", itemID, err)
 		}
 		http.Redirect(w, r, views.SectionListURL(planID, domain.SectionFundingSources), http.StatusSeeOther)
@@ -943,7 +938,7 @@ func (app *App) PostFundingSourceFinish() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubStartingPoint, domain.SectionFundingSources); err != nil {
+		if err := app.StartingPointSvc.MarkWizardSectionComplete(planID, domain.SectionFundingSources); err != nil {
 			log.Printf("Failed to mark funding sources complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.StartingPointSummaryURL(planID), http.StatusSeeOther)
@@ -982,14 +977,14 @@ func (app *App) GetCashOnHandEntry() http.HandlerFunc {
 			return
 		}
 
-		sectionStatus, err := app.Store.GetWizardSectionStatus(planID, domain.HubStartingPoint)
+		sectionStatus, err := app.StartingPointSvc.GetHubStatus(planID)
 		if err != nil {
 			log.Printf("Failed to load starting point section status for plan %s: %v", planID, err)
 		}
 
 		step := cashOnHandSteps[0]
 		if !sectionStatus[domain.SectionCashOnHand] {
-			if row, err := app.Store.GetStartingBalancesRow(planID); err != nil {
+			if row, err := app.StartingPointSvc.GetStartingBalancesRow(planID); err != nil {
 				log.Printf("Failed to load starting balances for plan %s: %v", planID, err)
 			} else if row.CurrentStep > 0 && row.CurrentStep < len(cashOnHandSteps) {
 				step = cashOnHandSteps[row.CurrentStep]
@@ -1009,7 +1004,7 @@ func (app *App) GetCashOnHandStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -1021,10 +1016,10 @@ func (app *App) GetCashOnHandStep() http.HandlerFunc {
 			return
 		}
 
-		row, err := app.Store.GetStartingBalancesRow(planID)
+		row, err := app.StartingPointSvc.GetStartingBalancesRow(planID)
 		if err != nil {
 			log.Printf("Failed to load starting balances for plan %s: %v", planID, err)
-			row = &store.StartingBalancesRow{}
+			row = &repositories.StartingBalancesRow{}
 		}
 
 		backURL := ""
@@ -1050,7 +1045,7 @@ func (app *App) PostCashOnHandStep() http.HandlerFunc {
 			app.renderErrorPage(w, r, http.StatusBadRequest, "Invalid plan ID")
 			return
 		}
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -1062,10 +1057,10 @@ func (app *App) PostCashOnHandStep() http.HandlerFunc {
 			return
 		}
 
-		row, err := app.Store.GetStartingBalancesRow(planID)
+		row, err := app.StartingPointSvc.GetStartingBalancesRow(planID)
 		if err != nil {
 			log.Printf("Failed to load starting balances for plan %s: %v", planID, err)
-			row = &store.StartingBalancesRow{}
+			row = &repositories.StartingBalancesRow{}
 		}
 		balances := row.Balances
 
@@ -1086,7 +1081,7 @@ func (app *App) PostCashOnHandStep() http.HandlerFunc {
 		balances = cashOnHandFieldSet(balances, step, amount)
 
 		newCurrentStep := idx + 1
-		if err := app.Store.SaveStartingBalancesStep(planID, balances, newCurrentStep); err != nil {
+		if err := app.StartingPointSvc.SaveStartingBalancesStep(planID, balances, newCurrentStep); err != nil {
 			log.Printf("Failed to save starting balances step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return
@@ -1099,7 +1094,7 @@ func (app *App) PostCashOnHandStep() http.HandlerFunc {
 
 		// Last step: Cash on Hand isn't repeatable, so finishing it marks
 		// the section complete directly and returns to the summary page.
-		if err := app.Store.MarkWizardSectionComplete(planID, domain.HubStartingPoint, domain.SectionCashOnHand); err != nil {
+		if err := app.StartingPointSvc.MarkWizardSectionComplete(planID, domain.SectionCashOnHand); err != nil {
 			log.Printf("Failed to mark cash on hand complete for plan %s: %v", planID, err)
 		}
 		http.Redirect(w, r, views.StartingPointSummaryURL(planID), http.StatusSeeOther)

@@ -25,7 +25,7 @@ func (app *App) PostCreateInvite() http.HandlerFunc {
 			return
 		}
 
-		plan, err := app.Store.Get(planID)
+		plan, err := app.PlanSvc.Get(planID)
 		if err != nil {
 			app.renderErrorPage(w, r, http.StatusNotFound, "Plan not found")
 			return
@@ -55,7 +55,7 @@ func (app *App) PostCreateInvite() http.HandlerFunc {
 			return
 		}
 
-		if err := app.Store.CreateInvite(invite); err != nil {
+		if err := app.InviteSvc.CreateInvite(invite); err != nil {
 			log.Printf("Failed to create invite: %v", err)
 			renderError("An internal database error occurred. Please try again.", http.StatusInternalServerError)
 			return
@@ -80,13 +80,13 @@ func (app *App) PostAcceptInvite() http.HandlerFunc {
 			return
 		}
 
-		if err := app.Store.GrantAccess(invite.PlanID, user.ID(), invite.AccessLevel); err != nil {
+		if err := app.AccessSvc.GrantAccess(invite.PlanID, user.ID(), invite.AccessLevel); err != nil {
 			log.Printf("Failed to grant access from invite %s: %v", invite.ID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to accept invite. Please try again.")
 			return
 		}
 
-		if err := app.Store.UpdateInviteStatus(invite.ID, domain.InviteAccepted); err != nil {
+		if err := app.InviteSvc.UpdateInviteStatus(invite.ID, domain.InviteAccepted); err != nil {
 			log.Printf("Failed to update invite %s status: %v", invite.ID, err)
 		}
 
@@ -109,7 +109,7 @@ func (app *App) PostRejectInvite() http.HandlerFunc {
 			return
 		}
 
-		if err := app.Store.UpdateInviteStatus(invite.ID, domain.InviteRejected); err != nil {
+		if err := app.InviteSvc.UpdateInviteStatus(invite.ID, domain.InviteRejected); err != nil {
 			log.Printf("Failed to update invite %s status: %v", invite.ID, err)
 			app.renderErrorPage(w, r, http.StatusInternalServerError, "Failed to decline invite. Please try again.")
 			return
@@ -131,7 +131,7 @@ func (app *App) loadOwnPendingInvite(w http.ResponseWriter, r *http.Request, use
 		return nil, false
 	}
 
-	invite, err := app.Store.GetInvite(inviteID)
+	invite, err := app.InviteSvc.GetInvite(inviteID)
 	if err != nil {
 		app.renderErrorPage(w, r, http.StatusNotFound, "We couldn't find that invite. It may have already been responded to.")
 		return nil, false

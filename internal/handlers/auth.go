@@ -72,10 +72,10 @@ func (app *App) AuthMiddleware(next http.Handler) http.Handler {
 		cookie, err := r.Cookie(sessionCookieName)
 		if err == nil {
 			// Try to retrieve session
-			session, err := app.Store.GetSession(cookie.Value)
+			session, err := app.AuthSvc.GetSession(cookie.Value)
 			if err == nil {
 				// Session is valid, get user
-				user, err := app.Store.GetUser(session.UserID)
+				user, err := app.AuthSvc.GetUser(session.UserID)
 				if err == nil {
 					r = WithUserContext(r, user)
 					next.ServeHTTP(w, r)
@@ -115,7 +115,7 @@ func (app *App) RequireAccess(requiredLevel domain.AccessLevel) func(http.Handle
 			}
 
 			// Check if user has access to the plan
-			access, err := app.Store.GetAccess(planID, user.ID())
+			access, err := app.AccessSvc.GetAccess(planID, user.ID())
 			if err != nil {
 				page := views.BuildErrorPage(r, http.StatusForbidden, "You don't have access to this plan.")
 				views.RenderErrorPageWithStatus(w, app.TemplateCache, page, http.StatusForbidden)
@@ -171,7 +171,7 @@ func (app *App) PostLogin() http.HandlerFunc {
 		password := r.PostForm.Get("password")
 
 		// Get user with password
-		userCreds, err := app.Store.GetUserWithPassword(email)
+		userCreds, err := app.AuthSvc.GetUserWithPassword(email)
 		if err != nil {
 			// User not found or password error
 			page := views.BuildLoginPageWithError(email, "Invalid email or password")
@@ -194,7 +194,7 @@ func (app *App) PostLogin() http.HandlerFunc {
 			return
 		}
 
-		if err := app.Store.SaveSession(session); err != nil {
+		if err := app.AuthSvc.SaveSession(session); err != nil {
 			log.Printf("Failed to save session: %v", err)
 			http.Error(w, "Session save failed", http.StatusInternalServerError)
 			return
@@ -243,7 +243,7 @@ func (app *App) PostSignup() http.HandlerFunc {
 		}
 
 		// Check if user already exists
-		_, err := app.Store.GetUserWithPassword(email)
+		_, err := app.AuthSvc.GetUserWithPassword(email)
 		if err == nil {
 			// User exists
 			page := views.BuildSignupPageWithError(email, firstName, lastName, "Email already registered")
@@ -260,7 +260,7 @@ func (app *App) PostSignup() http.HandlerFunc {
 		}
 
 		// Save user
-		if err := app.Store.SaveUserWithPassword(userCreds); err != nil {
+		if err := app.AuthSvc.SaveUserWithPassword(userCreds); err != nil {
 			log.Printf("Failed to save user: %v", err)
 			http.Error(w, "Failed to create account", http.StatusInternalServerError)
 			return
@@ -274,7 +274,7 @@ func (app *App) PostSignup() http.HandlerFunc {
 			return
 		}
 
-		if err := app.Store.SaveSession(session); err != nil {
+		if err := app.AuthSvc.SaveSession(session); err != nil {
 			log.Printf("Failed to save session: %v", err)
 			http.Error(w, "Session save failed", http.StatusInternalServerError)
 			return
@@ -293,7 +293,7 @@ func (app *App) PostLogout() http.HandlerFunc {
 		cookie, err := r.Cookie(sessionCookieName)
 		if err == nil {
 			// Delete session from store
-			_ = app.Store.DeleteSession(cookie.Value)
+			_ = app.AuthSvc.DeleteSession(cookie.Value)
 		}
 
 		// Clear cookie
