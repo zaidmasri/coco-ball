@@ -7,8 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 func TestSQLiteStore(t *testing.T) {
@@ -71,12 +70,16 @@ func TestSQLiteStore(t *testing.T) {
 
 	// Test plan creation and retrieval
 	fmt.Println("\nTesting plan operations...")
-	plan, err := domain.NewPlan(uuid.New(), "Test Plan", 1, 2025, user.ID())
+	plan, err := domain.NewPlan("Test Plan", 1, 2025, user.ID())
 	if err != nil {
 		t.Fatalf("Failed to create plan: %v", err)
 	}
 
-	if err := s.Save(plan); err != nil {
+	validatedPlan, err := plan.Validate()
+	if err != nil {
+		t.Fatalf("Failed to validate plan: %v", err)
+	}
+	if err := s.Save(validatedPlan); err != nil {
 		t.Fatalf("Failed to save plan: %v", err)
 	}
 	fmt.Println("✓ Plan saved successfully")

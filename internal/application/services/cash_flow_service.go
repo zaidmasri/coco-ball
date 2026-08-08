@@ -3,7 +3,7 @@ package services
 import (
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -56,8 +56,8 @@ func (s *cashFlowService) GetSummary(planID uuid.UUID) (interfaces.CashFlowSumma
 func (s *cashFlowService) CreateInventoryPurchaseDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.inventoryPurchases.CreateInventoryPurchaseDraft(planID)
 }
-func (s *cashFlowService) GetInventoryPurchaseDraft(planID uuid.UUID) (*repositories.InventoryPurchaseItem, error) {
-	return s.inventoryPurchases.GetInventoryPurchaseDraft(planID)
+func (s *cashFlowService) FindInventoryPurchaseDraft(planID uuid.UUID) (*repositories.InventoryPurchaseItem, error) {
+	return s.inventoryPurchases.FindInventoryPurchaseDraft(planID)
 }
 func (s *cashFlowService) GetInventoryPurchase(itemID uuid.UUID) (*repositories.InventoryPurchaseItem, error) {
 	return s.inventoryPurchases.GetInventoryPurchase(itemID)
@@ -75,8 +75,8 @@ func (s *cashFlowService) DeleteInventoryPurchase(itemID uuid.UUID) error {
 func (s *cashFlowService) CreateDistributionDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.distributions.CreateDistributionDraft(planID)
 }
-func (s *cashFlowService) GetDistributionDraft(planID uuid.UUID) (*repositories.DistributionItem, error) {
-	return s.distributions.GetDistributionDraft(planID)
+func (s *cashFlowService) FindDistributionDraft(planID uuid.UUID) (*repositories.DistributionItem, error) {
+	return s.distributions.FindDistributionDraft(planID)
 }
 func (s *cashFlowService) GetDistribution(itemID uuid.UUID) (*repositories.DistributionItem, error) {
 	return s.distributions.GetDistribution(itemID)

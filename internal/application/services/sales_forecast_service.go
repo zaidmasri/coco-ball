@@ -3,7 +3,7 @@ package services
 import (
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -51,8 +51,8 @@ func (s *salesForecastService) GetSummary(planID uuid.UUID) (interfaces.SalesFor
 func (s *salesForecastService) CreateProductDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.products.CreateProductDraft(planID)
 }
-func (s *salesForecastService) GetProductDraft(planID uuid.UUID) (*repositories.ProductItem, error) {
-	return s.products.GetProductDraft(planID)
+func (s *salesForecastService) FindProductDraft(planID uuid.UUID) (*repositories.ProductItem, error) {
+	return s.products.FindProductDraft(planID)
 }
 func (s *salesForecastService) GetProduct(itemID uuid.UUID) (*repositories.ProductItem, error) {
 	return s.products.GetProduct(itemID)

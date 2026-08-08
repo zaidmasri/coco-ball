@@ -10,7 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
+	domevents "github.com/zaidmasri/business-planning-tool/internal/domain/events"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -108,36 +109,65 @@ func (s *SQLiteStore) runMigrations() error {
 	return nil
 }
 
-// Save stores a plan
-func (s *SQLiteStore) Save(p *domain.Plan) error {
+// writeOutboxEvents inserts domain events into the outbox_events table within
+// the provided transaction. Callers must drain the aggregate's event buffer
+// (via PullEvents) before calling this so they pass the already-drained slice.
+func (s *SQLiteStore) writeOutboxEvents(tx *sql.Tx, events []domevents.DomainEvent, now int64) error {
+	for _, evt := range events {
+		payload, err := json.Marshal(evt)
+		if err != nil {
+			return fmt.Errorf("failed to marshal event payload: %w", err)
+		}
+		evtID, _ := uuid.NewV7()
+		if _, err := tx.Exec(
+			`INSERT INTO outbox_events (id, event_name, payload, created_at) VALUES (?, ?, ?, ?)`,
+			evtID.String(), evt.EventName(), string(payload), now,
+		); err != nil {
+			return fmt.Errorf("failed to insert outbox event %q: %w", evt.EventName(), err)
+		}
+	}
+	return nil
+}
+
+// Save persists a validated plan and atomically writes any accumulated domain
+// events to the outbox table. Both the plan row and the outbox inserts share
+// a single transaction so the outbox is never out of sync with the entity.
+func (s *SQLiteStore) Save(vp domain.ValidatedPlan) error {
+	p := vp.Plan()
+
 	data, err := json.Marshal(p)
 	if err != nil {
 		return fmt.Errorf("failed to marshal plan: %w", err)
 	}
 
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	now := time.Now().Unix()
-	_, err = s.db.Exec(
+	if _, err = tx.Exec(
 		`INSERT INTO plans (id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at`,
-		p.ID().String(),
-		data,
-		now,
-		now,
-	)
-
-	if err != nil {
+		p.ID().String(), data, now, now,
+	); err != nil {
 		return fmt.Errorf("failed to save plan: %w", err)
 	}
 
-	return nil
+	if err := s.writeOutboxEvents(tx, p.PullEvents(), now); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // Get retrieves a plan by ID
 func (s *SQLiteStore) Get(id uuid.UUID) (*domain.Plan, error) {
 	var data []byte
 
-	err := s.db.QueryRow("SELECT data FROM plans WHERE id = ?", id.String()).Scan(&data)
+	err := s.db.QueryRow("SELECT data FROM plans WHERE id = ? AND deleted_at IS NULL", id.String()).Scan(&data)
 	if err == sql.ErrNoRows {
 		return nil, errors.New("plan not found")
 	}
@@ -171,7 +201,7 @@ func (s *SQLiteStore) Get(id uuid.UUID) (*domain.Plan, error) {
 
 // GetAll retrieves all plans
 func (s *SQLiteStore) GetAll() ([]*domain.Plan, error) {
-	rows, err := s.db.Query("SELECT data FROM plans ORDER BY created_at DESC")
+	rows, err := s.db.Query("SELECT data FROM plans WHERE deleted_at IS NULL ORDER BY created_at DESC")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query plans: %w", err)
 	}
@@ -215,7 +245,10 @@ func (s *SQLiteStore) GetAll() ([]*domain.Plan, error) {
 	return plans, nil
 }
 
-// Delete removes a plan and its access records
+// Delete soft-deletes a plan and all its wizard items by setting deleted_at.
+// plan_access (join table) and wizard singleton/marker tables (starting_balances,
+// payroll_tax_rates, sales_growth_curve, wizard_sections) are hard-deleted
+// because they have no individual-row audit value.
 func (s *SQLiteStore) Delete(id uuid.UUID) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -223,30 +256,38 @@ func (s *SQLiteStore) Delete(id uuid.UUID) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec("DELETE FROM plan_access WHERE plan_id = ?", id.String()); err != nil {
-		return fmt.Errorf("failed to delete plan access: %w", err)
+	now := time.Now().Unix()
+
+	// Soft-delete all wizard item rows that belong to this plan.
+	softDeleteTables := []string{
+		"capital_assets", "startup_costs", "funding_sources",
+		"salary_roles", "benefits",
+		"products",
+		"inventory_purchases", "distributions",
+		"operating_expenses",
+	}
+	for _, table := range softDeleteTables {
+		if _, err := tx.Exec("UPDATE "+table+" SET deleted_at = ? WHERE plan_id = ?", now, id.String()); err != nil {
+			return fmt.Errorf("failed to soft-delete %s: %w", table, err)
+		}
 	}
 
-	// Wizard tables aren't covered by SQLite foreign-key cascades (this
-	// codebase never sets PRAGMA foreign_keys=ON), so they must be deleted
-	// explicitly, matching how plan_access is handled above.
-	wizardTables := []string{
-		"capital_assets", "startup_costs", "funding_sources", "starting_balances",
-		"salary_roles", "benefits", "payroll_tax_rates",
-		"products", "sales_growth_curve",
-		"operating_expenses",
-		"inventory_purchases", "distributions",
+	// Hard-delete join table and singletons (no soft-delete needed).
+	hardDeleteTables := []string{
+		"plan_access",
+		"starting_balances", "payroll_tax_rates", "sales_growth_curve",
 		"wizard_sections",
 	}
-	for _, table := range wizardTables {
+	for _, table := range hardDeleteTables {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE plan_id = ?", id.String()); err != nil {
 			return fmt.Errorf("failed to delete %s: %w", table, err)
 		}
 	}
 
-	res, err := tx.Exec("DELETE FROM plans WHERE id = ?", id.String())
+	// Soft-delete the plan itself.
+	res, err := tx.Exec("UPDATE plans SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", now, id.String())
 	if err != nil {
-		return fmt.Errorf("failed to delete plan: %w", err)
+		return fmt.Errorf("failed to soft-delete plan: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
@@ -325,28 +366,43 @@ func (s *SQLiteStore) GetUserByEmail(email string) (*domain.User, error) {
 	return s.GetUser(id)
 }
 
-// SaveUserWithPassword stores a user with password credentials
+// SaveUserWithPassword stores a user with password credentials and atomically
+// writes any accumulated domain events to the outbox table.
 func (s *SQLiteStore) SaveUserWithPassword(u *domain.UserWithPassword) error {
-	// Save basic user info
-	if err := s.SaveUser(u.User); err != nil {
-		return err
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	now := time.Now().Unix()
+
+	if _, err := tx.Exec(
+		"INSERT OR IGNORE INTO users (id, email, first_name, last_name, created_at) VALUES (?, ?, ?, ?, ?)",
+		u.ID().String(),
+		strings.ToLower(u.Email()),
+		u.FirstName(),
+		u.LastName(),
+		now,
+	); err != nil {
+		return fmt.Errorf("failed to save user: %w", err)
 	}
 
-	// Save credentials
-	now := time.Now().Unix()
-	_, err := s.db.Exec(
+	if _, err := tx.Exec(
 		`INSERT OR REPLACE INTO users_credentials (email, password_hash, created_at)
 		 VALUES (?, ?, ?)`,
 		strings.ToLower(u.Email()),
 		u.PasswordHash,
 		now,
-	)
-
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to save user credentials: %w", err)
 	}
 
-	return nil
+	if err := s.writeOutboxEvents(tx, u.PullEvents(), now); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // GetUserWithPassword retrieves a user with password hash by email
@@ -432,10 +488,6 @@ func (s *SQLiteStore) GetSession(sessionID string) (*domain.Session, error) {
 		ExpiresAt: time.Unix(expiresAt, 0),
 	}
 
-	if !session.IsValid() {
-		return nil, domain.ErrSessionExpired
-	}
-
 	return session, nil
 }
 
@@ -451,13 +503,9 @@ func (s *SQLiteStore) DeleteSession(sessionID string) error {
 
 // GrantAccess gives a user access to a plan
 func (s *SQLiteStore) GrantAccess(planID, userID uuid.UUID, level domain.AccessLevel) error {
-	if !level.IsValid() {
-		return errors.New("invalid access level")
-	}
-
 	// Verify plan and user exist
 	var exists int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM plans WHERE id = ?", planID.String()).Scan(&exists); err != nil {
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM plans WHERE id = ? AND deleted_at IS NULL", planID.String()).Scan(&exists); err != nil {
 		return err
 	}
 	if exists == 0 {
@@ -560,7 +608,7 @@ func (s *SQLiteStore) GetUserPlans(userID uuid.UUID) ([]*domain.Plan, error) {
 	rows, err := s.db.Query(
 		`SELECT p.data FROM plans p
 		 JOIN plan_access pa ON p.id = pa.plan_id
-		 WHERE pa.user_id = ?
+		 WHERE pa.user_id = ? AND p.deleted_at IS NULL
 		 ORDER BY p.created_at DESC`,
 		userID.String(),
 	)
@@ -607,10 +655,12 @@ func (s *SQLiteStore) GetUserPlans(userID uuid.UUID) ([]*domain.Plan, error) {
 	return plans, nil
 }
 
-// CreateInvite stores a new plan invite
+// CreateInvite stores a new plan invite. The UserInvitedToPlan domain event
+// is emitted by the Plan aggregate root (via Plan.RecordUserInvited) and
+// persisted when the Plan is saved — not here.
 func (s *SQLiteStore) CreateInvite(invite *domain.PlanInvite) error {
 	now := time.Now().Unix()
-	_, err := s.db.Exec(
+	if _, err := s.db.Exec(
 		`INSERT INTO plan_invites (id, plan_id, email, access_level, status, invited_by, created_at, responded_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
 		invite.ID.String(),
@@ -620,11 +670,9 @@ func (s *SQLiteStore) CreateInvite(invite *domain.PlanInvite) error {
 		string(invite.Status),
 		invite.InvitedBy.String(),
 		now,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to create invite: %w", err)
 	}
-
 	invite.CreatedAt = now
 	return nil
 }
@@ -801,4 +849,14 @@ func (s *SQLiteStore) UpdateInviteStatus(id uuid.UUID, status domain.InviteStatu
 // Close closes the database connection
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
+}
+
+// mustUSD constructs a USD Money value. Panics only if domain.USD is removed
+// from supportedCurrencies, which would be a programming error.
+func mustUSD(n int64) domain.Money {
+	m, err := domain.NewMoney(n, domain.USD)
+	if err != nil {
+		panic(err)
+	}
+	return m
 }

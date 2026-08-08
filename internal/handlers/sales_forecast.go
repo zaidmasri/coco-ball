@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
@@ -132,7 +132,7 @@ func (app *App) GetProductList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.SalesForecastSvc.GetProductDraft(planID); err != nil {
+		if draft, err := app.SalesForecastSvc.FindProductDraft(planID); err != nil {
 			log.Printf("Failed to load product draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID

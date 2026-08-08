@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -47,7 +47,7 @@ func scanOperatingExpenseItem(row rowScanner) (*repositories.OperatingExpenseIte
 		ID: id,
 		Cost: domain.Cost{
 			Name:               name,
-			BaseAmountPerMonth: domain.Money(monthlyAmount),
+			BaseAmountPerMonth: mustUSD(monthlyAmount),
 			Growth: domain.GrowthStrategy{
 				Type:       domain.GrowthType(growthType),
 				AnnualRate: annualRate,
@@ -64,7 +64,7 @@ const operatingExpenseColumns = "id, name, monthly_amount, growth_type, annual_r
 // or resumes the plan's existing in-progress draft if one is already
 // present.
 func (s *SQLiteStore) CreateOperatingExpenseDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetOperatingExpenseDraft(planID)
+	existing, err := s.FindOperatingExpenseDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -77,7 +77,10 @@ func (s *SQLiteStore) CreateOperatingExpenseDraft(planID uuid.UUID) (uuid.UUID, 
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO operating_expenses (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -89,11 +92,11 @@ func (s *SQLiteStore) CreateOperatingExpenseDraft(planID uuid.UUID) (uuid.UUID, 
 	return id, nil
 }
 
-// GetOperatingExpenseDraft returns the plan's in-progress Operating
+// FindOperatingExpenseDraft returns the plan's in-progress Operating
 // Expense draft, if any, without creating one.
-func (s *SQLiteStore) GetOperatingExpenseDraft(planID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
+func (s *SQLiteStore) FindOperatingExpenseDraft(planID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanOperatingExpenseItem(row)
@@ -110,7 +113,7 @@ func (s *SQLiteStore) GetOperatingExpenseDraft(planID uuid.UUID) (*repositories.
 // its own ID.
 func (s *SQLiteStore) GetOperatingExpense(itemID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE id = ?",
+		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanOperatingExpenseItem(row)
@@ -129,7 +132,7 @@ func (s *SQLiteStore) SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cos
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE operating_expenses SET name=?, monthly_amount=?, growth_type=?, annual_rate=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
-		cost.Name, int64(cost.BaseAmountPerMonth), string(cost.Growth.Type), cost.Growth.AnnualRate, string(status), currentStep, now, itemID.String(),
+		cost.Name, cost.BaseAmountPerMonth.MinorUnits(), string(cost.Growth.Type), cost.Growth.AnnualRate, string(status), currentStep, now, itemID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save operating expense step: %w", err)
@@ -141,7 +144,7 @@ func (s *SQLiteStore) SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cos
 // for a plan, in the order they were added.
 func (s *SQLiteStore) ListCompleteOperatingExpenses(planID uuid.UUID) ([]repositories.OperatingExpenseItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+operatingExpenseColumns+" FROM operating_expenses WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -163,9 +166,9 @@ func (s *SQLiteStore) ListCompleteOperatingExpenses(planID uuid.UUID) ([]reposit
 	return items, nil
 }
 
-// DeleteOperatingExpense removes a single Operating Expense item.
+// DeleteOperatingExpense soft-deletes a single Operating Expense item.
 func (s *SQLiteStore) DeleteOperatingExpense(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM operating_expenses WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE operating_expenses SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete operating expense: %w", err)
 	}

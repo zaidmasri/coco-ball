@@ -2,12 +2,12 @@ package repositories
 
 import (
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 type ProductRepository interface {
 	CreateProductDraft(planID uuid.UUID) (uuid.UUID, error)
-	GetProductDraft(planID uuid.UUID) (*ProductItem, error)
+	FindProductDraft(planID uuid.UUID) (*ProductItem, error)
 	GetProduct(itemID uuid.UUID) (*ProductItem, error)
 	SaveProductStep(itemID uuid.UUID, product domain.Product, currentStep int, status ItemStatus) error
 	ListCompleteProducts(planID uuid.UUID) ([]ProductItem, error)

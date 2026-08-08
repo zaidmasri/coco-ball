@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
@@ -59,6 +59,12 @@ func (app *App) PostCreateInvite() http.HandlerFunc {
 			log.Printf("Failed to create invite: %v", err)
 			renderError("An internal database error occurred. Please try again.", http.StatusInternalServerError)
 			return
+		}
+
+		// Plan is the aggregate root for invites; it emits UserInvitedToPlan.
+		plan.RecordUserInvited(invite.ID, invite.Email, invite.AccessLevel, user.ID())
+		if err := app.PlanSvc.Save(plan); err != nil {
+			log.Printf("Failed to record UserInvitedToPlan event for plan %s: %v", planID, err)
 		}
 
 		http.Redirect(w, r, "/plan/"+planID.String()+"/setup", http.StatusSeeOther)

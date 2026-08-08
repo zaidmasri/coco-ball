@@ -1,4 +1,4 @@
-package domain
+package entities
 
 import "strings"
 
@@ -48,7 +48,7 @@ func ValidateInventoryPurchase(inv InventoryPurchase) error {
 	if strings.TrimSpace(inv.Category) == "" {
 		return ErrInvalidName
 	}
-	if inv.MonthlyAmount < 0 {
+	if inv.MonthlyAmount.IsNegative() {
 		return ErrNegativeAmount
 	}
 	return nil
@@ -68,7 +68,7 @@ func ValidateDistribution(dist Distribution) error {
 	if strings.TrimSpace(dist.Name) == "" {
 		return ErrInvalidName
 	}
-	if dist.MonthlyAmount < 0 {
+	if dist.MonthlyAmount.IsNegative() {
 		return ErrNegativeAmount
 	}
 	return nil

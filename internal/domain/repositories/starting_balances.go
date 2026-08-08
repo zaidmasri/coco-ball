@@ -2,7 +2,7 @@ package repositories
 
 import (
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 type StartingBalancesRepository interface {

@@ -2,7 +2,7 @@ package interfaces
 
 import (
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -21,7 +21,7 @@ type PayrollService interface {
 
 	// Salary Roles
 	CreateSalaryRoleDraft(planID uuid.UUID) (uuid.UUID, error)
-	GetSalaryRoleDraft(planID uuid.UUID) (*repositories.SalaryRoleItem, error)
+	FindSalaryRoleDraft(planID uuid.UUID) (*repositories.SalaryRoleItem, error)
 	GetSalaryRole(itemID uuid.UUID) (*repositories.SalaryRoleItem, error)
 	SaveSalaryRoleStep(itemID uuid.UUID, role domain.SalaryRole, currentStep int, status repositories.ItemStatus) error
 	ListCompleteSalaryRoles(planID uuid.UUID) ([]repositories.SalaryRoleItem, error)
@@ -29,7 +29,7 @@ type PayrollService interface {
 
 	// Benefits
 	CreateBenefitDraft(planID uuid.UUID) (uuid.UUID, error)
-	GetBenefitDraft(planID uuid.UUID) (*repositories.BenefitItem, error)
+	FindBenefitDraft(planID uuid.UUID) (*repositories.BenefitItem, error)
 	GetBenefit(itemID uuid.UUID) (*repositories.BenefitItem, error)
 	SaveBenefitStep(itemID uuid.UUID, benefit domain.Benefit, currentStep int, status repositories.ItemStatus) error
 	ListCompleteBenefits(planID uuid.UUID) ([]repositories.BenefitItem, error)

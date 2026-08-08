@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 // TemplateFuncs are helper functions available to every parsed page
@@ -25,7 +25,7 @@ var TemplateFuncs = template.FuncMap{
 func addMoney(values ...domain.Money) domain.Money {
 	var total domain.Money
 	for _, v := range values {
-		total += v
+		total = total.Add(v)
 	}
 	return total
 }
@@ -33,11 +33,11 @@ func addMoney(values ...domain.Money) domain.Money {
 // formatMoney renders a whole-dollar Money value as US currency, e.g.
 // "$1,234.00" or "-$500.00" for a negative amount.
 func formatMoney(m domain.Money) string {
-	neg := m < 0
+	neg := m.IsNegative()
 	if neg {
-		m = -m
+		m = m.Neg()
 	}
-	s := "$" + groupThousands(int64(m)) + ".00"
+	s := "$" + groupThousands(m.MinorUnits()) + ".00"
 	if neg {
 		return "-" + s
 	}

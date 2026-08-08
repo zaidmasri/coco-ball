@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 // Migration is a single schema or data change. Exactly one of SQL or Fn is
@@ -360,6 +360,51 @@ var migrations = []Migration{
 	// since migration 35 introduced a new table that must not orphan
 	// pre-existing Operating Expenses data.
 	{Fn: backfillOperatingExpensesData},
+
+	// Migrations 38-47: add deleted_at column (soft-delete support) to all
+	// business entity tables. Per the Repository Rules, hard DELETE is
+	// forbidden; instead each row is marked deleted_at = unix-epoch-seconds.
+	// Singleton tables (starting_balances, payroll_tax_rates, sales_growth_curve)
+	// and join/marker tables (plan_access, wizard_sections) keep hard-delete
+	// because they have no individual-row audit value.
+	{SQL: `ALTER TABLE plans ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE capital_assets ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE startup_costs ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE funding_sources ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE salary_roles ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE benefits ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE products ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE inventory_purchases ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE distributions ADD COLUMN deleted_at INTEGER`},
+	{SQL: `ALTER TABLE operating_expenses ADD COLUMN deleted_at INTEGER`},
+
+	// Migration 48: Transactional outbox for domain events.
+	// Repositories write domain events here in the same transaction that
+	// saves the aggregate; a relay goroutine reads and delivers them
+	// separately, guaranteeing at-least-once delivery even if the process
+	// crashes after the commit.
+	{SQL: `CREATE TABLE IF NOT EXISTS outbox_events (
+		id         TEXT PRIMARY KEY,
+		event_name TEXT NOT NULL,
+		payload    TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		processed_at INTEGER
+	)`},
+	{SQL: `CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed ON outbox_events(created_at) WHERE processed_at IS NULL`},
+
+	// Migration 49: Idempotency key store.
+	// Every mutating command reserves a key here with status='running'
+	// before executing; on completion it caches the JSON response and
+	// flips to 'completed'. A second request with the same key returns
+	// the cached response immediately without re-executing.
+	{SQL: `CREATE TABLE IF NOT EXISTS idempotency_keys (
+		key        TEXT PRIMARY KEY,
+		status     TEXT NOT NULL DEFAULT 'running',
+		response   TEXT,
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL
+	)`},
+
 }
 
 // GetMigrations returns all migrations in application order.

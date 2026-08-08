@@ -1,17 +1,17 @@
-// Package domain contains the aggregate root for the business plan
-package domain
+package entities
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
+	domevents "github.com/zaidmasri/business-planning-tool/internal/domain/events"
 )
 
 type (
 	// MonthIndex normalizes time. 0 = Month 1 of operations, 1 = Month 2, etc.
 	MonthIndex         int64
-	Money              int64
 	DepreciationMethod string
 	GrowthType         string
 )
@@ -102,7 +102,69 @@ type Plan struct {
 	salesGrowth      SalesGrowthCurve
 	inventoryPlan    []InventoryPurchase
 	distributions    []Distribution
+
+	// domainEvents holds events accumulated during this request. The
+	// repository must drain this list via PullEvents() and persist each event
+	// to the outbox table in the same transaction that saves the plan.
+	domainEvents []domevents.DomainEvent
 }
+
+// recordEvent appends a domain event to the plan's in-memory event list.
+func (p *Plan) recordEvent(e domevents.DomainEvent) {
+	p.domainEvents = append(p.domainEvents, e)
+}
+
+// PullEvents returns all accumulated domain events and resets the list.
+// Call this inside the repository's Save implementation after persisting the
+// plan, passing every event to the outbox writer in the same transaction.
+func (p *Plan) PullEvents() []domevents.DomainEvent {
+	evts := p.domainEvents
+	p.domainEvents = nil
+	return evts
+}
+
+// RecordUserInvited records a UserInvitedToPlan event on the Plan aggregate.
+// Call this after creating the PlanInvite so the event is persisted in the
+// same outbox transaction as the Plan save. PlanInvite is not an aggregate
+// root and must not emit events directly.
+func (p *Plan) RecordUserInvited(inviteID uuid.UUID, email string, level AccessLevel, invitedBy uuid.UUID) {
+	p.recordEvent(domevents.NewUserInvitedToPlan(p.id, inviteID, invitedBy, email, string(level)))
+}
+
+// validate checks the plan's current state against all business invariants.
+// It is separate from construction so it can be called independently.
+func (p *Plan) validate() error {
+	if strings.TrimSpace(p.name) == "" {
+		return ErrInvalidName
+	}
+	if p.startingMonth < 1 || p.startingMonth > 12 {
+		return ErrInvalidStartingMonth
+	}
+	if p.startingYear < 1900 || p.startingYear > 2100 {
+		return ErrInvalidStartingYear
+	}
+	return nil
+}
+
+// ValidatedPlan is an opaque token proving the plan passed all invariant
+// checks. Repository Save methods require this type so unvalidated data
+// cannot be persisted — invalid states become unrepresentable at the
+// persistence boundary.
+type ValidatedPlan struct{ plan *Plan }
+
+// Validate runs all invariant checks. On success it returns a ValidatedPlan
+// that the repository layer accepts. On failure it returns a domain sentinel
+// error describing the violation.
+func (p *Plan) Validate() (ValidatedPlan, error) {
+	if err := p.validate(); err != nil {
+		return ValidatedPlan{}, err
+	}
+	return ValidatedPlan{plan: p}, nil
+}
+
+// Plan returns the underlying plan. Used only by the repository
+// implementation to access plan data for persistence.
+func (vp ValidatedPlan) Plan() *Plan { return vp.plan }
 
 func validateCoreProperties(name string, month, year int) (string, error) {
 	cleanName := strings.TrimSpace(name)
@@ -122,13 +184,22 @@ func validateCoreProperties(name string, month, year int) (string, error) {
 	return cleanName, nil
 }
 
-func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int, ownerID uuid.UUID) (*Plan, error) {
+// NewPlan creates a brand-new Plan with a domain-generated UUIDv7 identity.
+// Use UnmarshalJSON (via plan_json.go) when reconstructing a plan from
+// persisted data — that path sets the existing id directly without calling
+// this constructor, satisfying the rule that validation is write-side only.
+func NewPlan(name string, startingMonth, startingYear int, ownerID uuid.UUID) (*Plan, error) {
 	cleanName, err := validateCoreProperties(name, startingMonth, startingYear)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Plan{
+	id, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate plan id: %w", err)
+	}
+
+	p := &Plan{
 		id:            id,
 		name:          cleanName,
 		startingMonth: startingMonth,
@@ -146,7 +217,10 @@ func NewPlan(id uuid.UUID, name string, startingMonth, startingYear int, ownerID
 		products:        make([]Product, 0),
 		inventoryPlan:   make([]InventoryPurchase, 0),
 		distributions:   make([]Distribution, 0),
-	}, nil
+	}
+
+	p.recordEvent(domevents.NewPlanCreated(id, cleanName, ownerID))
+	return p, nil
 }
 
 func (p *Plan) ChangeCoreDetails(name string, startingMonth, startingYear int) error {
@@ -160,6 +234,7 @@ func (p *Plan) ChangeCoreDetails(name string, startingMonth, startingYear int) e
 	p.startingMonth = startingMonth
 	p.startingYear = startingYear
 
+	p.recordEvent(domevents.NewPlanUpdated(p.id))
 	return nil
 }
 
@@ -168,3 +243,19 @@ func (p *Plan) Name() string       { return p.name }
 func (p *Plan) StartingMonth() int { return p.startingMonth }
 func (p *Plan) StartingYear() int  { return p.startingYear }
 func (p *Plan) OwnerID() uuid.UUID { return p.ownerID }
+
+// AggregateID implements entities.AggregateRoot.
+//
+// Plan is the aggregate root for the business planning domain. Its boundary
+// includes all wizard sections: capital assets, startup costs, funding
+// sources, salary roles, benefits, products, inventory purchases,
+// distributions, and operating expenses. These are entities within this
+// aggregate and MUST NOT be referenced by other aggregates by embedding the
+// full struct — reference this aggregate only by its ID (uuid.UUID).
+//
+// The only other aggregate root is User (see user.go). All cross-aggregate
+// associations in this domain use uuid.UUID identifiers, never embedded structs.
+func (p *Plan) AggregateID() uuid.UUID { return p.id }
+
+// compile-time assertion that Plan satisfies the AggregateRoot marker.
+var _ AggregateRoot = (*Plan)(nil)

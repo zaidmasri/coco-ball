@@ -1,9 +1,11 @@
 package services
 
 import (
+	"errors"
+
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -16,6 +18,9 @@ func NewAccessService(access repositories.AccessRepository) interfaces.AccessSer
 }
 
 func (s *accessService) GrantAccess(planID, userID uuid.UUID, level domain.AccessLevel) error {
+	if !level.IsValid() {
+		return errors.New("invalid access level")
+	}
 	return s.access.GrantAccess(planID, userID, level)
 }
 func (s *accessService) GetAccess(planID, userID uuid.UUID) (*domain.PlanAccess, error) {

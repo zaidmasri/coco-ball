@@ -3,7 +3,7 @@ package services
 import (
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -48,8 +48,8 @@ func (s *operatingExpensesService) GetSummary(planID uuid.UUID) (interfaces.Oper
 func (s *operatingExpensesService) CreateOperatingExpenseDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.operatingExpenses.CreateOperatingExpenseDraft(planID)
 }
-func (s *operatingExpensesService) GetOperatingExpenseDraft(planID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
-	return s.operatingExpenses.GetOperatingExpenseDraft(planID)
+func (s *operatingExpensesService) FindOperatingExpenseDraft(planID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
+	return s.operatingExpenses.FindOperatingExpenseDraft(planID)
 }
 func (s *operatingExpensesService) GetOperatingExpense(itemID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
 	return s.operatingExpenses.GetOperatingExpense(itemID)

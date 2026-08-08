@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
@@ -135,7 +135,7 @@ func (app *App) GetInventoryPurchaseList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.CashFlowSvc.GetInventoryPurchaseDraft(planID); err != nil {
+		if draft, err := app.CashFlowSvc.FindInventoryPurchaseDraft(planID); err != nil {
 			log.Printf("Failed to load inventory purchase draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -396,7 +396,7 @@ func (app *App) GetDistributionList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.CashFlowSvc.GetDistributionDraft(planID); err != nil {
+		if draft, err := app.CashFlowSvc.FindDistributionDraft(planID); err != nil {
 			log.Printf("Failed to load distribution draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID

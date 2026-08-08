@@ -12,7 +12,7 @@
 <div class="input-group input-group-lg">
   <span class="input-group-text">$</span>
   <input type="number" step="0.01" min="0" class="form-control" id="cost" name="cost"
-         value="{{ if ne .Asset.PurchaseCost 0 }}{{ .Asset.PurchaseCost }}{{ end }}" autofocus required />
+         value="{{ if not .Asset.PurchaseCost.IsZero }}{{ .Asset.PurchaseCost.MinorUnits }}{{ end }}" autofocus required />
 </div>
 
 {{ else if eq .Step "depreciation-method" }}

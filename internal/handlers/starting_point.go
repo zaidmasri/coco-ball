@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
@@ -73,9 +73,13 @@ func cashOnHandButtonLabel(idx int) string {
 func parseStepMoney(raw string) (domain.Money, bool) {
 	val, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 	if err != nil || val < 0 {
-		return 0, false
+		return domain.Money{}, false
 	}
-	return domain.Money(val), true
+	m, err := domain.NewMoney(int64(val), domain.USD)
+	if err != nil {
+		return domain.Money{}, false
+	}
+	return m, true
 }
 
 // isStartingPointSection reports whether section is one of the 4 known
@@ -194,7 +198,7 @@ func (app *App) GetFixedAssetList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.StartingPointSvc.GetCapitalAssetDraft(planID); err != nil {
+		if draft, err := app.StartingPointSvc.FindCapitalAssetDraft(planID); err != nil {
 			log.Printf("Failed to load capital asset draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -468,7 +472,7 @@ func (app *App) GetStartupCostList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.StartingPointSvc.GetStartupCostDraft(planID); err != nil {
+		if draft, err := app.StartingPointSvc.FindStartupCostDraft(planID); err != nil {
 			log.Printf("Failed to load startup cost draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -716,7 +720,7 @@ func (app *App) GetFundingSourceList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.StartingPointSvc.GetFundingSourceDraft(planID); err != nil {
+		if draft, err := app.StartingPointSvc.FindFundingSourceDraft(planID); err != nil {
 			log.Printf("Failed to load funding source draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID

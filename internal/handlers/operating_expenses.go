@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
@@ -63,7 +63,7 @@ func (app *App) GetOperatingExpenseList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.OpExSvc.GetOperatingExpenseDraft(planID); err != nil {
+		if draft, err := app.OpExSvc.FindOperatingExpenseDraft(planID); err != nil {
 			log.Printf("Failed to load operating expense draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID

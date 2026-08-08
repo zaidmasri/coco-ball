@@ -2,7 +2,7 @@ package interfaces
 
 import (
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -23,7 +23,7 @@ type StartingPointService interface {
 
 	// Fixed Assets
 	CreateCapitalAssetDraft(planID uuid.UUID) (uuid.UUID, error)
-	GetCapitalAssetDraft(planID uuid.UUID) (*repositories.CapitalAssetItem, error)
+	FindCapitalAssetDraft(planID uuid.UUID) (*repositories.CapitalAssetItem, error)
 	GetCapitalAsset(itemID uuid.UUID) (*repositories.CapitalAssetItem, error)
 	SaveCapitalAssetStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int, status repositories.ItemStatus) error
 	ListCompleteCapitalAssets(planID uuid.UUID) ([]repositories.CapitalAssetItem, error)
@@ -31,7 +31,7 @@ type StartingPointService interface {
 
 	// Startup Costs
 	CreateStartupCostDraft(planID uuid.UUID) (uuid.UUID, error)
-	GetStartupCostDraft(planID uuid.UUID) (*repositories.StartupCostItem, error)
+	FindStartupCostDraft(planID uuid.UUID) (*repositories.StartupCostItem, error)
 	GetStartupCost(itemID uuid.UUID) (*repositories.StartupCostItem, error)
 	SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int, status repositories.ItemStatus) error
 	ListCompleteStartupCosts(planID uuid.UUID) ([]repositories.StartupCostItem, error)
@@ -39,7 +39,7 @@ type StartingPointService interface {
 
 	// Funding Sources
 	CreateFundingSourceDraft(planID uuid.UUID) (uuid.UUID, error)
-	GetFundingSourceDraft(planID uuid.UUID) (*repositories.FundingSourceItem, error)
+	FindFundingSourceDraft(planID uuid.UUID) (*repositories.FundingSourceItem, error)
 	GetFundingSource(itemID uuid.UUID) (*repositories.FundingSourceItem, error)
 	SaveFundingSourceStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int, status repositories.ItemStatus) error
 	ListCompleteFundingSources(planID uuid.UUID) ([]repositories.FundingSourceItem, error)

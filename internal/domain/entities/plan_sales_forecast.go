@@ -1,4 +1,4 @@
-package domain
+package entities
 
 import "strings"
 
@@ -37,7 +37,7 @@ func ValidateProduct(product Product) error {
 	if strings.TrimSpace(product.Name) == "" {
 		return ErrInvalidName
 	}
-	if product.PricePerUnit < 0 || product.CostPerUnit < 0 {
+	if product.PricePerUnit.IsNegative() || product.CostPerUnit.IsNegative() {
 		return ErrNegativeAmount
 	}
 	return nil

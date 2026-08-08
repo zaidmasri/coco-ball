@@ -3,7 +3,7 @@ package services
 import (
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -59,8 +59,8 @@ func (s *payrollService) GetSummary(planID uuid.UUID) (interfaces.PayrollSummary
 func (s *payrollService) CreateSalaryRoleDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.salaryRoles.CreateSalaryRoleDraft(planID)
 }
-func (s *payrollService) GetSalaryRoleDraft(planID uuid.UUID) (*repositories.SalaryRoleItem, error) {
-	return s.salaryRoles.GetSalaryRoleDraft(planID)
+func (s *payrollService) FindSalaryRoleDraft(planID uuid.UUID) (*repositories.SalaryRoleItem, error) {
+	return s.salaryRoles.FindSalaryRoleDraft(planID)
 }
 func (s *payrollService) GetSalaryRole(itemID uuid.UUID) (*repositories.SalaryRoleItem, error) {
 	return s.salaryRoles.GetSalaryRole(itemID)
@@ -78,8 +78,8 @@ func (s *payrollService) DeleteSalaryRole(itemID uuid.UUID) error {
 func (s *payrollService) CreateBenefitDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.benefits.CreateBenefitDraft(planID)
 }
-func (s *payrollService) GetBenefitDraft(planID uuid.UUID) (*repositories.BenefitItem, error) {
-	return s.benefits.GetBenefitDraft(planID)
+func (s *payrollService) FindBenefitDraft(planID uuid.UUID) (*repositories.BenefitItem, error) {
+	return s.benefits.FindBenefitDraft(planID)
 }
 func (s *payrollService) GetBenefit(itemID uuid.UUID) (*repositories.BenefitItem, error) {
 	return s.benefits.GetBenefit(itemID)

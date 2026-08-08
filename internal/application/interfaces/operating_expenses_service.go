@@ -2,7 +2,7 @@ package interfaces
 
 import (
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -20,7 +20,7 @@ type OperatingExpensesService interface {
 
 	// Operating Expenses
 	CreateOperatingExpenseDraft(planID uuid.UUID) (uuid.UUID, error)
-	GetOperatingExpenseDraft(planID uuid.UUID) (*repositories.OperatingExpenseItem, error)
+	FindOperatingExpenseDraft(planID uuid.UUID) (*repositories.OperatingExpenseItem, error)
 	GetOperatingExpense(itemID uuid.UUID) (*repositories.OperatingExpenseItem, error)
 	SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status repositories.ItemStatus) error
 	ListCompleteOperatingExpenses(planID uuid.UUID) ([]repositories.OperatingExpenseItem, error)

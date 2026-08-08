@@ -1,4 +1,4 @@
-package domain
+package entities
 
 import (
 	"crypto/rand"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	domevents "github.com/zaidmasri/business-planning-tool/internal/domain/events"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -111,6 +112,8 @@ func NewUserWithPassword(email, firstName, lastName, password string) (*UserWith
 	if err != nil {
 		return nil, err
 	}
+
+	user.recordEvent(domevents.NewUserRegistered(user.ID(), user.Email()))
 
 	return &UserWithPassword{
 		User:         user,

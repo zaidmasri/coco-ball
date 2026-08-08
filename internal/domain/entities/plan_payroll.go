@@ -1,4 +1,4 @@
-package domain
+package entities
 
 import "strings"
 
@@ -47,7 +47,7 @@ func ValidateSalaryRole(role SalaryRole) error {
 	if strings.TrimSpace(role.Role) == "" {
 		return ErrInvalidName
 	}
-	if role.MonthlyPay < 0 {
+	if role.MonthlyPay.IsNegative() {
 		return ErrNegativeAmount
 	}
 	return nil
@@ -67,7 +67,7 @@ func ValidateBenefit(benefit Benefit) error {
 	if strings.TrimSpace(benefit.Type) == "" {
 		return ErrInvalidName
 	}
-	if benefit.MonthlyAmount < 0 {
+	if benefit.MonthlyAmount.IsNegative() {
 		return ErrNegativeAmount
 	}
 	return nil

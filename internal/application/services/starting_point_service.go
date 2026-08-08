@@ -3,7 +3,7 @@ package services
 import (
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -69,8 +69,8 @@ func (s *startingPointService) GetSummary(planID uuid.UUID) (interfaces.Starting
 func (s *startingPointService) CreateCapitalAssetDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.capitalAssets.CreateCapitalAssetDraft(planID)
 }
-func (s *startingPointService) GetCapitalAssetDraft(planID uuid.UUID) (*repositories.CapitalAssetItem, error) {
-	return s.capitalAssets.GetCapitalAssetDraft(planID)
+func (s *startingPointService) FindCapitalAssetDraft(planID uuid.UUID) (*repositories.CapitalAssetItem, error) {
+	return s.capitalAssets.FindCapitalAssetDraft(planID)
 }
 func (s *startingPointService) GetCapitalAsset(itemID uuid.UUID) (*repositories.CapitalAssetItem, error) {
 	return s.capitalAssets.GetCapitalAsset(itemID)
@@ -90,8 +90,8 @@ func (s *startingPointService) DeleteCapitalAsset(itemID uuid.UUID) error {
 func (s *startingPointService) CreateStartupCostDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.startupCosts.CreateStartupCostDraft(planID)
 }
-func (s *startingPointService) GetStartupCostDraft(planID uuid.UUID) (*repositories.StartupCostItem, error) {
-	return s.startupCosts.GetStartupCostDraft(planID)
+func (s *startingPointService) FindStartupCostDraft(planID uuid.UUID) (*repositories.StartupCostItem, error) {
+	return s.startupCosts.FindStartupCostDraft(planID)
 }
 func (s *startingPointService) GetStartupCost(itemID uuid.UUID) (*repositories.StartupCostItem, error) {
 	return s.startupCosts.GetStartupCost(itemID)
@@ -111,8 +111,8 @@ func (s *startingPointService) DeleteStartupCost(itemID uuid.UUID) error {
 func (s *startingPointService) CreateFundingSourceDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return s.fundingSources.CreateFundingSourceDraft(planID)
 }
-func (s *startingPointService) GetFundingSourceDraft(planID uuid.UUID) (*repositories.FundingSourceItem, error) {
-	return s.fundingSources.GetFundingSourceDraft(planID)
+func (s *startingPointService) FindFundingSourceDraft(planID uuid.UUID) (*repositories.FundingSourceItem, error) {
+	return s.fundingSources.FindFundingSourceDraft(planID)
 }
 func (s *startingPointService) GetFundingSource(itemID uuid.UUID) (*repositories.FundingSourceItem, error) {
 	return s.fundingSources.GetFundingSource(itemID)

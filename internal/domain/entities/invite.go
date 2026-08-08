@@ -1,7 +1,8 @@
-package domain
+package entities
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -24,6 +25,11 @@ const (
 
 // PlanInvite represents an invitation for an email address to collaborate
 // on a plan at a given access level.
+//
+// PlanInvite is an entity within the Plan aggregate boundary. It does not
+// carry an event buffer — only aggregate roots may emit events. The Plan
+// aggregate emits UserInvitedToPlan via Plan.RecordUserInvited after the
+// invite is created.
 type PlanInvite struct {
 	ID          uuid.UUID
 	PlanID      uuid.UUID
@@ -45,8 +51,13 @@ func NewPlanInvite(planID uuid.UUID, email string, level AccessLevel, invitedBy 
 		return nil, errors.New("invalid access level")
 	}
 
+	id, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate invite id: %w", err)
+	}
+
 	return &PlanInvite{
-		ID:          uuid.New(),
+		ID:          id,
 		PlanID:      planID,
 		Email:       cleanEmail,
 		AccessLevel: level,

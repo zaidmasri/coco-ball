@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -60,7 +60,7 @@ func scanInventoryPurchaseItem(row rowScanner) (*repositories.InventoryPurchaseI
 		ID: id,
 		Purchase: domain.InventoryPurchase{
 			Category:       category,
-			MonthlyAmount:  domain.Money(monthlyAmount),
+			MonthlyAmount:  mustUSD(monthlyAmount),
 			GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 		},
 		Status:      repositories.ItemStatus(status),
@@ -74,7 +74,7 @@ const inventoryPurchaseColumns = "id, category, monthly_amount, growth_yr2, grow
 // or resumes the plan's existing in-progress draft if one is already
 // present.
 func (s *SQLiteStore) CreateInventoryPurchaseDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetInventoryPurchaseDraft(planID)
+	existing, err := s.FindInventoryPurchaseDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -87,7 +87,10 @@ func (s *SQLiteStore) CreateInventoryPurchaseDraft(planID uuid.UUID) (uuid.UUID,
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO inventory_purchases (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -99,11 +102,11 @@ func (s *SQLiteStore) CreateInventoryPurchaseDraft(planID uuid.UUID) (uuid.UUID,
 	return id, nil
 }
 
-// GetInventoryPurchaseDraft returns the plan's in-progress Inventory
+// FindInventoryPurchaseDraft returns the plan's in-progress Inventory
 // Purchase draft, if any, without creating one.
-func (s *SQLiteStore) GetInventoryPurchaseDraft(planID uuid.UUID) (*repositories.InventoryPurchaseItem, error) {
+func (s *SQLiteStore) FindInventoryPurchaseDraft(planID uuid.UUID) (*repositories.InventoryPurchaseItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanInventoryPurchaseItem(row)
@@ -120,7 +123,7 @@ func (s *SQLiteStore) GetInventoryPurchaseDraft(planID uuid.UUID) (*repositories
 // its own ID.
 func (s *SQLiteStore) GetInventoryPurchase(itemID uuid.UUID) (*repositories.InventoryPurchaseItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE id = ?",
+		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanInventoryPurchaseItem(row)
@@ -141,7 +144,7 @@ func (s *SQLiteStore) SaveInventoryPurchaseStep(itemID uuid.UUID, inv domain.Inv
 	growthYr3 := inv.GrowthAfterYr1.GrowthRatePercent(1) / 100
 	res, err := s.db.Exec(
 		`UPDATE inventory_purchases SET category=?, monthly_amount=?, growth_yr2=?, growth_yr3=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
-		inv.Category, int64(inv.MonthlyAmount), growthYr2, growthYr3, string(status), currentStep, now, itemID.String(),
+		inv.Category, inv.MonthlyAmount.MinorUnits(), growthYr2, growthYr3, string(status), currentStep, now, itemID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save inventory purchase step: %w", err)
@@ -153,7 +156,7 @@ func (s *SQLiteStore) SaveInventoryPurchaseStep(itemID uuid.UUID, inv domain.Inv
 // for a plan, in the order they were added.
 func (s *SQLiteStore) ListCompleteInventoryPurchases(planID uuid.UUID) ([]repositories.InventoryPurchaseItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+inventoryPurchaseColumns+" FROM inventory_purchases WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -175,9 +178,9 @@ func (s *SQLiteStore) ListCompleteInventoryPurchases(planID uuid.UUID) ([]reposi
 	return items, nil
 }
 
-// DeleteInventoryPurchase removes a single Inventory Purchase item.
+// DeleteInventoryPurchase soft-deletes a single Inventory Purchase item.
 func (s *SQLiteStore) DeleteInventoryPurchase(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM inventory_purchases WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE inventory_purchases SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete inventory purchase: %w", err)
 	}
@@ -205,7 +208,7 @@ func scanDistributionItem(row rowScanner) (*repositories.DistributionItem, error
 		ID: id,
 		Distribution: domain.Distribution{
 			Name:           name,
-			MonthlyAmount:  domain.Money(monthlyAmount),
+			MonthlyAmount:  mustUSD(monthlyAmount),
 			GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 		},
 		Status:      repositories.ItemStatus(status),
@@ -218,7 +221,7 @@ const distributionColumns = "id, name, monthly_amount, growth_yr2, growth_yr3, s
 // CreateDistributionDraft starts a new Distribution wizard item, or
 // resumes the plan's existing in-progress draft if one is already present.
 func (s *SQLiteStore) CreateDistributionDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetDistributionDraft(planID)
+	existing, err := s.FindDistributionDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -231,7 +234,10 @@ func (s *SQLiteStore) CreateDistributionDraft(planID uuid.UUID) (uuid.UUID, erro
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO distributions (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -243,11 +249,11 @@ func (s *SQLiteStore) CreateDistributionDraft(planID uuid.UUID) (uuid.UUID, erro
 	return id, nil
 }
 
-// GetDistributionDraft returns the plan's in-progress Distribution draft,
+// FindDistributionDraft returns the plan's in-progress Distribution draft,
 // if any, without creating one.
-func (s *SQLiteStore) GetDistributionDraft(planID uuid.UUID) (*repositories.DistributionItem, error) {
+func (s *SQLiteStore) FindDistributionDraft(planID uuid.UUID) (*repositories.DistributionItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+distributionColumns+" FROM distributions WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+distributionColumns+" FROM distributions WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanDistributionItem(row)
@@ -264,7 +270,7 @@ func (s *SQLiteStore) GetDistributionDraft(planID uuid.UUID) (*repositories.Dist
 // ID.
 func (s *SQLiteStore) GetDistribution(itemID uuid.UUID) (*repositories.DistributionItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+distributionColumns+" FROM distributions WHERE id = ?",
+		"SELECT "+distributionColumns+" FROM distributions WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanDistributionItem(row)
@@ -285,7 +291,7 @@ func (s *SQLiteStore) SaveDistributionStep(itemID uuid.UUID, dist domain.Distrib
 	growthYr3 := dist.GrowthAfterYr1.GrowthRatePercent(1) / 100
 	res, err := s.db.Exec(
 		`UPDATE distributions SET name=?, monthly_amount=?, growth_yr2=?, growth_yr3=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
-		dist.Name, int64(dist.MonthlyAmount), growthYr2, growthYr3, string(status), currentStep, now, itemID.String(),
+		dist.Name, dist.MonthlyAmount.MinorUnits(), growthYr2, growthYr3, string(status), currentStep, now, itemID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save distribution step: %w", err)
@@ -297,7 +303,7 @@ func (s *SQLiteStore) SaveDistributionStep(itemID uuid.UUID, dist domain.Distrib
 // plan, in the order they were added.
 func (s *SQLiteStore) ListCompleteDistributions(planID uuid.UUID) ([]repositories.DistributionItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+distributionColumns+" FROM distributions WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+distributionColumns+" FROM distributions WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -319,9 +325,9 @@ func (s *SQLiteStore) ListCompleteDistributions(planID uuid.UUID) ([]repositorie
 	return items, nil
 }
 
-// DeleteDistribution removes a single Distribution item.
+// DeleteDistribution soft-deletes a single Distribution item.
 func (s *SQLiteStore) DeleteDistribution(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM distributions WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE distributions SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete distribution: %w", err)
 	}

@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
@@ -161,8 +161,7 @@ func (app *App) PostSetup() http.HandlerFunc {
 		startMonth, _ := strconv.Atoi(r.PostForm.Get("startMonth"))
 		startYear, _ := strconv.Atoi(r.PostForm.Get("startYear"))
 
-		newID := uuid.New()
-		plan, err := domain.NewPlan(newID, companyName, startMonth, startYear, user.ID())
+		plan, err := domain.NewPlan(companyName, startMonth, startYear, user.ID())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -173,13 +172,13 @@ func (app *App) PostSetup() http.HandlerFunc {
 			return
 		}
 
-		if err := app.AccessSvc.GrantAccess(newID, user.ID(), domain.Owner); err != nil {
+		if err := app.AccessSvc.GrantAccess(plan.ID(), user.ID(), domain.Owner); err != nil {
 			log.Printf("Failed to grant owner access: %v", err)
 			http.Error(w, "Failed to setup plan access", http.StatusInternalServerError)
 			return
 		}
 
-		http.Redirect(w, r, "/plan/"+newID.String()+"/starting-point", http.StatusSeeOther)
+		http.Redirect(w, r, "/plan/"+plan.ID().String()+"/starting-point", http.StatusSeeOther)
 	}
 }
 

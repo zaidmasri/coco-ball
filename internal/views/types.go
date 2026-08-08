@@ -1,7 +1,7 @@
 package views
 
 import (
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 // BasePage contains common data for all pages

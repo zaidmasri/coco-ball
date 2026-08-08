@@ -11,7 +11,7 @@
                    class="form-control"
                    id="amount"
                    name="amount"
-                   value="{{ if ne .Balances.Cash 0 }}{{ .Balances.Cash }}{{ end }}"
+                   value="{{ if not .Balances.Cash.IsZero }}{{ .Balances.Cash.MinorUnits }}{{ end }}"
                    autofocus
                    required />
         </div>
@@ -25,7 +25,7 @@
                    class="form-control"
                    id="amount"
                    name="amount"
-                   value="{{ if ne .Balances.AccountsReceivable 0 }}{{ .Balances.AccountsReceivable }}{{ end }}"
+                   value="{{ if not .Balances.AccountsReceivable.IsZero }}{{ .Balances.AccountsReceivable.MinorUnits }}{{ end }}"
                    autofocus
                    required />
         </div>
@@ -39,7 +39,7 @@
                    class="form-control"
                    id="amount"
                    name="amount"
-                   value="{{ if ne .Balances.PrepaidExpenses 0 }}{{ .Balances.PrepaidExpenses }}{{ end }}"
+                   value="{{ if not .Balances.PrepaidExpenses.IsZero }}{{ .Balances.PrepaidExpenses.MinorUnits }}{{ end }}"
                    autofocus
                    required />
         </div>
@@ -53,7 +53,7 @@
                    class="form-control"
                    id="amount"
                    name="amount"
-                   value="{{ if ne .Balances.AccountsPayable 0 }}{{ .Balances.AccountsPayable }}{{ end }}"
+                   value="{{ if not .Balances.AccountsPayable.IsZero }}{{ .Balances.AccountsPayable.MinorUnits }}{{ end }}"
                    autofocus
                    required />
         </div>
@@ -67,7 +67,7 @@
                    class="form-control"
                    id="amount"
                    name="amount"
-                   value="{{ if ne .Balances.AccruedExpenses 0 }}{{ .Balances.AccruedExpenses }}{{ end }}"
+                   value="{{ if not .Balances.AccruedExpenses.IsZero }}{{ .Balances.AccruedExpenses.MinorUnits }}{{ end }}"
                    autofocus
                    required />
         </div>

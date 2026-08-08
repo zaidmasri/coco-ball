@@ -1,4 +1,4 @@
-package domain
+package entities
 
 import (
 	"math"
@@ -40,12 +40,10 @@ func (c Cost) ProjectedAmount(month MonthIndex) Money {
 	if c.Growth.Type == AnnualStepPercent && c.Growth.AnnualRate > 0 {
 		yearsPassed := int(month) / 12
 		if yearsPassed > 0 {
-			// Compound the base amount annually: Base * (1 + rate)^years
 			multiplier := math.Pow(1.0+c.Growth.AnnualRate, float64(yearsPassed))
-			return Money(float64(c.BaseAmountPerMonth) * multiplier)
+			return c.BaseAmountPerMonth.Mul(multiplier)
 		}
 	}
-
 	return c.BaseAmountPerMonth
 }
 
@@ -60,7 +58,7 @@ func (r RevenueStream) ProjectedAmount(month MonthIndex) Money {
 		yearsPassed := int(month) / 12
 		if yearsPassed > 0 {
 			multiplier := math.Pow(1.0+r.Growth.AnnualRate, float64(yearsPassed))
-			return Money(float64(r.BaseAmountPerMonth) * multiplier)
+			return r.BaseAmountPerMonth.Mul(multiplier)
 		}
 	}
 	return r.BaseAmountPerMonth
@@ -76,7 +74,7 @@ func (p *Plan) Revenues() []RevenueStream {
 func (p *Plan) MonthlyRevenue(month MonthIndex) Money {
 	var total Money
 	for _, rev := range p.revenues {
-		total += rev.ProjectedAmount(month)
+		total = total.Add(rev.ProjectedAmount(month))
 	}
 	return total
 }
@@ -85,7 +83,7 @@ func (p *Plan) MonthlyRevenue(month MonthIndex) Money {
 func (p *Plan) TotalRevenues(duration int) Money {
 	var total Money
 	for i := range duration {
-		total += p.MonthlyRevenue(MonthIndex(i))
+		total = total.Add(p.MonthlyRevenue(MonthIndex(i)))
 	}
 	return total
 }
@@ -94,7 +92,7 @@ func (p *Plan) TotalRevenues(duration int) Money {
 func (p *Plan) MonthlyDepreciation(month MonthIndex) Money {
 	var total Money
 	for _, asset := range p.futurePurchases {
-		total += asset.DepreciationForMonth(month)
+		total = total.Add(asset.DepreciationForMonth(month))
 	}
 	return total
 }
@@ -102,7 +100,7 @@ func (p *Plan) MonthlyDepreciation(month MonthIndex) Money {
 func (p *Plan) MonthlyOpEx(month MonthIndex) Money {
 	var total Money
 	for _, exp := range p.opEx {
-		total += exp.ProjectedAmount(month)
+		total = total.Add(exp.ProjectedAmount(month))
 	}
 	return total
 }
@@ -111,23 +109,23 @@ func (p *Plan) MonthlyOpEx(month MonthIndex) Money {
 func (p *Plan) MonthlyCOGS(month MonthIndex) Money {
 	var total Money
 	for _, cogs := range p.cogs {
-		total += cogs.ProjectedAmount(month)
+		total = total.Add(cogs.ProjectedAmount(month))
 	}
 	return total
 }
 
 func (p *Plan) MonthlyNetCashFlow(month MonthIndex, duration int) Money {
 	if int(month) < 0 || int(month) >= duration {
-		return 0
+		return Money{}
 	}
-	return p.MonthlyRevenue(month) - p.MonthlyOpEx(month) - p.MonthlyCOGS(month)
+	return p.MonthlyRevenue(month).Sub(p.MonthlyOpEx(month)).Sub(p.MonthlyCOGS(month))
 }
 
 // TotalOpEx calculates the lifetime operating expenses over the plan's duration.
 func (p *Plan) TotalOpEx(duration int) Money {
 	var total Money
 	for i := range duration {
-		total += p.MonthlyOpEx(MonthIndex(i))
+		total = total.Add(p.MonthlyOpEx(MonthIndex(i)))
 	}
 	return total
 }
@@ -136,21 +134,21 @@ func (p *Plan) TotalOpEx(duration int) Money {
 func (p *Plan) TotalCOGS(duration int) Money {
 	var total Money
 	for i := range duration {
-		total += p.MonthlyCOGS(MonthIndex(i))
+		total = total.Add(p.MonthlyCOGS(MonthIndex(i)))
 	}
 	return total
 }
 
 // TotalExpenses calculates the total lifetime expenses (OpEx + COGS).
 func (p *Plan) TotalExpenses(duration int) Money {
-	return p.TotalOpEx(duration) + p.TotalCOGS(duration)
+	return p.TotalOpEx(duration).Add(p.TotalCOGS(duration))
 }
 
 func (p *Plan) AddRevenue(name string, baseAmount Money, growth GrowthStrategy) error {
 	if strings.TrimSpace(name) == "" {
 		return ErrInvalidName
 	}
-	if baseAmount < 0 {
+	if baseAmount.IsNegative() {
 		return ErrNegativeAmount
 	}
 	if growth.Type != FlatGrowth && growth.Type != AnnualStepPercent {
@@ -190,7 +188,7 @@ func ValidateOpExpense(cost Cost) error {
 	if strings.TrimSpace(cost.Name) == "" {
 		return ErrInvalidName
 	}
-	if cost.BaseAmountPerMonth < 0 {
+	if cost.BaseAmountPerMonth.IsNegative() {
 		return ErrNegativeAmount
 	}
 	if cost.Growth.Type != FlatGrowth && cost.Growth.Type != AnnualStepPercent {
@@ -212,7 +210,7 @@ func (p *Plan) AddCOGS(name string, baseAmount Money, growth GrowthStrategy) err
 	if strings.TrimSpace(name) == "" {
 		return ErrInvalidName
 	}
-	if baseAmount < 0 {
+	if baseAmount.IsNegative() {
 		return ErrNegativeAmount
 	}
 	if growth.Type != FlatGrowth && growth.Type != AnnualStepPercent {

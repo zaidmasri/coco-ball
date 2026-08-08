@@ -2,7 +2,7 @@ package interfaces
 
 import (
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -20,7 +20,7 @@ type SalesForecastService interface {
 
 	// Products
 	CreateProductDraft(planID uuid.UUID) (uuid.UUID, error)
-	GetProductDraft(planID uuid.UUID) (*repositories.ProductItem, error)
+	FindProductDraft(planID uuid.UUID) (*repositories.ProductItem, error)
 	GetProduct(itemID uuid.UUID) (*repositories.ProductItem, error)
 	SaveProductStep(itemID uuid.UUID, product domain.Product, currentStep int, status repositories.ItemStatus) error
 	ListCompleteProducts(planID uuid.UUID) ([]repositories.ProductItem, error)

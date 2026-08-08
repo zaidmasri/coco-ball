@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 // BuildBasePage creates a BasePage from request context and user
@@ -65,7 +65,7 @@ func BuildBalanceSheetPage(r *http.Request, user *domain.User, plan *domain.Plan
 
 	balances := true
 	for _, y := range years {
-		diff := y.TotalAssets - y.TotalLiabilitiesAndEquity
+		diff := y.TotalAssets.Sub(y.TotalLiabilitiesAndEquity).MinorUnits()
 		if diff < -25 || diff > 25 {
 			balances = false
 			break
@@ -88,7 +88,7 @@ func BuildAnalyticsPage(r *http.Request, user *domain.User, plan *domain.Plan, c
 	years := plan.BalanceSheetSnapshots(domain.ProjectionYears)
 	balances := true
 	for _, y := range years {
-		diff := y.TotalAssets - y.TotalLiabilitiesAndEquity
+		diff := y.TotalAssets.Sub(y.TotalLiabilitiesAndEquity).MinorUnits()
 		if diff < -25 || diff > 25 {
 			balances = false
 			break
@@ -97,8 +97,9 @@ func BuildAnalyticsPage(r *http.Request, user *domain.User, plan *domain.Plan, c
 
 	equity, debt := plan.FundingBreakdown()
 	var ownerInjectionPercent float64
-	if equity+debt != 0 {
-		ownerInjectionPercent = float64(equity) / float64(equity+debt) * 100
+	total := equity.Add(debt)
+	if !total.IsZero() {
+		ownerInjectionPercent = float64(equity.MinorUnits()) / float64(total.MinorUnits()) * 100
 	}
 
 	return AnalyticsPage{

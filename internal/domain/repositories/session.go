@@ -1,6 +1,6 @@
 package repositories
 
-import "github.com/zaidmasri/business-planning-tool/internal/domain"
+import domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 
 type SessionRepository interface {
 	SaveSession(s *domain.Session) error

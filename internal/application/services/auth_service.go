@@ -3,7 +3,7 @@ package services
 import (
 	"github.com/google/uuid"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -29,6 +29,13 @@ func (s *authService) GetUserWithPassword(email string) (*domain.UserWithPasswor
 }
 func (s *authService) SaveSession(sess *domain.Session) error { return s.sessions.SaveSession(sess) }
 func (s *authService) GetSession(sessionID string) (*domain.Session, error) {
-	return s.sessions.GetSession(sessionID)
+	sess, err := s.sessions.GetSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if !sess.IsValid() {
+		return nil, domain.ErrSessionExpired
+	}
+	return sess, nil
 }
 func (s *authService) DeleteSession(sessionID string) error { return s.sessions.DeleteSession(sessionID) }

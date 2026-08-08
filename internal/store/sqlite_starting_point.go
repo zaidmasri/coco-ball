@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -81,9 +81,9 @@ func scanCapitalAssetItem(row rowScanner) (*repositories.CapitalAssetItem, error
 		ID: id,
 		Asset: domain.CapitalAsset{
 			Name:               name,
-			PurchaseCost:       domain.Money(purchaseCost),
+			PurchaseCost:       mustUSD(purchaseCost),
 			UsefulLifeMonths:   usefulLifeMonths,
-			SalvageValue:       domain.Money(salvageValue),
+			SalvageValue:       mustUSD(salvageValue),
 			PurchaseMonthIndex: domain.MonthIndex(purchaseMonthIndex),
 			DepreciationMethod: domain.DepreciationMethod(deprMethod),
 		},
@@ -98,7 +98,7 @@ const capitalAssetColumns = "id, name, purchase_cost, useful_life_months, salvag
 // the plan's existing in-progress draft if one is already present (at most
 // one draft per plan+section at a time).
 func (s *SQLiteStore) CreateCapitalAssetDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetCapitalAssetDraft(planID)
+	existing, err := s.FindCapitalAssetDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -111,7 +111,10 @@ func (s *SQLiteStore) CreateCapitalAssetDraft(planID uuid.UUID) (uuid.UUID, erro
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO capital_assets (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -123,11 +126,11 @@ func (s *SQLiteStore) CreateCapitalAssetDraft(planID uuid.UUID) (uuid.UUID, erro
 	return id, nil
 }
 
-// GetCapitalAssetDraft returns the plan's in-progress Fixed Asset draft, if
+// FindCapitalAssetDraft returns the plan's in-progress Fixed Asset draft, if
 // any, without creating one. Returns (nil, nil) when there is none.
-func (s *SQLiteStore) GetCapitalAssetDraft(planID uuid.UUID) (*repositories.CapitalAssetItem, error) {
+func (s *SQLiteStore) FindCapitalAssetDraft(planID uuid.UUID) (*repositories.CapitalAssetItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanCapitalAssetItem(row)
@@ -143,7 +146,7 @@ func (s *SQLiteStore) GetCapitalAssetDraft(planID uuid.UUID) (*repositories.Capi
 // GetCapitalAsset retrieves a single Fixed Asset wizard item by its own ID.
 func (s *SQLiteStore) GetCapitalAsset(itemID uuid.UUID) (*repositories.CapitalAssetItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE id = ?",
+		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanCapitalAssetItem(row)
@@ -164,7 +167,7 @@ func (s *SQLiteStore) SaveCapitalAssetStep(itemID uuid.UUID, asset domain.Capita
 		`UPDATE capital_assets
 		 SET name=?, purchase_cost=?, useful_life_months=?, salvage_value=?, purchase_month_index=?, depreciation_method=?, status=?, current_step=?, updated_at=?
 		 WHERE id = ?`,
-		asset.Name, int64(asset.PurchaseCost), asset.UsefulLifeMonths, int64(asset.SalvageValue), int64(asset.PurchaseMonthIndex), string(asset.DepreciationMethod), string(status), currentStep, now,
+		asset.Name, asset.PurchaseCost.MinorUnits(), asset.UsefulLifeMonths, asset.SalvageValue.MinorUnits(), int64(asset.PurchaseMonthIndex), string(asset.DepreciationMethod), string(status), currentStep, now,
 		itemID.String(),
 	)
 	if err != nil {
@@ -177,7 +180,7 @@ func (s *SQLiteStore) SaveCapitalAssetStep(itemID uuid.UUID, asset domain.Capita
 // in the order they were added.
 func (s *SQLiteStore) ListCompleteCapitalAssets(planID uuid.UUID) ([]repositories.CapitalAssetItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+capitalAssetColumns+" FROM capital_assets WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -199,9 +202,9 @@ func (s *SQLiteStore) ListCompleteCapitalAssets(planID uuid.UUID) ([]repositorie
 	return items, nil
 }
 
-// DeleteCapitalAsset removes a single Fixed Asset item.
+// DeleteCapitalAsset soft-deletes a single Fixed Asset item.
 func (s *SQLiteStore) DeleteCapitalAsset(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM capital_assets WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE capital_assets SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete capital asset: %w", err)
 	}
@@ -226,7 +229,7 @@ func scanStartupCostItem(row rowScanner) (*repositories.StartupCostItem, error) 
 
 	return &repositories.StartupCostItem{
 		ID:          id,
-		Cost:        domain.StartupCost{Name: name, Amount: domain.Money(amount)},
+		Cost:        domain.StartupCost{Name: name, Amount: mustUSD(amount)},
 		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
 	}, nil
@@ -237,7 +240,7 @@ const startupCostColumns = "id, name, amount, status, current_step"
 // CreateStartupCostDraft starts a new Startup Cost wizard item, or resumes
 // the plan's existing draft if one is already present.
 func (s *SQLiteStore) CreateStartupCostDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetStartupCostDraft(planID)
+	existing, err := s.FindStartupCostDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -250,7 +253,10 @@ func (s *SQLiteStore) CreateStartupCostDraft(planID uuid.UUID) (uuid.UUID, error
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO startup_costs (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -262,11 +268,11 @@ func (s *SQLiteStore) CreateStartupCostDraft(planID uuid.UUID) (uuid.UUID, error
 	return id, nil
 }
 
-// GetStartupCostDraft returns the plan's in-progress Startup Cost draft, if
+// FindStartupCostDraft returns the plan's in-progress Startup Cost draft, if
 // any, without creating one.
-func (s *SQLiteStore) GetStartupCostDraft(planID uuid.UUID) (*repositories.StartupCostItem, error) {
+func (s *SQLiteStore) FindStartupCostDraft(planID uuid.UUID) (*repositories.StartupCostItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+startupCostColumns+" FROM startup_costs WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+startupCostColumns+" FROM startup_costs WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanStartupCostItem(row)
@@ -282,7 +288,7 @@ func (s *SQLiteStore) GetStartupCostDraft(planID uuid.UUID) (*repositories.Start
 // GetStartupCost retrieves a single Startup Cost wizard item by its own ID.
 func (s *SQLiteStore) GetStartupCost(itemID uuid.UUID) (*repositories.StartupCostItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+startupCostColumns+" FROM startup_costs WHERE id = ?",
+		"SELECT "+startupCostColumns+" FROM startup_costs WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanStartupCostItem(row)
@@ -301,7 +307,7 @@ func (s *SQLiteStore) SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupC
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE startup_costs SET name=?, amount=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
-		cost.Name, int64(cost.Amount), string(status), currentStep, now, itemID.String(),
+		cost.Name, cost.Amount.MinorUnits(), string(status), currentStep, now, itemID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save startup cost step: %w", err)
@@ -313,7 +319,7 @@ func (s *SQLiteStore) SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupC
 // in the order they were added.
 func (s *SQLiteStore) ListCompleteStartupCosts(planID uuid.UUID) ([]repositories.StartupCostItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+startupCostColumns+" FROM startup_costs WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+startupCostColumns+" FROM startup_costs WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -335,9 +341,9 @@ func (s *SQLiteStore) ListCompleteStartupCosts(planID uuid.UUID) ([]repositories
 	return items, nil
 }
 
-// DeleteStartupCost removes a single Startup Cost item.
+// DeleteStartupCost soft-deletes a single Startup Cost item.
 func (s *SQLiteStore) DeleteStartupCost(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM startup_costs WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE startup_costs SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete startup cost: %w", err)
 	}
@@ -365,7 +371,7 @@ func scanFundingSourceItem(row rowScanner) (*repositories.FundingSourceItem, err
 		ID: id,
 		Funding: domain.FundingSource{
 			Name:         name,
-			Amount:       domain.Money(amount),
+			Amount:       mustUSD(amount),
 			InterestRate: interestRate,
 			TermMonths:   termMonths,
 		},
@@ -379,7 +385,7 @@ const fundingSourceColumns = "id, name, amount, interest_rate, term_months, stat
 // CreateFundingSourceDraft starts a new Funding Source wizard item, or
 // resumes the plan's existing draft if one is already present.
 func (s *SQLiteStore) CreateFundingSourceDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetFundingSourceDraft(planID)
+	existing, err := s.FindFundingSourceDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -392,7 +398,10 @@ func (s *SQLiteStore) CreateFundingSourceDraft(planID uuid.UUID) (uuid.UUID, err
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO funding_sources (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -404,11 +413,11 @@ func (s *SQLiteStore) CreateFundingSourceDraft(planID uuid.UUID) (uuid.UUID, err
 	return id, nil
 }
 
-// GetFundingSourceDraft returns the plan's in-progress Funding Source
+// FindFundingSourceDraft returns the plan's in-progress Funding Source
 // draft, if any, without creating one.
-func (s *SQLiteStore) GetFundingSourceDraft(planID uuid.UUID) (*repositories.FundingSourceItem, error) {
+func (s *SQLiteStore) FindFundingSourceDraft(planID uuid.UUID) (*repositories.FundingSourceItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanFundingSourceItem(row)
@@ -425,7 +434,7 @@ func (s *SQLiteStore) GetFundingSourceDraft(planID uuid.UUID) (*repositories.Fun
 // ID.
 func (s *SQLiteStore) GetFundingSource(itemID uuid.UUID) (*repositories.FundingSourceItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE id = ?",
+		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanFundingSourceItem(row)
@@ -444,7 +453,7 @@ func (s *SQLiteStore) SaveFundingSourceStep(itemID uuid.UUID, funding domain.Fun
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE funding_sources SET name=?, amount=?, interest_rate=?, term_months=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
-		funding.Name, int64(funding.Amount), funding.InterestRate, funding.TermMonths, string(status), currentStep, now, itemID.String(),
+		funding.Name, funding.Amount.MinorUnits(), funding.InterestRate, funding.TermMonths, string(status), currentStep, now, itemID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save funding source step: %w", err)
@@ -456,7 +465,7 @@ func (s *SQLiteStore) SaveFundingSourceStep(itemID uuid.UUID, funding domain.Fun
 // plan, in the order they were added.
 func (s *SQLiteStore) ListCompleteFundingSources(planID uuid.UUID) ([]repositories.FundingSourceItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+fundingSourceColumns+" FROM funding_sources WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -478,9 +487,9 @@ func (s *SQLiteStore) ListCompleteFundingSources(planID uuid.UUID) ([]repositori
 	return items, nil
 }
 
-// DeleteFundingSource removes a single Funding Source item.
+// DeleteFundingSource soft-deletes a single Funding Source item.
 func (s *SQLiteStore) DeleteFundingSource(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM funding_sources WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE funding_sources SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete funding source: %w", err)
 	}
@@ -513,11 +522,11 @@ func (s *SQLiteStore) GetStartingBalancesRow(planID uuid.UUID) (*repositories.St
 
 	return &repositories.StartingBalancesRow{
 		Balances: domain.StartingBalances{
-			Cash:               domain.Money(cash),
-			AccountsReceivable: domain.Money(ar),
-			PrepaidExpenses:    domain.Money(pe),
-			AccountsPayable:    domain.Money(ap),
-			AccruedExpenses:    domain.Money(ae),
+			Cash:               mustUSD(cash),
+			AccountsReceivable: mustUSD(ar),
+			PrepaidExpenses:    mustUSD(pe),
+			AccountsPayable:    mustUSD(ap),
+			AccruedExpenses:    mustUSD(ae),
 		},
 		CurrentStep: currentStep,
 	}, nil
@@ -534,7 +543,7 @@ func (s *SQLiteStore) SaveStartingBalancesStep(planID uuid.UUID, balances domain
 			cash=excluded.cash, accounts_receivable=excluded.accounts_receivable, prepaid_expenses=excluded.prepaid_expenses,
 			accounts_payable=excluded.accounts_payable, accrued_expenses=excluded.accrued_expenses,
 			current_step=excluded.current_step, updated_at=excluded.updated_at`,
-		planID.String(), int64(balances.Cash), int64(balances.AccountsReceivable), int64(balances.PrepaidExpenses), int64(balances.AccountsPayable), int64(balances.AccruedExpenses), currentStep, now, now,
+		planID.String(), balances.Cash.MinorUnits(), balances.AccountsReceivable.MinorUnits(), balances.PrepaidExpenses.MinorUnits(), balances.AccountsPayable.MinorUnits(), balances.AccruedExpenses.MinorUnits(), currentStep, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save starting balances step: %w", err)

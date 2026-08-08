@@ -1,8 +1,16 @@
+// wizard_item.go defines the item-wrapper types used by the wizard sub-entity
+// repositories. Each *Item struct pairs a domain value object (e.g.
+// domain.CapitalAsset) with a store-assigned UUID and wizard progress fields.
+//
+// NOTE: These IDs live at the repository layer, not the domain layer. A
+// future improvement is to promote the ID into the domain entity itself so
+// that Plan can reference individual items by identity without the repository
+// wrapper — see AGENTS.md "Known Limitations" for context.
 package repositories
 
 import (
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 // ItemStatus tracks whether a wizard item has been fully answered

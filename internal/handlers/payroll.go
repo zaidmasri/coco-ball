@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
@@ -137,7 +137,7 @@ func (app *App) GetSalaryRoleList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.PayrollSvc.GetSalaryRoleDraft(planID); err != nil {
+		if draft, err := app.PayrollSvc.FindSalaryRoleDraft(planID); err != nil {
 			log.Printf("Failed to load salary role draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID
@@ -407,7 +407,7 @@ func (app *App) GetBenefitList() http.HandlerFunc {
 
 		var draftItemID *uuid.UUID
 		var draftStep string
-		if draft, err := app.PayrollSvc.GetBenefitDraft(planID); err != nil {
+		if draft, err := app.PayrollSvc.FindBenefitDraft(planID); err != nil {
 			log.Printf("Failed to load benefit draft for plan %s: %v", planID, err)
 		} else if draft != nil {
 			id := draft.ID

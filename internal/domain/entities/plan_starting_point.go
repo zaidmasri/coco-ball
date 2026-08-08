@@ -1,4 +1,4 @@
-package domain
+package entities
 
 import "strings"
 
@@ -40,56 +40,52 @@ type StartingBalances struct {
 
 // DepreciationForMonth calculates the exact depreciation expense for a specific normalized month.
 func (c CapitalAsset) DepreciationForMonth(month MonthIndex) Money {
-	// Edge Case: Asset hasn't been purchased yet
 	if month < c.PurchaseMonthIndex {
-		return 0
+		return Money{}
 	}
 
-	// Edge Case: Asset is past its useful life
 	if month >= c.PurchaseMonthIndex+MonthIndex(c.UsefulLifeMonths) {
-		return 0
+		return Money{}
 	}
 
 	monthSincePurchase := int(month - c.PurchaseMonthIndex)
 
 	if c.DepreciationMethod == StraightLine {
-		depreciableBase := c.PurchaseCost - c.SalvageValue
-		if depreciableBase <= 0 {
-			return 0
+		depreciableBase := c.PurchaseCost.Sub(c.SalvageValue)
+		if !depreciableBase.IsPositive() {
+			return Money{}
 		}
-		return depreciableBase / Money(c.UsefulLifeMonths)
+		return depreciableBase.Div(int64(c.UsefulLifeMonths))
 	}
 
 	if c.DepreciationMethod == DoubleDeclining {
 		rate := 2.0 / float64(c.UsefulLifeMonths)
-		bookValue := float64(c.PurchaseCost)
+		bookValue := float64(c.PurchaseCost.MinorUnits())
 
 		// Because DDB relies on the previous month's book value, we must iterate
 		// up to the requested month to find the exact expense.
 		for i := 0; i <= monthSincePurchase; i++ {
-			expense := Money(bookValue * rate)
+			expense := fromFloatUSD(bookValue * rate)
 
 			// Edge Case: Salvage Value Floor
-			if Money(bookValue)-expense < c.SalvageValue {
-				expense = Money(bookValue) - c.SalvageValue
+			if fromFloatUSD(bookValue).Sub(expense).Less(c.SalvageValue) {
+				expense = fromFloatUSD(bookValue).Sub(c.SalvageValue)
 			}
 
-			// If we've reached the target month, return the calculated expense
 			if i == monthSincePurchase {
 				return expense
 			}
 
-			// Otherwise, reduce book value and continue to the next month
-			bookValue -= float64(expense)
+			bookValue -= float64(expense.MinorUnits())
 
 			// Edge Case: Fully depreciated before useful life ends (common in DDB)
-			if Money(bookValue) <= c.SalvageValue {
-				return 0
+			if fromFloatUSD(bookValue).LessOrEqual(c.SalvageValue) {
+				return Money{}
 			}
 		}
 	}
 
-	return 0
+	return Money{}
 }
 
 // LoadStartingPointData populates the Starting Point section fields from an
@@ -109,7 +105,7 @@ func ValidateStartupCost(cost StartupCost) error {
 	if strings.TrimSpace(cost.Name) == "" {
 		return ErrInvalidName
 	}
-	if cost.Amount < 0 {
+	if cost.Amount.IsNegative() {
 		return ErrNegativeAmount
 	}
 	return nil
@@ -130,7 +126,7 @@ func ValidateFundingSource(funding FundingSource) error {
 	if strings.TrimSpace(funding.Name) == "" {
 		return ErrInvalidName
 	}
-	if funding.Amount < 0 {
+	if funding.Amount.IsNegative() {
 		return ErrNegativeAmount
 	}
 	return nil
@@ -156,18 +152,15 @@ func (p *Plan) SetStartingBalances(cash, ar, pe, ap, ae Money) {
 	}
 }
 
-// ValidateCapitalAsset checks a CapitalAsset before it's persisted. Factored
-// out of AddCapitalPurchase so the Starting Point wizard's step handlers
-// can validate a single field/struct at a time without needing a *Plan
-// receiver.
+// ValidateCapitalAsset checks a CapitalAsset before it's persisted.
 func ValidateCapitalAsset(asset CapitalAsset) error {
-	if asset.PurchaseCost < 0 || asset.SalvageValue < 0 {
+	if asset.PurchaseCost.IsNegative() || asset.SalvageValue.IsNegative() {
 		return ErrNegativeAmount
 	}
 	if asset.DepreciationMethod != None && asset.UsefulLifeMonths < 1 {
 		return ErrInvalidUsefulLife
 	}
-	if asset.PurchaseCost < asset.SalvageValue {
+	if asset.PurchaseCost.Less(asset.SalvageValue) {
 		return ErrPurchaseCostLessThanSalvageValue
 	}
 	if asset.DepreciationMethod != StraightLine && asset.DepreciationMethod != DoubleDeclining && asset.DepreciationMethod != None {

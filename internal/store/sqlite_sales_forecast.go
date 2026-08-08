@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -56,8 +56,8 @@ func scanProductItem(row rowScanner) (*repositories.ProductItem, error) {
 		Product: domain.Product{
 			Name:         name,
 			Month1Units:  month1Units,
-			PricePerUnit: domain.Money(pricePerUnit),
-			CostPerUnit:  domain.Money(costPerUnit),
+			PricePerUnit: mustUSD(pricePerUnit),
+			CostPerUnit:  mustUSD(costPerUnit),
 		},
 		Status:      repositories.ItemStatus(status),
 		CurrentStep: currentStep,
@@ -69,7 +69,7 @@ const productColumns = "id, name, month1_units, price_per_unit, cost_per_unit, s
 // CreateProductDraft starts a new Product wizard item, or resumes the
 // plan's existing in-progress draft if one is already present.
 func (s *SQLiteStore) CreateProductDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetProductDraft(planID)
+	existing, err := s.FindProductDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -82,7 +82,10 @@ func (s *SQLiteStore) CreateProductDraft(planID uuid.UUID) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO products (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -94,11 +97,11 @@ func (s *SQLiteStore) CreateProductDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return id, nil
 }
 
-// GetProductDraft returns the plan's in-progress Product draft, if any,
+// FindProductDraft returns the plan's in-progress Product draft, if any,
 // without creating one.
-func (s *SQLiteStore) GetProductDraft(planID uuid.UUID) (*repositories.ProductItem, error) {
+func (s *SQLiteStore) FindProductDraft(planID uuid.UUID) (*repositories.ProductItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+productColumns+" FROM products WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+productColumns+" FROM products WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanProductItem(row)
@@ -114,7 +117,7 @@ func (s *SQLiteStore) GetProductDraft(planID uuid.UUID) (*repositories.ProductIt
 // GetProduct retrieves a single Product wizard item by its own ID.
 func (s *SQLiteStore) GetProduct(itemID uuid.UUID) (*repositories.ProductItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+productColumns+" FROM products WHERE id = ?",
+		"SELECT "+productColumns+" FROM products WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanProductItem(row)
@@ -133,7 +136,7 @@ func (s *SQLiteStore) SaveProductStep(itemID uuid.UUID, product domain.Product, 
 	now := time.Now().Unix()
 	res, err := s.db.Exec(
 		`UPDATE products SET name=?, month1_units=?, price_per_unit=?, cost_per_unit=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
-		product.Name, product.Month1Units, int64(product.PricePerUnit), int64(product.CostPerUnit), string(status), currentStep, now, itemID.String(),
+		product.Name, product.Month1Units, product.PricePerUnit.MinorUnits(), product.CostPerUnit.MinorUnits(), string(status), currentStep, now, itemID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save product step: %w", err)
@@ -145,7 +148,7 @@ func (s *SQLiteStore) SaveProductStep(itemID uuid.UUID, product domain.Product, 
 // order they were added.
 func (s *SQLiteStore) ListCompleteProducts(planID uuid.UUID) ([]repositories.ProductItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+productColumns+" FROM products WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+productColumns+" FROM products WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -167,9 +170,9 @@ func (s *SQLiteStore) ListCompleteProducts(planID uuid.UUID) ([]repositories.Pro
 	return items, nil
 }
 
-// DeleteProduct removes a single Product item.
+// DeleteProduct soft-deletes a single Product item.
 func (s *SQLiteStore) DeleteProduct(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM products WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE products SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete product: %w", err)
 	}

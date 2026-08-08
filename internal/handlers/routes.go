@@ -4,7 +4,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
 // RegisterRoutes registers all application routes on the provided mux

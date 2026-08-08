@@ -33,7 +33,7 @@
 // These choices keep the accounting identity Assets = Liabilities + Equity
 // true by construction (up to whole-dollar rounding) for every month of the
 // projection — see TestBalanceSheetSnapshots_Balance in projection_test.go.
-package domain
+package entities
 
 import "math"
 
@@ -182,12 +182,12 @@ type loanScheduleEntry struct {
 // schedule for `horizon` months (zero-padded after payoff or past term).
 func amortizationSchedule(principal Money, annualRate float64, termMonths, horizon int) []loanScheduleEntry {
 	schedule := make([]loanScheduleEntry, horizon)
-	if termMonths <= 0 || principal <= 0 {
+	if termMonths <= 0 || !principal.IsPositive() {
 		return schedule
 	}
 
 	monthlyRate := annualRate / 12.0
-	p := float64(principal)
+	p := float64(principal.MinorUnits())
 
 	var payment float64
 	if monthlyRate == 0 {
@@ -210,9 +210,9 @@ func amortizationSchedule(principal Money, annualRate float64, termMonths, horiz
 		balance -= principalPortion
 
 		schedule[m] = loanScheduleEntry{
-			Interest:      Money(interest),
-			Principal:     Money(principalPortion),
-			EndingBalance: Money(balance),
+			Interest:      fromFloatUSD(interest),
+			Principal:     fromFloatUSD(principalPortion),
+			EndingBalance: fromFloatUSD(balance),
 		}
 	}
 
@@ -273,8 +273,8 @@ func (p *Plan) unitGrowthMultipliers(horizon int) []float64 {
 func (p *Plan) monthlyProductRevenueAndCOGS(multiplier float64) (revenue, cogs Money) {
 	for _, prod := range p.products {
 		units := float64(prod.Month1Units) * multiplier
-		revenue += Money(units * float64(prod.PricePerUnit))
-		cogs += Money(units * float64(prod.CostPerUnit))
+		revenue = revenue.Add(fromFloatUSD(units * float64(prod.PricePerUnit.MinorUnits())))
+		cogs = cogs.Add(fromFloatUSD(units * float64(prod.CostPerUnit.MinorUnits())))
 	}
 	return revenue, cogs
 }
@@ -286,21 +286,21 @@ func (p *Plan) monthlyPayrollCost(month int) (payrollCost, payrollTax Money) {
 	var w2Base Money
 
 	for _, role := range p.salaryRoles {
-		amt := Money(float64(role.MonthlyPay) * annualGrowthMultiplier(role.GrowthAfterYr1, month))
-		payrollCost += amt
+		amt := fromFloatUSD(float64(role.MonthlyPay.MinorUnits()) * annualGrowthMultiplier(role.GrowthAfterYr1, month))
+		payrollCost = payrollCost.Add(amt)
 		if !role.IsContractor {
-			w2Base += amt
+			w2Base = w2Base.Add(amt)
 		}
 	}
 
 	for _, b := range p.benefits {
-		amt := Money(float64(b.MonthlyAmount) * annualGrowthMultiplier(b.GrowthAfterYr1, month))
-		payrollCost += amt
+		amt := fromFloatUSD(float64(b.MonthlyAmount.MinorUnits()) * annualGrowthMultiplier(b.GrowthAfterYr1, month))
+		payrollCost = payrollCost.Add(amt)
 	}
 
 	rates := p.payrollTaxRates
 	taxRate := rates.SocialSecurityRate + rates.MedicareRate + rates.FUTARate + rates.SUTARate
-	payrollTax = Money(float64(w2Base) * taxRate)
+	payrollTax = fromFloatUSD(float64(w2Base.MinorUnits()) * taxRate)
 
 	return payrollCost, payrollTax
 }
@@ -318,12 +318,12 @@ func (p *Plan) ProjectMonths(horizon int) []MonthlyFinancials {
 	var loanSchedules [][]loanScheduleEntry
 	var openingCash Money
 	for _, f := range p.fundingSources {
-		openingCash += f.Amount
+		openingCash = openingCash.Add(f.Amount)
 		if isAmortizingLoan(f) {
 			loanSchedules = append(loanSchedules, amortizationSchedule(f.Amount, f.InterestRate, f.TermMonths, horizon))
 		}
 	}
-	openingCash += p.startingBalances.Cash
+	openingCash = openingCash.Add(p.startingBalances.Cash)
 
 	var openingRetainedEarnings Money
 
@@ -332,8 +332,8 @@ func (p *Plan) ProjectMonths(horizon int) []MonthlyFinancials {
 	// they must reduce Equity by the same amount they reduce Cash — modeled
 	// here as an opening deficit against Retained Earnings.
 	for _, sc := range p.startupCosts {
-		openingCash -= sc.Amount
-		openingRetainedEarnings -= sc.Amount
+		openingCash = openingCash.Sub(sc.Amount)
+		openingRetainedEarnings = openingRetainedEarnings.Sub(sc.Amount)
 	}
 
 	// StartingBalances (Cash/AR/Prepaid/AP/AccruedExpenses) describe an
@@ -344,13 +344,18 @@ func (p *Plan) ProjectMonths(horizon int) []MonthlyFinancials {
 	// balance (Cash/AR/Prepaid are assets with no other offsetting entry;
 	// AP/AccruedExpenses are liabilities already counted separately).
 	sb := p.startingBalances
-	openingRetainedEarnings += sb.Cash + sb.AccountsReceivable + sb.PrepaidExpenses - sb.AccountsPayable - sb.AccruedExpenses
+	openingRetainedEarnings = openingRetainedEarnings.
+		Add(sb.Cash).
+		Add(sb.AccountsReceivable).
+		Add(sb.PrepaidExpenses).
+		Sub(sb.AccountsPayable).
+		Sub(sb.AccruedExpenses)
 
 	capexByMonth := make([]Money, horizon)
 	for _, asset := range p.futurePurchases {
 		m := int(asset.PurchaseMonthIndex)
 		if m >= 0 && m < horizon {
-			capexByMonth[m] += asset.PurchaseCost
+			capexByMonth[m] = capexByMonth[m].Add(asset.PurchaseCost)
 		}
 	}
 
@@ -365,8 +370,8 @@ func (p *Plan) ProjectMonths(horizon int) []MonthlyFinancials {
 		// Fold in the legacy flat/annual-step Revenue & COGS API (kept for
 		// backward compatibility with AddRevenue/AddCOGS); no current
 		// handler populates those slices, so in practice this adds 0.
-		revenue += p.MonthlyRevenue(MonthIndex(m))
-		cogs += p.MonthlyCOGS(MonthIndex(m))
+		revenue = revenue.Add(p.MonthlyRevenue(MonthIndex(m)))
+		cogs = cogs.Add(p.MonthlyCOGS(MonthIndex(m)))
 
 		payrollCost, payrollTax := p.monthlyPayrollCost(m)
 		opex := p.MonthlyOpEx(MonthIndex(m))
@@ -374,31 +379,31 @@ func (p *Plan) ProjectMonths(horizon int) []MonthlyFinancials {
 
 		var interest, principal, loanBalance Money
 		for _, schedule := range loanSchedules {
-			interest += schedule[m].Interest
-			principal += schedule[m].Principal
-			loanBalance += schedule[m].EndingBalance
+			interest = interest.Add(schedule[m].Interest)
+			principal = principal.Add(schedule[m].Principal)
+			loanBalance = loanBalance.Add(schedule[m].EndingBalance)
 		}
 
 		var inventoryPurchase, distribution Money
 		for _, inv := range p.inventoryPlan {
-			inventoryPurchase += Money(float64(inv.MonthlyAmount) * annualGrowthMultiplier(inv.GrowthAfterYr1, m))
+			inventoryPurchase = inventoryPurchase.Add(fromFloatUSD(float64(inv.MonthlyAmount.MinorUnits()) * annualGrowthMultiplier(inv.GrowthAfterYr1, m)))
 		}
 		for _, d := range p.distributions {
-			distribution += Money(float64(d.MonthlyAmount) * annualGrowthMultiplier(d.GrowthAfterYr1, m))
+			distribution = distribution.Add(fromFloatUSD(float64(d.MonthlyAmount.MinorUnits()) * annualGrowthMultiplier(d.GrowthAfterYr1, m)))
 		}
 
-		grossProfit := revenue - cogs
-		operatingIncome := grossProfit - opex - payrollCost - payrollTax - depr
-		netIncome := operatingIncome - interest
+		grossProfit := revenue.Sub(cogs)
+		operatingIncome := grossProfit.Sub(opex).Sub(payrollCost).Sub(payrollTax).Sub(depr)
+		netIncome := operatingIncome.Sub(interest)
 
 		capex := capexByMonth[m]
-		netCashFlow := netIncome + depr - capex - inventoryPurchase - principal - distribution
-		runningCash += netCashFlow
+		netCashFlow := netIncome.Add(depr).Sub(capex).Sub(inventoryPurchase).Sub(principal).Sub(distribution)
+		runningCash = runningCash.Add(netCashFlow)
 
-		runningAccumDepr += depr
-		runningFixedAssetsGross += capex
-		runningInventory += inventoryPurchase
-		runningRetainedEarnings += netIncome - distribution
+		runningAccumDepr = runningAccumDepr.Add(depr)
+		runningFixedAssetsGross = runningFixedAssetsGross.Add(capex)
+		runningInventory = runningInventory.Add(inventoryPurchase)
+		runningRetainedEarnings = runningRetainedEarnings.Add(netIncome).Sub(distribution)
 
 		results[m] = MonthlyFinancials{
 			Month:              MonthIndex(m),
@@ -441,16 +446,16 @@ func (p *Plan) AnnualSummaries(years int) []AnnualFinancials {
 		s := AnnualFinancials{Year: y + 1}
 		for m := y * 12; m < (y+1)*12 && m < len(months); m++ {
 			mm := months[m]
-			s.Revenue += mm.Revenue
-			s.COGS += mm.COGS
-			s.GrossProfit += mm.GrossProfit
-			s.PayrollCost += mm.PayrollCost
-			s.PayrollTax += mm.PayrollTax
-			s.OpEx += mm.OpEx
-			s.Depreciation += mm.Depreciation
-			s.InterestExpense += mm.InterestExpense
-			s.OperatingIncome += mm.OperatingIncome
-			s.NetIncome += mm.NetIncome
+			s.Revenue = s.Revenue.Add(mm.Revenue)
+			s.COGS = s.COGS.Add(mm.COGS)
+			s.GrossProfit = s.GrossProfit.Add(mm.GrossProfit)
+			s.PayrollCost = s.PayrollCost.Add(mm.PayrollCost)
+			s.PayrollTax = s.PayrollTax.Add(mm.PayrollTax)
+			s.OpEx = s.OpEx.Add(mm.OpEx)
+			s.Depreciation = s.Depreciation.Add(mm.Depreciation)
+			s.InterestExpense = s.InterestExpense.Add(mm.InterestExpense)
+			s.OperatingIncome = s.OperatingIncome.Add(mm.OperatingIncome)
+			s.NetIncome = s.NetIncome.Add(mm.NetIncome)
 		}
 		summaries[y] = s
 	}
@@ -466,7 +471,7 @@ func (p *Plan) BalanceSheetSnapshots(years int) []BalanceSheetSnapshot {
 	var openingEquity Money
 	for _, f := range p.fundingSources {
 		if !isAmortizingLoan(f) {
-			openingEquity += f.Amount
+			openingEquity = openingEquity.Add(f.Amount)
 		}
 	}
 
@@ -480,14 +485,14 @@ func (p *Plan) BalanceSheetSnapshots(years int) []BalanceSheetSnapshot {
 		}
 		mm := months[idx]
 
-		currentAssets := mm.CashBalance + balances.AccountsReceivable + mm.InventoryBalance + balances.PrepaidExpenses
-		fixedAssetsNet := mm.FixedAssetsGross - mm.AccumulatedDepreciation
-		totalAssets := currentAssets + fixedAssetsNet
+		currentAssets := mm.CashBalance.Add(balances.AccountsReceivable).Add(mm.InventoryBalance).Add(balances.PrepaidExpenses)
+		fixedAssetsNet := mm.FixedAssetsGross.Sub(mm.AccumulatedDepreciation)
+		totalAssets := currentAssets.Add(fixedAssetsNet)
 
-		currentLiabilities := balances.AccountsPayable + balances.AccruedExpenses
-		totalLiabilities := currentLiabilities + mm.LoanBalance
+		currentLiabilities := balances.AccountsPayable.Add(balances.AccruedExpenses)
+		totalLiabilities := currentLiabilities.Add(mm.LoanBalance)
 
-		totalEquity := openingEquity + mm.RetainedEarnings
+		totalEquity := openingEquity.Add(mm.RetainedEarnings)
 
 		snapshots[y] = BalanceSheetSnapshot{
 			Year: y + 1,
@@ -514,7 +519,7 @@ func (p *Plan) BalanceSheetSnapshots(years int) []BalanceSheetSnapshot {
 			RetainedEarnings: mm.RetainedEarnings,
 			TotalEquity:      totalEquity,
 
-			TotalLiabilitiesAndEquity: totalLiabilities + totalEquity,
+			TotalLiabilitiesAndEquity: totalLiabilities.Add(totalEquity),
 		}
 	}
 
@@ -534,30 +539,30 @@ func (p *Plan) FinancialRatiosSeries(years int) []FinancialRatios {
 		b := balances[y]
 		r := FinancialRatios{Year: y + 1}
 
-		if b.CurrentLiabilities != 0 {
-			r.CurrentRatio = float64(b.CurrentAssets) / float64(b.CurrentLiabilities)
-			r.QuickRatio = float64(b.Cash+b.AccountsReceivable) / float64(b.CurrentLiabilities)
+		if !b.CurrentLiabilities.IsZero() {
+			r.CurrentRatio = float64(b.CurrentAssets.MinorUnits()) / float64(b.CurrentLiabilities.MinorUnits())
+			r.QuickRatio = float64(b.Cash.Add(b.AccountsReceivable).MinorUnits()) / float64(b.CurrentLiabilities.MinorUnits())
 		}
-		if b.TotalEquity != 0 {
-			r.DebtToEquity = float64(b.TotalLiabilities) / float64(b.TotalEquity)
-			r.ReturnOnEquityPercent = float64(a.NetIncome) / float64(b.TotalEquity) * 100
+		if !b.TotalEquity.IsZero() {
+			r.DebtToEquity = float64(b.TotalLiabilities.MinorUnits()) / float64(b.TotalEquity.MinorUnits())
+			r.ReturnOnEquityPercent = float64(a.NetIncome.MinorUnits()) / float64(b.TotalEquity.MinorUnits()) * 100
 		}
 
 		var annualPrincipal Money
 		for m := y * 12; m < (y+1)*12 && m < len(months); m++ {
-			annualPrincipal += months[m].PrincipalPayment
+			annualPrincipal = annualPrincipal.Add(months[m].PrincipalPayment)
 		}
-		debtService := a.InterestExpense + annualPrincipal
-		if debtService != 0 {
-			r.DSCR = float64(a.OperatingIncome+a.Depreciation) / float64(debtService)
+		debtService := a.InterestExpense.Add(annualPrincipal)
+		if !debtService.IsZero() {
+			r.DSCR = float64(a.OperatingIncome.Add(a.Depreciation).MinorUnits()) / float64(debtService.MinorUnits())
 		}
 
-		if y > 0 && annuals[y-1].Revenue != 0 {
-			r.SalesGrowthPercent = float64(a.Revenue-annuals[y-1].Revenue) / float64(annuals[y-1].Revenue) * 100
+		if y > 0 && !annuals[y-1].Revenue.IsZero() {
+			r.SalesGrowthPercent = float64(a.Revenue.Sub(annuals[y-1].Revenue).MinorUnits()) / float64(annuals[y-1].Revenue.MinorUnits()) * 100
 		}
-		if a.Revenue != 0 {
-			r.GrossProfitMarginPercent = float64(a.GrossProfit) / float64(a.Revenue) * 100
-			r.NetProfitMarginPercent = float64(a.NetIncome) / float64(a.Revenue) * 100
+		if !a.Revenue.IsZero() {
+			r.GrossProfitMarginPercent = float64(a.GrossProfit.MinorUnits()) / float64(a.Revenue.MinorUnits()) * 100
+			r.NetProfitMarginPercent = float64(a.NetIncome.MinorUnits()) / float64(a.Revenue.MinorUnits()) * 100
 		}
 
 		ratios[y] = r
@@ -591,8 +596,8 @@ func (p *Plan) ProductFinancialsSeries(years int) []ProductFinancials {
 		for y := 0; y < years; y++ {
 			for m := y * 12; m < (y+1)*12 && m < horizon; m++ {
 				units := float64(prod.Month1Units) * multipliers[m]
-				result[i].RevenueByYear[y] += Money(units * float64(prod.PricePerUnit))
-				result[i].COGSByYear[y] += Money(units * float64(prod.CostPerUnit))
+				result[i].RevenueByYear[y] = result[i].RevenueByYear[y].Add(fromFloatUSD(units * float64(prod.PricePerUnit.MinorUnits())))
+				result[i].COGSByYear[y] = result[i].COGSByYear[y].Add(fromFloatUSD(units * float64(prod.CostPerUnit.MinorUnits())))
 			}
 		}
 	}
@@ -617,7 +622,7 @@ func (p *Plan) OpExAnnualBreakdown(years int) []OpExLine {
 		lines[i] = OpExLine{Name: cost.Name, AmountByYear: make([]Money, years)}
 		for y := 0; y < years; y++ {
 			for m := y * 12; m < (y+1)*12 && m < horizon; m++ {
-				lines[i].AmountByYear[y] += cost.ProjectedAmount(MonthIndex(m))
+				lines[i].AmountByYear[y] = lines[i].AmountByYear[y].Add(cost.ProjectedAmount(MonthIndex(m)))
 			}
 		}
 	}
@@ -640,7 +645,7 @@ func (p *Plan) AssetDepreciationBreakdown() []AssetDepreciation {
 	for i, asset := range p.futurePurchases {
 		var year1 Money
 		for m := 0; m < 12; m++ {
-			year1 += asset.DepreciationForMonth(MonthIndex(m))
+			year1 = year1.Add(asset.DepreciationForMonth(MonthIndex(m)))
 		}
 		result[i] = AssetDepreciation{
 			Name:              asset.Name,
@@ -671,8 +676,8 @@ func (p *Plan) LoanAmortizationSummary(years int) []LoanYearSummary {
 	for y := 0; y < years; y++ {
 		var interest, principal Money
 		for m := y * 12; m < (y+1)*12 && m < len(months); m++ {
-			interest += months[m].InterestExpense
-			principal += months[m].PrincipalPayment
+			interest = interest.Add(months[m].InterestExpense)
+			principal = principal.Add(months[m].PrincipalPayment)
 		}
 
 		idx := (y+1)*12 - 1
@@ -697,9 +702,9 @@ func (p *Plan) LoanAmortizationSummary(years int) []LoanYearSummary {
 func (p *Plan) FundingBreakdown() (equity, debt Money) {
 	for _, f := range p.fundingSources {
 		if isAmortizingLoan(f) {
-			debt += f.Amount
+			debt = debt.Add(f.Amount)
 		} else {
-			equity += f.Amount
+			equity = equity.Add(f.Amount)
 		}
 	}
 	return equity, debt
@@ -732,17 +737,17 @@ func (p *Plan) Breakeven() BreakevenAnalysis {
 	b := BreakevenAnalysis{
 		GrossMargin:               y1.GrossProfit,
 		TotalSales:                y1.Revenue,
-		PayrollFixedCost:          y1.PayrollCost + y1.PayrollTax,
+		PayrollFixedCost:          y1.PayrollCost.Add(y1.PayrollTax),
 		OperatingExpenseFixedCost: y1.OpEx,
 	}
-	b.TotalFixedExpenses = b.PayrollFixedCost + b.OperatingExpenseFixedCost
+	b.TotalFixedExpenses = b.PayrollFixedCost.Add(b.OperatingExpenseFixedCost)
 
-	if y1.Revenue != 0 {
-		b.GrossMarginPercent = float64(y1.GrossProfit) / float64(y1.Revenue) * 100
+	if !y1.Revenue.IsZero() {
+		b.GrossMarginPercent = float64(y1.GrossProfit.MinorUnits()) / float64(y1.Revenue.MinorUnits()) * 100
 	}
 	if b.GrossMarginPercent > 0 {
-		b.BreakevenAnnual = Money(float64(b.TotalFixedExpenses) / (b.GrossMarginPercent / 100))
-		b.BreakevenMonthly = b.BreakevenAnnual / 12
+		b.BreakevenAnnual = fromFloatUSD(float64(b.TotalFixedExpenses.MinorUnits()) / (b.GrossMarginPercent / 100))
+		b.BreakevenMonthly = b.BreakevenAnnual.Div(12)
 	}
 
 	return b

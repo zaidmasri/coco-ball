@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
@@ -68,7 +68,7 @@ func scanSalaryRoleItem(row rowScanner) (*repositories.SalaryRoleItem, error) {
 			Role:           role,
 			IsContractor:   isContractor,
 			Headcount:      headcount,
-			MonthlyPay:     domain.Money(monthlyPay),
+			MonthlyPay:     mustUSD(monthlyPay),
 			GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 		},
 		Status:      repositories.ItemStatus(status),
@@ -81,7 +81,7 @@ const salaryRoleColumns = "id, role, is_contractor, headcount, monthly_pay, grow
 // CreateSalaryRoleDraft starts a new Salary Role wizard item, or resumes
 // the plan's existing in-progress draft if one is already present.
 func (s *SQLiteStore) CreateSalaryRoleDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetSalaryRoleDraft(planID)
+	existing, err := s.FindSalaryRoleDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -94,7 +94,10 @@ func (s *SQLiteStore) CreateSalaryRoleDraft(planID uuid.UUID) (uuid.UUID, error)
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO salary_roles (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -106,11 +109,11 @@ func (s *SQLiteStore) CreateSalaryRoleDraft(planID uuid.UUID) (uuid.UUID, error)
 	return id, nil
 }
 
-// GetSalaryRoleDraft returns the plan's in-progress Salary Role draft, if
+// FindSalaryRoleDraft returns the plan's in-progress Salary Role draft, if
 // any, without creating one.
-func (s *SQLiteStore) GetSalaryRoleDraft(planID uuid.UUID) (*repositories.SalaryRoleItem, error) {
+func (s *SQLiteStore) FindSalaryRoleDraft(planID uuid.UUID) (*repositories.SalaryRoleItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+salaryRoleColumns+" FROM salary_roles WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+salaryRoleColumns+" FROM salary_roles WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanSalaryRoleItem(row)
@@ -126,7 +129,7 @@ func (s *SQLiteStore) GetSalaryRoleDraft(planID uuid.UUID) (*repositories.Salary
 // GetSalaryRole retrieves a single Salary Role wizard item by its own ID.
 func (s *SQLiteStore) GetSalaryRole(itemID uuid.UUID) (*repositories.SalaryRoleItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+salaryRoleColumns+" FROM salary_roles WHERE id = ?",
+		"SELECT "+salaryRoleColumns+" FROM salary_roles WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanSalaryRoleItem(row)
@@ -149,7 +152,7 @@ func (s *SQLiteStore) SaveSalaryRoleStep(itemID uuid.UUID, role domain.SalaryRol
 		`UPDATE salary_roles
 		 SET role=?, is_contractor=?, headcount=?, monthly_pay=?, growth_yr2=?, growth_yr3=?, status=?, current_step=?, updated_at=?
 		 WHERE id = ?`,
-		role.Role, role.IsContractor, role.Headcount, int64(role.MonthlyPay), growthYr2, growthYr3, string(status), currentStep, now,
+		role.Role, role.IsContractor, role.Headcount, role.MonthlyPay.MinorUnits(), growthYr2, growthYr3, string(status), currentStep, now,
 		itemID.String(),
 	)
 	if err != nil {
@@ -162,7 +165,7 @@ func (s *SQLiteStore) SaveSalaryRoleStep(itemID uuid.UUID, role domain.SalaryRol
 // the order they were added.
 func (s *SQLiteStore) ListCompleteSalaryRoles(planID uuid.UUID) ([]repositories.SalaryRoleItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+salaryRoleColumns+" FROM salary_roles WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+salaryRoleColumns+" FROM salary_roles WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -184,9 +187,9 @@ func (s *SQLiteStore) ListCompleteSalaryRoles(planID uuid.UUID) ([]repositories.
 	return items, nil
 }
 
-// DeleteSalaryRole removes a single Salary Role item.
+// DeleteSalaryRole soft-deletes a single Salary Role item.
 func (s *SQLiteStore) DeleteSalaryRole(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM salary_roles WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE salary_roles SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete salary role: %w", err)
 	}
@@ -214,7 +217,7 @@ func scanBenefitItem(row rowScanner) (*repositories.BenefitItem, error) {
 		ID: id,
 		Benefit: domain.Benefit{
 			Type:           benefitType,
-			MonthlyAmount:  domain.Money(monthlyAmount),
+			MonthlyAmount:  mustUSD(monthlyAmount),
 			GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 		},
 		Status:      repositories.ItemStatus(status),
@@ -227,7 +230,7 @@ const benefitColumns = "id, type, monthly_amount, growth_yr2, growth_yr3, status
 // CreateBenefitDraft starts a new Benefit wizard item, or resumes the
 // plan's existing in-progress draft if one is already present.
 func (s *SQLiteStore) CreateBenefitDraft(planID uuid.UUID) (uuid.UUID, error) {
-	existing, err := s.GetBenefitDraft(planID)
+	existing, err := s.FindBenefitDraft(planID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -240,7 +243,10 @@ func (s *SQLiteStore) CreateBenefitDraft(planID uuid.UUID) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to generate item id: %w", err)
+	}
 	now := time.Now().Unix()
 	if _, err := s.db.Exec(
 		`INSERT INTO benefits (id, plan_id, status, current_step, sort_order, created_at, updated_at)
@@ -252,11 +258,11 @@ func (s *SQLiteStore) CreateBenefitDraft(planID uuid.UUID) (uuid.UUID, error) {
 	return id, nil
 }
 
-// GetBenefitDraft returns the plan's in-progress Benefit draft, if any,
+// FindBenefitDraft returns the plan's in-progress Benefit draft, if any,
 // without creating one.
-func (s *SQLiteStore) GetBenefitDraft(planID uuid.UUID) (*repositories.BenefitItem, error) {
+func (s *SQLiteStore) FindBenefitDraft(planID uuid.UUID) (*repositories.BenefitItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+benefitColumns+" FROM benefits WHERE plan_id = ? AND status = ? LIMIT 1",
+		"SELECT "+benefitColumns+" FROM benefits WHERE plan_id = ? AND status = ? AND deleted_at IS NULL LIMIT 1",
 		planID.String(), string(repositories.StatusDraft),
 	)
 	item, err := scanBenefitItem(row)
@@ -272,7 +278,7 @@ func (s *SQLiteStore) GetBenefitDraft(planID uuid.UUID) (*repositories.BenefitIt
 // GetBenefit retrieves a single Benefit wizard item by its own ID.
 func (s *SQLiteStore) GetBenefit(itemID uuid.UUID) (*repositories.BenefitItem, error) {
 	row := s.db.QueryRow(
-		"SELECT "+benefitColumns+" FROM benefits WHERE id = ?",
+		"SELECT "+benefitColumns+" FROM benefits WHERE id = ? AND deleted_at IS NULL",
 		itemID.String(),
 	)
 	item, err := scanBenefitItem(row)
@@ -293,7 +299,7 @@ func (s *SQLiteStore) SaveBenefitStep(itemID uuid.UUID, benefit domain.Benefit, 
 	growthYr3 := benefit.GrowthAfterYr1.GrowthRatePercent(1) / 100
 	res, err := s.db.Exec(
 		`UPDATE benefits SET type=?, monthly_amount=?, growth_yr2=?, growth_yr3=?, status=?, current_step=?, updated_at=? WHERE id = ?`,
-		benefit.Type, int64(benefit.MonthlyAmount), growthYr2, growthYr3, string(status), currentStep, now, itemID.String(),
+		benefit.Type, benefit.MonthlyAmount.MinorUnits(), growthYr2, growthYr3, string(status), currentStep, now, itemID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save benefit step: %w", err)
@@ -305,7 +311,7 @@ func (s *SQLiteStore) SaveBenefitStep(itemID uuid.UUID, benefit domain.Benefit, 
 // order they were added.
 func (s *SQLiteStore) ListCompleteBenefits(planID uuid.UUID) ([]repositories.BenefitItem, error) {
 	rows, err := s.db.Query(
-		"SELECT "+benefitColumns+" FROM benefits WHERE plan_id = ? AND status = ? ORDER BY sort_order ASC",
+		"SELECT "+benefitColumns+" FROM benefits WHERE plan_id = ? AND status = ? AND deleted_at IS NULL ORDER BY sort_order ASC",
 		planID.String(), string(repositories.StatusComplete),
 	)
 	if err != nil {
@@ -327,9 +333,9 @@ func (s *SQLiteStore) ListCompleteBenefits(planID uuid.UUID) ([]repositories.Ben
 	return items, nil
 }
 
-// DeleteBenefit removes a single Benefit item.
+// DeleteBenefit soft-deletes a single Benefit item.
 func (s *SQLiteStore) DeleteBenefit(itemID uuid.UUID) error {
-	res, err := s.db.Exec("DELETE FROM benefits WHERE id = ?", itemID.String())
+	res, err := s.db.Exec("UPDATE benefits SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", time.Now().Unix(), itemID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete benefit: %w", err)
 	}

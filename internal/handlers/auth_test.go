@@ -9,9 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/uuid"
 	appservices "github.com/zaidmasri/business-planning-tool/internal/application/services"
-	"github.com/zaidmasri/business-planning-tool/internal/domain"
+	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/store"
 )
 
@@ -79,18 +78,21 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	fmt.Println("✓ Users created successfully")
 
 	// Create a plan for user1
-	planID := uuid.New()
-	plan, err := domain.NewPlan(planID, "User1 Plan", 1, 2024, user1.ID())
+	plan, err := domain.NewPlan("User1 Plan", 1, 2024, user1.ID())
 	if err != nil {
 		t.Fatalf("Failed to create plan: %v", err)
 	}
 
-	if err := s.Save(plan); err != nil {
+	validatedPlan, err := plan.Validate()
+	if err != nil {
+		t.Fatalf("Failed to validate plan: %v", err)
+	}
+	if err := s.Save(validatedPlan); err != nil {
 		t.Fatalf("Failed to save plan: %v", err)
 	}
 
 	// Grant user1 owner access
-	if err := s.GrantAccess(planID, user1.ID(), domain.Owner); err != nil {
+	if err := s.GrantAccess(plan.ID(), user1.ID(), domain.Owner); err != nil {
 		t.Fatalf("Failed to grant user1 owner access: %v", err)
 	}
 
@@ -104,7 +106,7 @@ func TestUserAuthorizationFlow(t *testing.T) {
 
 	// Test 1: User1 can access their own plan
 	t.Run("User1 can access their own plan", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/plan/"+planID.String()+"/setup", nil)
+		req := httptest.NewRequest("GET", "/plan/"+plan.ID().String()+"/setup", nil)
 		req = WithUserContext(req, user1)
 		w := httptest.NewRecorder()
 
@@ -120,7 +122,7 @@ func TestUserAuthorizationFlow(t *testing.T) {
 
 	// Test 2: User2 cannot access user1's plan
 	t.Run("User2 cannot access user1's plan", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/plan/"+planID.String()+"/setup", nil)
+		req := httptest.NewRequest("GET", "/plan/"+plan.ID().String()+"/setup", nil)
 		req = WithUserContext(req, user2)
 		w := httptest.NewRecorder()
 
@@ -135,7 +137,7 @@ func TestUserAuthorizationFlow(t *testing.T) {
 
 	// Test 3: Unauthenticated user cannot access the plan
 	t.Run("Unauthenticated user cannot access plan", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/plan/"+planID.String()+"/setup", nil)
+		req := httptest.NewRequest("GET", "/plan/"+plan.ID().String()+"/setup", nil)
 		w := httptest.NewRecorder()
 
 		mux.ServeHTTP(w, req)
@@ -150,11 +152,11 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	// Test 4: User2 with Editor access can edit
 	t.Run("User with Editor access can edit", func(t *testing.T) {
 		// Grant user2 editor access
-		if err := s.GrantAccess(planID, user2.ID(), domain.Editor); err != nil {
+		if err := s.GrantAccess(plan.ID(), user2.ID(), domain.Editor); err != nil {
 			t.Fatalf("Failed to grant user2 editor access: %v", err)
 		}
 
-		req := httptest.NewRequest("POST", "/plan/"+planID.String()+"/setup", nil)
+		req := httptest.NewRequest("POST", "/plan/"+plan.ID().String()+"/setup", nil)
 		req = WithUserContext(req, user2)
 		w := httptest.NewRecorder()
 
@@ -180,11 +182,11 @@ func TestUserAuthorizationFlow(t *testing.T) {
 		}
 
 		// Grant viewer-only access
-		if err := s.GrantAccess(planID, userViewer.ID(), domain.Viewer); err != nil {
+		if err := s.GrantAccess(plan.ID(), userViewer.ID(), domain.Viewer); err != nil {
 			t.Fatalf("Failed to grant viewer access: %v", err)
 		}
 
-		req := httptest.NewRequest("POST", "/plan/"+planID.String()+"/setup", nil)
+		req := httptest.NewRequest("POST", "/plan/"+plan.ID().String()+"/setup", nil)
 		req = WithUserContext(req, userViewer)
 		w := httptest.NewRecorder()
 
