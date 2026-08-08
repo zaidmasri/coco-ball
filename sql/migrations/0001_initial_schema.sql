@@ -270,13 +270,14 @@ CREATE INDEX idx_operating_expenses_plan_id ON operating_expenses(plan_id);
 
 CREATE TABLE outbox_events (
 	id TEXT PRIMARY KEY,
+	aggregate_id TEXT NOT NULL,
 	event_name TEXT NOT NULL,
 	payload TEXT NOT NULL,
-	created_at INTEGER NOT NULL,
-	processed_at INTEGER
+	occurred_at INTEGER NOT NULL,
+	published_at INTEGER
 );
 
-CREATE INDEX idx_outbox_unprocessed ON outbox_events(created_at) WHERE processed_at IS NULL;
+CREATE INDEX idx_outbox_unpublished ON outbox_events(occurred_at) WHERE published_at IS NULL;
 
 CREATE TABLE idempotency_keys (
 	key TEXT PRIMARY KEY,

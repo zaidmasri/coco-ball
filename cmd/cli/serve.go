@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"html/template"
 	"io/fs"
 	"log"
@@ -25,6 +26,10 @@ func serve(dbPath, port string) {
 	if err := sqlite.RunMigrations(conn); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
+
+	// Drains the outbox table written by aggregate repositories on every save.
+	relay := sqlite.NewOutboxRelay(conn, 2*time.Second)
+	relay.Start(context.Background())
 
 	// Infrastructure: one sqlc-backed repository per domain interface.
 	planRepo := sqlite.NewPlanRepository(conn)

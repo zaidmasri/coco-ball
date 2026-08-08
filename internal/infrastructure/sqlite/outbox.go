@@ -14,7 +14,7 @@ import (
 // queries bound to the same transaction as the aggregate write so the state
 // change and its events commit or roll back together. now is the same
 // timestamp used for the aggregate's own created_at/updated_at, keeping the
-// outbox row's created_at consistent within one transaction rather than
+// outbox row's occurred_at consistent within one transaction rather than
 // using each event's own OccurredAt().
 func insertOutboxEvents(ctx context.Context, q *db.Queries, events []domevents.DomainEvent, now int64) error {
 	for _, evt := range events {
@@ -29,10 +29,11 @@ func insertOutboxEvents(ctx context.Context, q *db.Queries, events []domevents.D
 		}
 
 		if err := q.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
-			ID:        id.String(),
-			EventName: evt.EventName(),
-			Payload:   string(payload),
-			CreatedAt: now,
+			ID:          id.String(),
+			AggregateID: evt.AggregateID().String(),
+			EventName:   evt.EventName(),
+			Payload:     string(payload),
+			OccurredAt:  now,
 		}); err != nil {
 			return fmt.Errorf("failed to insert outbox event %q: %w", evt.EventName(), err)
 		}

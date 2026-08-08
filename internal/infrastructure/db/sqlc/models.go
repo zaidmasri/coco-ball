@@ -110,10 +110,11 @@ type OperatingExpense struct {
 
 type OutboxEvent struct {
 	ID          string        `db:"id" json:"id"`
+	AggregateID string        `db:"aggregate_id" json:"aggregate_id"`
 	EventName   string        `db:"event_name" json:"event_name"`
 	Payload     string        `db:"payload" json:"payload"`
-	CreatedAt   int64         `db:"created_at" json:"created_at"`
-	ProcessedAt sql.NullInt64 `db:"processed_at" json:"processed_at"`
+	OccurredAt  int64         `db:"occurred_at" json:"occurred_at"`
+	PublishedAt sql.NullInt64 `db:"published_at" json:"published_at"`
 }
 
 type PayrollTaxRate struct {

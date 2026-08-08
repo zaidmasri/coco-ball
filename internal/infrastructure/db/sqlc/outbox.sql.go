@@ -7,25 +7,80 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
+const getUnpublishedOutboxEvents = `-- name: GetUnpublishedOutboxEvents :many
+SELECT id, aggregate_id, event_name, payload, occurred_at, published_at
+FROM outbox_events
+WHERE published_at IS NULL
+ORDER BY occurred_at
+LIMIT ?
+`
+
+func (q *Queries) GetUnpublishedOutboxEvents(ctx context.Context, limit int64) ([]OutboxEvent, error) {
+	rows, err := q.db.QueryContext(ctx, getUnpublishedOutboxEvents, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []OutboxEvent{}
+	for rows.Next() {
+		var i OutboxEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.AggregateID,
+			&i.EventName,
+			&i.Payload,
+			&i.OccurredAt,
+			&i.PublishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertOutboxEvent = `-- name: InsertOutboxEvent :exec
-INSERT INTO outbox_events (id, event_name, payload, created_at) VALUES (?, ?, ?, ?)
+INSERT INTO outbox_events (id, aggregate_id, event_name, payload, occurred_at) VALUES (?, ?, ?, ?, ?)
 `
 
 type InsertOutboxEventParams struct {
-	ID        string `db:"id" json:"id"`
-	EventName string `db:"event_name" json:"event_name"`
-	Payload   string `db:"payload" json:"payload"`
-	CreatedAt int64  `db:"created_at" json:"created_at"`
+	ID          string `db:"id" json:"id"`
+	AggregateID string `db:"aggregate_id" json:"aggregate_id"`
+	EventName   string `db:"event_name" json:"event_name"`
+	Payload     string `db:"payload" json:"payload"`
+	OccurredAt  int64  `db:"occurred_at" json:"occurred_at"`
 }
 
 func (q *Queries) InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error {
 	_, err := q.db.ExecContext(ctx, insertOutboxEvent,
 		arg.ID,
+		arg.AggregateID,
 		arg.EventName,
 		arg.Payload,
-		arg.CreatedAt,
+		arg.OccurredAt,
 	)
+	return err
+}
+
+const markOutboxEventPublished = `-- name: MarkOutboxEventPublished :exec
+UPDATE outbox_events SET published_at = ? WHERE id = ?
+`
+
+type MarkOutboxEventPublishedParams struct {
+	PublishedAt sql.NullInt64 `db:"published_at" json:"published_at"`
+	ID          string        `db:"id" json:"id"`
+}
+
+func (q *Queries) MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error {
+	_, err := q.db.ExecContext(ctx, markOutboxEventPublished, arg.PublishedAt, arg.ID)
 	return err
 }

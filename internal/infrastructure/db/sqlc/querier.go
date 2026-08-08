@@ -67,6 +67,7 @@ type Querier interface {
 	GetSession(ctx context.Context, id string) (GetSessionRow, error)
 	GetStartingBalancesRow(ctx context.Context, planID string) (GetStartingBalancesRowRow, error)
 	GetStartupCost(ctx context.Context, id string) (GetStartupCostRow, error)
+	GetUnpublishedOutboxEvents(ctx context.Context, limit int64) ([]OutboxEvent, error)
 	GetUserByID(ctx context.Context, id string) (GetUserByIDRow, error)
 	GetUserCredentialsByEmail(ctx context.Context, email string) (GetUserCredentialsByEmailRow, error)
 	GetUserIDByEmail(ctx context.Context, email string) (string, error)
@@ -83,6 +84,7 @@ type Querier interface {
 	ListCompleteSalaryRoles(ctx context.Context, arg ListCompleteSalaryRolesParams) ([]ListCompleteSalaryRolesRow, error)
 	ListCompleteStartupCosts(ctx context.Context, arg ListCompleteStartupCostsParams) ([]ListCompleteStartupCostsRow, error)
 	ListWizardSections(ctx context.Context, arg ListWizardSectionsParams) ([]ListWizardSectionsRow, error)
+	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
 	MaxBenefitSortOrder(ctx context.Context, planID string) (int64, error)
 	MaxCapitalAssetSortOrder(ctx context.Context, planID string) (int64, error)
 	MaxDistributionSortOrder(ctx context.Context, planID string) (int64, error)

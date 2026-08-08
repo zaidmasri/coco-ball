@@ -85,7 +85,7 @@ func TestPlanService_Save_EmitsCreatedEvent(t *testing.T) {
 	defer db.Close()
 
 	var eventName string
-	err = db.QueryRow(`SELECT event_name FROM outbox_events ORDER BY created_at LIMIT 1`).Scan(&eventName)
+	err = db.QueryRow(`SELECT event_name FROM outbox_events ORDER BY occurred_at LIMIT 1`).Scan(&eventName)
 	if err != nil {
 		t.Fatalf("expected at least one outbox event after Save, got none: %v", err)
 	}
