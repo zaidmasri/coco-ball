@@ -1,16 +1,48 @@
 package services_test
 
 import (
+	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/zaidmasri/business-planning-tool/internal/application/fakes"
 	"github.com/zaidmasri/business-planning-tool/internal/application/services"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
+	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/sqlite"
 )
 
+// newTestStore creates a temp-file-backed SQLite connection (migrations
+// applied) and returns a PlanRepository over it, its db path, and a cleanup
+// func, mirroring the pattern in internal/handlers/auth_test.go.
+func newTestStore(t *testing.T) (repo repositories.PlanRepository, dbPath string, cleanup func()) {
+	t.Helper()
+
+	tmpDir := filepath.Join(os.TempDir(), "northbasis_plan_service_test")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	dbPath = filepath.Join(tmpDir, uuid.NewString()+".db")
+
+	conn, err := sqlite.NewConnection(dbPath)
+	if err != nil {
+		t.Fatalf("NewConnection: %v", err)
+	}
+	if err := sqlite.RunMigrations(conn); err != nil {
+		t.Fatalf("RunMigrations: %v", err)
+	}
+
+	cleanup = func() {
+		conn.Close()
+		os.Remove(dbPath)
+	}
+	return sqlite.NewPlanRepository(conn), dbPath, cleanup
+}
+
 func TestPlanService_SaveAndGet(t *testing.T) {
-	repo := fakes.NewPlanRepository()
+	repo, _, cleanup := newTestStore(t)
+	defer cleanup()
 	svc := services.NewPlanService(repo)
 
 	ownerID, _ := uuid.NewV7()
@@ -33,7 +65,8 @@ func TestPlanService_SaveAndGet(t *testing.T) {
 }
 
 func TestPlanService_Save_EmitsCreatedEvent(t *testing.T) {
-	repo := fakes.NewPlanRepository()
+	repo, dbPath, cleanup := newTestStore(t)
+	defer cleanup()
 	svc := services.NewPlanService(repo)
 
 	ownerID, _ := uuid.NewV7()
@@ -42,17 +75,28 @@ func TestPlanService_Save_EmitsCreatedEvent(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	evts := repo.DrainEvents()
-	if len(evts) == 0 {
-		t.Fatal("expected at least one domain event after Save, got none")
+	// SQLiteStore.Save writes domain events into the outbox_events table
+	// within the same transaction (see writeOutboxEvents in sqlite.go).
+	// Query it directly rather than draining an in-memory buffer.
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
 	}
-	if evts[0].EventName() != "plan.created" {
-		t.Errorf("expected plan.created event, got %q", evts[0].EventName())
+	defer db.Close()
+
+	var eventName string
+	err = db.QueryRow(`SELECT event_name FROM outbox_events ORDER BY created_at LIMIT 1`).Scan(&eventName)
+	if err != nil {
+		t.Fatalf("expected at least one outbox event after Save, got none: %v", err)
+	}
+	if eventName != "plan.created" {
+		t.Errorf("expected plan.created event, got %q", eventName)
 	}
 }
 
 func TestPlanService_Delete(t *testing.T) {
-	repo := fakes.NewPlanRepository()
+	repo, _, cleanup := newTestStore(t)
+	defer cleanup()
 	svc := services.NewPlanService(repo)
 
 	ownerID, _ := uuid.NewV7()
@@ -69,7 +113,8 @@ func TestPlanService_Delete(t *testing.T) {
 }
 
 func TestPlanService_Get_NotFound(t *testing.T) {
-	repo := fakes.NewPlanRepository()
+	repo, _, cleanup := newTestStore(t)
+	defer cleanup()
 	svc := services.NewPlanService(repo)
 
 	missing, _ := uuid.NewV7()

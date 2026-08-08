@@ -4,16 +4,19 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/zaidmasri/business-planning-tool/internal/store"
+	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/sqlite"
 )
 
 func migrate(dbPath string) {
-	// Initialize store which automatically runs migrations
-	sqliteStore, err := store.NewSQLiteStore(dbPath)
+	conn, err := sqlite.NewConnection(dbPath)
 	if err != nil {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
-	defer sqliteStore.Close()
+	defer conn.Close()
+
+	if err := sqlite.RunMigrations(conn); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
 
 	fmt.Println("✓ Database migrations completed successfully")
 }

@@ -89,8 +89,7 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [x] `processed_at` column on `outbox_events` (migration 48) — the outbox relay goroutine (not yet implemented) will set this when it delivers an event to the message broker; `idx_outbox_unprocessed` partial index filters `processed_at IS NULL` for efficient relay queries
 - [x] Idempotency table: `idempotency_keys` table (migration 49) — schema in place; middleware wrapper not yet wired
 - [x] CQRS formal types: `internal/application/commands/plan.go` (CreatePlan, UpdatePlan, DeletePlan) and `internal/application/queries/plan.go` (GetPlan, GetUserPlans, GetAllPlans)
-- [x] In-memory fakes: `internal/application/fakes/plan_repository.go` implements `repositories.PlanRepository` for application-layer tests; includes `DrainEvents()` for event-emission assertions
-- [x] Application-layer tests using fakes: `internal/application/services/plan_service_test.go` (save/get, event emission, delete, not-found)
+- [x] Application-layer tests: `internal/application/services/plan_service_test.go` (save/get, event emission, delete, not-found) — exercises a real temp-file `store.SQLiteStore`, not a fake
 
 ### Teams & Collaboration (2026-08-01)
 - [x] Plan invites - Owner can invite a collaborator by email at a chosen access level (Editor/Viewer) via `POST /plan/{id}/invites`
@@ -313,11 +312,9 @@ Note: the Makefile comments indicate the production image (`docker-compose.yml`)
 │   │   │   └── plan.go          # CreatePlan, UpdatePlan, DeletePlan
 │   │   ├── queries/             # CQRS read-side query types
 │   │   │   └── plan.go          # GetPlan, GetUserPlans, GetAllPlans
-│   │   ├── fakes/               # In-memory fakes for application-layer tests
-│   │   │   └── plan_repository.go # Implements PlanRepository; DrainEvents() for test assertions
 │   │   └── services/            # Application service implementations (delegate to repositories)
 │   │       ├── plan_service.go
-│   │       ├── plan_service_test.go # App-layer tests (uses fakes, no DB)
+│   │       ├── plan_service_test.go # App-layer tests (real temp-file SQLiteStore)
 │   │       ├── auth_service.go  # Session expiry check lives here (not in store)
 │   │       ├── access_service.go # Access level validation lives here (not in store)
 │   │       ├── starting_point_service.go
@@ -457,7 +454,7 @@ Aggregates emit events via `recordEvent()`; repositories drain them with `PullEv
 - **First/Last Name Now Required at Signup (2026-08-01)**: `NewUserWithPassword` gained `firstName`/`lastName` params (migrations 7–8 add the columns, default `''` for existing rows). `User.FullName()` falls back to email when both are blank, so legacy accounts created before this change still render sensibly in the invite inbox and setup page's "invited by" text.
 - **Docker Deployment Split into Prod/Dev Images (2026-08-01/02)**: Production `Dockerfile` is a multi-stage Alpine build (cgo enabled for `go-sqlite3`, `CGO_CFLAGS=-D_LARGEFILE64_SOURCE` needed for musl+sqlite compatibility) producing a small runtime image; `Dockerfile.dev` instead installs `air` and hot-reloads from a bind-mounted source tree via `docker-compose.dev.yml`. `docker-compose.yml` (prod) adds an HTTP healthcheck and a named volume for the SQLite file so data survives container recreation. Makefile centralizes both local-Go and Docker workflows.
 
-- **DDD / CQRS Architecture Implemented (2026-08-07)**: Added `internal/domain/repositories/` (repository interfaces), `internal/application/interfaces/` (service interfaces), and `internal/application/services/` (implementations). All wizard-item Delete methods now use soft-delete (`deleted_at`). Business logic (session expiry, access-level validation) moved from `internal/store/` into the service layer. `Find*` vs `Get*` naming convention enforced: nine methods that returned `nil, nil` on not-found renamed from `Get*Draft` to `Find*Draft` across all four layers. UUIDv7 adopted in all domain constructors. ValidatedPlan opaque token pattern applied to PlanRepository.Save. Domain events (`DomainEvent`, `PlanCreated`/`PlanUpdated`/`PlanDeleted`) in `internal/domain/events.go`. Transactional outbox via `outbox_events` table (migration 48). Idempotency schema via `idempotency_keys` table (migration 49). CQRS command/query types in `internal/application/commands/` and `internal/application/queries/`. In-memory fake `PlanRepository` in `internal/application/fakes/` with application-layer tests in `internal/application/services/plan_service_test.go`.
+- **DDD / CQRS Architecture Implemented (2026-08-07)**: Added `internal/domain/repositories/` (repository interfaces), `internal/application/interfaces/` (service interfaces), and `internal/application/services/` (implementations). All wizard-item Delete methods now use soft-delete (`deleted_at`). Business logic (session expiry, access-level validation) moved from `internal/store/` into the service layer. `Find*` vs `Get*` naming convention enforced: nine methods that returned `nil, nil` on not-found renamed from `Get*Draft` to `Find*Draft` across all four layers. UUIDv7 adopted in all domain constructors. ValidatedPlan opaque token pattern applied to PlanRepository.Save. Domain events (`DomainEvent`, `PlanCreated`/`PlanUpdated`/`PlanDeleted`) in `internal/domain/events.go`. Transactional outbox via `outbox_events` table (migration 48). Idempotency schema via `idempotency_keys` table (migration 49). CQRS command/query types in `internal/application/commands/` and `internal/application/queries/`. Application-layer tests in `internal/application/services/plan_service_test.go` (real temp-file `SQLiteStore`).
 - **`github.com/google/uuid` Permitted in Domain Layer (2026-08-07)**: The "zero third-party" rule for the domain layer has one explicit carve-out: `github.com/google/uuid`. It is a pure value type (no DB driver, no HTTP framework coupling), stable, and pervasive across all layers; banning it from the domain would force awkward string conversions at every boundary. All other third-party imports remain prohibited in `internal/domain/`.
 - **Read-After-Write Deferred (2026-08-07)**: Rule 4 (re-read from DB after insert/update before returning to caller) was not implemented. All write methods still return only `error`. The application uses POST-redirect-GET everywhere — the next `Get*` handler re-reads from the DB — so the intent is satisfied at the HTTP level. Cascading the change through 19 repository interfaces, 10 service implementations, and all callers is out of scope for this session. This is a known gap; document it rather than silently violate it.
 
@@ -484,7 +481,7 @@ Aggregates emit events via `recordEvent()`; repositories drain them with `PullEv
 ---
 
 **Last Updated**: 2026-08-07 (continued)
-**Session Focus**: DDD/CQRS architecture — UUIDv7, ValidatedPlan, domain events, outbox, idempotency schema, CQRS command/query types, in-memory fakes, application-layer tests
+**Session Focus**: DDD/CQRS architecture — UUIDv7, ValidatedPlan, domain events, outbox, idempotency schema, CQRS command/query types, application-layer tests
 **Total Remaining Items**: ~28 (across all categories)
 **Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → ~~Data Persistence~~ ✅ → ~~Docker Containerization~~ ✅ → ~~DDD/CQRS Architecture~~ ✅ → Testing → Form Validation → Income Tax Modeling
 
@@ -721,7 +718,6 @@ tighten them deliberately rather than rediscover them by surprise.
 4. **Transactional outbox** — `SQLiteStore.Save` opens a transaction, writes the plan row, drains `plan.PullEvents()`, inserts each into `outbox_events`, then commits. Schema via migration 48 with a partial index on `processed_at IS NULL` for efficient relay queries.
 5. **Idempotency schema** — `idempotency_keys` table via migration 49 (`key`, `status`, `response`, `created_at`, `updated_at`). Intended for `INSERT … ON CONFLICT DO NOTHING` atomic reservation.
 6. **CQRS formal types** — `internal/application/commands/plan.go` (CreatePlan, UpdatePlan, DeletePlan) and `internal/application/queries/plan.go` (GetPlan, GetUserPlans, GetAllPlans). These are the intended command/query envelopes for future handler refactors; handlers currently pass arguments directly to service methods.
-7. **In-memory fakes** — `internal/application/fakes/plan_repository.go` is a thread-safe `PlanRepository` backed by a `map`. Implements `Save(ValidatedPlan)`, `Get`, `GetAll`, `Delete`, `GetUserPlans`, and `DrainEvents()` for post-save event assertions.
-8. **Application-layer tests** — `internal/application/services/plan_service_test.go` uses `fakes.PlanRepository`; covers save/get round-trip, event emission on create, delete, and not-found error. No DB required.
-9. **Test files updated** — `plan_test.go`, `projection_test.go`, `sqlite_test.go`, `auth_test.go` all updated for the new `NewPlan(name, month, year, ownerID)` signature (removed UUID arg), and `s.Save` call sites updated to validate first (`plan.Validate()` → `s.Save(validated)`).
-10. **Full suite green** — `go build ./...` and `go test ./...` pass with no errors.
+7. **Application-layer tests** — `internal/application/services/plan_service_test.go` uses a real temp-file `store.SQLiteStore` (migrations applied, cleaned up after each test); covers save/get round-trip, event emission on create (queried directly from the `outbox_events` table), delete, and not-found error.
+8. **Test files updated** — `plan_test.go`, `projection_test.go`, `sqlite_test.go`, `auth_test.go` all updated for the new `NewPlan(name, month, year, ownerID)` signature (removed UUID arg), and `s.Save` call sites updated to validate first (`plan.Validate()` → `s.Save(validated)`).
+9. **Full suite green** — `go build ./...` and `go test ./...` pass with no errors.

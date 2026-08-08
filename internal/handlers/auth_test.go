@@ -11,28 +11,60 @@ import (
 
 	appservices "github.com/zaidmasri/business-planning-tool/internal/application/services"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
-	"github.com/zaidmasri/business-planning-tool/internal/store"
+	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
+	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/sqlite"
 )
 
-func setupTestApp(t *testing.T) (*App, *store.SQLiteStore, func()) {
+// testRepos bundles the repositories test cases need to seed data directly
+// (bypassing the HTTP layer), since each domain interface is now backed by
+// its own small sqlc-based repository struct rather than one shared store.
+type testRepos struct {
+	plans  repositories.PlanRepository
+	users  repositories.UserRepository
+	access repositories.AccessRepository
+}
+
+func setupTestApp(t *testing.T) (*App, testRepos, func()) {
 	tmpDir := filepath.Join(os.TempDir(), "northbasis_auth_test")
 	os.MkdirAll(tmpDir, 0755)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	s, err := store.NewSQLiteStore(dbPath)
+	conn, err := sqlite.NewConnection(dbPath)
 	if err != nil {
-		t.Fatalf("Failed to initialize store: %v", err)
+		t.Fatalf("Failed to initialize database: %v", err)
+	}
+	if err := sqlite.RunMigrations(conn); err != nil {
+		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	planSvc := appservices.NewPlanService(s)
-	authSvc := appservices.NewAuthService(s, s)
-	accessSvc := appservices.NewAccessService(s)
-	inviteSvc := appservices.NewInviteService(s)
-	startingPointSvc := appservices.NewStartingPointService(s, s, s, s, s)
-	payrollSvc := appservices.NewPayrollService(s, s, s, s)
-	salesForecastSvc := appservices.NewSalesForecastService(s, s, s)
-	cashFlowSvc := appservices.NewCashFlowService(s, s, s)
-	opExSvc := appservices.NewOperatingExpensesService(s, s)
+	planRepo := sqlite.NewPlanRepository(conn)
+	userRepo := sqlite.NewUserRepository(conn)
+	sessionRepo := sqlite.NewSessionRepository(conn)
+	accessRepo := sqlite.NewAccessRepository(conn)
+	inviteRepo := sqlite.NewInviteRepository(conn)
+	wizardProgressRepo := sqlite.NewWizardProgressRepository(conn)
+	capitalAssetRepo := sqlite.NewCapitalAssetRepository(conn)
+	startupCostRepo := sqlite.NewStartupCostRepository(conn)
+	fundingSourceRepo := sqlite.NewFundingSourceRepository(conn)
+	startingBalancesRepo := sqlite.NewStartingBalancesRepository(conn)
+	salaryRoleRepo := sqlite.NewSalaryRoleRepository(conn)
+	benefitRepo := sqlite.NewBenefitRepository(conn)
+	payrollTaxRatesRepo := sqlite.NewPayrollTaxRatesRepository(conn)
+	productRepo := sqlite.NewProductRepository(conn)
+	salesGrowthCurveRepo := sqlite.NewSalesGrowthCurveRepository(conn)
+	inventoryPurchaseRepo := sqlite.NewInventoryPurchaseRepository(conn)
+	distributionRepo := sqlite.NewDistributionRepository(conn)
+	operatingExpenseRepo := sqlite.NewOperatingExpenseRepository(conn)
+
+	planSvc := appservices.NewPlanService(planRepo)
+	authSvc := appservices.NewAuthService(userRepo, sessionRepo)
+	accessSvc := appservices.NewAccessService(accessRepo)
+	inviteSvc := appservices.NewInviteService(inviteRepo)
+	startingPointSvc := appservices.NewStartingPointService(capitalAssetRepo, startupCostRepo, fundingSourceRepo, startingBalancesRepo, wizardProgressRepo)
+	payrollSvc := appservices.NewPayrollService(salaryRoleRepo, benefitRepo, payrollTaxRatesRepo, wizardProgressRepo)
+	salesForecastSvc := appservices.NewSalesForecastService(productRepo, salesGrowthCurveRepo, wizardProgressRepo)
+	cashFlowSvc := appservices.NewCashFlowService(inventoryPurchaseRepo, distributionRepo, wizardProgressRepo)
+	opExSvc := appservices.NewOperatingExpensesService(operatingExpenseRepo, wizardProgressRepo)
 	hubSvc := appservices.NewHubCompletionService(startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc)
 
 	// Create a minimal template cache with an error template
@@ -45,11 +77,11 @@ func setupTestApp(t *testing.T) (*App, *store.SQLiteStore, func()) {
 		templateCache)
 
 	cleanup := func() {
-		s.Close()
+		conn.Close()
 		os.Remove(dbPath)
 	}
 
-	return app, s, cleanup
+	return app, testRepos{plans: planRepo, users: userRepo, access: accessRepo}, cleanup
 }
 
 func TestUserAuthorizationFlow(t *testing.T) {
@@ -67,11 +99,11 @@ func TestUserAuthorizationFlow(t *testing.T) {
 		t.Fatalf("Failed to create user2: %v", err)
 	}
 
-	if err := s.SaveUser(user1); err != nil {
+	if err := s.users.SaveUser(user1); err != nil {
 		t.Fatalf("Failed to save user1: %v", err)
 	}
 
-	if err := s.SaveUser(user2); err != nil {
+	if err := s.users.SaveUser(user2); err != nil {
 		t.Fatalf("Failed to save user2: %v", err)
 	}
 
@@ -87,12 +119,12 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to validate plan: %v", err)
 	}
-	if err := s.Save(validatedPlan); err != nil {
+	if err := s.plans.Save(validatedPlan); err != nil {
 		t.Fatalf("Failed to save plan: %v", err)
 	}
 
 	// Grant user1 owner access
-	if err := s.GrantAccess(plan.ID(), user1.ID(), domain.Owner); err != nil {
+	if err := s.access.GrantAccess(plan.ID(), user1.ID(), domain.Owner); err != nil {
 		t.Fatalf("Failed to grant user1 owner access: %v", err)
 	}
 
@@ -152,7 +184,7 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	// Test 4: User2 with Editor access can edit
 	t.Run("User with Editor access can edit", func(t *testing.T) {
 		// Grant user2 editor access
-		if err := s.GrantAccess(plan.ID(), user2.ID(), domain.Editor); err != nil {
+		if err := s.access.GrantAccess(plan.ID(), user2.ID(), domain.Editor); err != nil {
 			t.Fatalf("Failed to grant user2 editor access: %v", err)
 		}
 
@@ -177,12 +209,12 @@ func TestUserAuthorizationFlow(t *testing.T) {
 			t.Fatalf("Failed to create viewer user: %v", err)
 		}
 
-		if err := s.SaveUser(userViewer); err != nil {
+		if err := s.users.SaveUser(userViewer); err != nil {
 			t.Fatalf("Failed to save viewer user: %v", err)
 		}
 
 		// Grant viewer-only access
-		if err := s.GrantAccess(plan.ID(), userViewer.ID(), domain.Viewer); err != nil {
+		if err := s.access.GrantAccess(plan.ID(), userViewer.ID(), domain.Viewer); err != nil {
 			t.Fatalf("Failed to grant viewer access: %v", err)
 		}
 

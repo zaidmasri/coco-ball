@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/config"
 )
 
 func main() {
@@ -32,9 +34,10 @@ func main() {
 }
 
 func serveCmd() {
+	cfg := config.Load()
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	dbPath := fs.String("db", "./northbasis.db", "path to SQLite database file")
-	port := fs.String("port", ":8080", "port to listen on")
+	dbPath := fs.String("db", cfg.DBPath, "path to SQLite database file")
+	port := fs.String("port", cfg.Port, "port to listen on")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		log.Fatalf("failed to parse flags: %v", err)
 	}
@@ -43,8 +46,9 @@ func serveCmd() {
 }
 
 func migrateCmd() {
+	cfg := config.Load()
 	fs := flag.NewFlagSet("migrate", flag.ExitOnError)
-	dbPath := fs.String("db", "./northbasis.db", "path to SQLite database file")
+	dbPath := fs.String("db", cfg.DBPath, "path to SQLite database file")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		log.Fatalf("failed to parse flags: %v", err)
 	}
@@ -53,8 +57,9 @@ func migrateCmd() {
 }
 
 func resetCmd() {
+	cfg := config.Load()
 	fs := flag.NewFlagSet("reset", flag.ExitOnError)
-	dbPath := fs.String("db", "./northbasis.db", "path to SQLite database file")
+	dbPath := fs.String("db", cfg.DBPath, "path to SQLite database file")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		log.Fatalf("failed to parse flags: %v", err)
 	}

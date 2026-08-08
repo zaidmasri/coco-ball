@@ -28,7 +28,7 @@ const (
 // Wizard hub keys. A "hub" is a top-level plan section (Starting Point,
 // Payroll, Sales Forecast, Cash Flow) made up of one or more sub-sections,
 // each tracked independently in the wizard_sections table (see
-// internal/store's GetWizardSectionStatus/MarkWizardSectionComplete).
+// internal/infrastructure/sqlite's WizardProgressRepository).
 const (
 	HubStartingPoint     = "starting-point"
 	HubPayroll           = "payroll"

@@ -10,12 +10,10 @@ import (
 //
 // Starting Point, Payroll, Sales Forecast, Operating Expenses, and Cash
 // Flow are deliberately NOT included here - they moved to normalized SQL
-// tables (see internal/store's sqlite_starting_point.go, sqlite_payroll.go,
-// sqlite_sales_forecast.go, sqlite_operating_expenses.go,
-// sqlite_cash_flow.go) so each wizard's sub-pages can save progressively
-// without racing other sections. The store layer populates those fields on
-// Plan via each section's LoadXData method after unmarshalling everything
-// else from this blob.
+// tables (see internal/infrastructure/sqlite's plan_repository.go) so each
+// wizard's sub-pages can save progressively without racing other sections.
+// The repository layer populates those fields on Plan via each section's
+// LoadXData method after unmarshalling everything else from this blob.
 type planJSON struct {
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`

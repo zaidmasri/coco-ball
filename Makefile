@@ -28,6 +28,17 @@ test:
 clean:
 	rm -rf $(BIN_DIR) tmp
 
+## sqlc / sql-migrate
+
+sqlc:
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
+
+migrate-up:
+	go run github.com/rubenv/sql-migrate/sql-migrate@latest up -config=dbconfig.yml
+
+migrate-down:
+	go run github.com/rubenv/sql-migrate/sql-migrate@latest down -config=dbconfig.yml
+
 ## Production image (Coolify deploys via docker-compose.yml)
 
 docker-build:

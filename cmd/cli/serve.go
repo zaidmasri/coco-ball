@@ -10,29 +10,52 @@ import (
 
 	appservices "github.com/zaidmasri/business-planning-tool/internal/application/services"
 	"github.com/zaidmasri/business-planning-tool/internal/handlers"
+	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/sqlite"
 	"github.com/zaidmasri/business-planning-tool/internal/middleware"
-	"github.com/zaidmasri/business-planning-tool/internal/store"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
 func serve(dbPath, port string) {
-	// Infrastructure: SQLiteStore satisfies all repository interfaces.
-	sqliteStore, err := store.NewSQLiteStore(dbPath)
+	conn, err := sqlite.NewConnection(dbPath)
 	if err != nil {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
-	defer sqliteStore.Close()
+	defer conn.Close()
+
+	if err := sqlite.RunMigrations(conn); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
+
+	// Infrastructure: one sqlc-backed repository per domain interface.
+	planRepo := sqlite.NewPlanRepository(conn)
+	userRepo := sqlite.NewUserRepository(conn)
+	sessionRepo := sqlite.NewSessionRepository(conn)
+	accessRepo := sqlite.NewAccessRepository(conn)
+	inviteRepo := sqlite.NewInviteRepository(conn)
+	wizardProgressRepo := sqlite.NewWizardProgressRepository(conn)
+	capitalAssetRepo := sqlite.NewCapitalAssetRepository(conn)
+	startupCostRepo := sqlite.NewStartupCostRepository(conn)
+	fundingSourceRepo := sqlite.NewFundingSourceRepository(conn)
+	startingBalancesRepo := sqlite.NewStartingBalancesRepository(conn)
+	salaryRoleRepo := sqlite.NewSalaryRoleRepository(conn)
+	benefitRepo := sqlite.NewBenefitRepository(conn)
+	payrollTaxRatesRepo := sqlite.NewPayrollTaxRatesRepository(conn)
+	productRepo := sqlite.NewProductRepository(conn)
+	salesGrowthCurveRepo := sqlite.NewSalesGrowthCurveRepository(conn)
+	inventoryPurchaseRepo := sqlite.NewInventoryPurchaseRepository(conn)
+	distributionRepo := sqlite.NewDistributionRepository(conn)
+	operatingExpenseRepo := sqlite.NewOperatingExpenseRepository(conn)
 
 	// Application services
-	planSvc := appservices.NewPlanService(sqliteStore)
-	authSvc := appservices.NewAuthService(sqliteStore, sqliteStore)
-	accessSvc := appservices.NewAccessService(sqliteStore)
-	inviteSvc := appservices.NewInviteService(sqliteStore)
-	startingPointSvc := appservices.NewStartingPointService(sqliteStore, sqliteStore, sqliteStore, sqliteStore, sqliteStore)
-	payrollSvc := appservices.NewPayrollService(sqliteStore, sqliteStore, sqliteStore, sqliteStore)
-	salesForecastSvc := appservices.NewSalesForecastService(sqliteStore, sqliteStore, sqliteStore)
-	cashFlowSvc := appservices.NewCashFlowService(sqliteStore, sqliteStore, sqliteStore)
-	opExSvc := appservices.NewOperatingExpensesService(sqliteStore, sqliteStore)
+	planSvc := appservices.NewPlanService(planRepo)
+	authSvc := appservices.NewAuthService(userRepo, sessionRepo)
+	accessSvc := appservices.NewAccessService(accessRepo)
+	inviteSvc := appservices.NewInviteService(inviteRepo)
+	startingPointSvc := appservices.NewStartingPointService(capitalAssetRepo, startupCostRepo, fundingSourceRepo, startingBalancesRepo, wizardProgressRepo)
+	payrollSvc := appservices.NewPayrollService(salaryRoleRepo, benefitRepo, payrollTaxRatesRepo, wizardProgressRepo)
+	salesForecastSvc := appservices.NewSalesForecastService(productRepo, salesGrowthCurveRepo, wizardProgressRepo)
+	cashFlowSvc := appservices.NewCashFlowService(inventoryPurchaseRepo, distributionRepo, wizardProgressRepo)
+	opExSvc := appservices.NewOperatingExpensesService(operatingExpenseRepo, wizardProgressRepo)
 	hubSvc := appservices.NewHubCompletionService(startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc)
 
 	// Load templates

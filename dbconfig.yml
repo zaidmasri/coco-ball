@@ -1,0 +1,9 @@
+# Config for the standalone sql-migrate CLI (`make migrate-up`/`make migrate-down`),
+# for developers who want to inspect/step migrations manually. The app itself
+# runs migrations programmatically via internal/infrastructure/sqlite.RunMigrations
+# using the embedded sql/migrations_fs.go filesystem, not this file.
+development:
+    dialect: sqlite3
+    datasource: ./northbasis.db
+    dir: sql/migrations
+    table: gorp_migrations
