@@ -10,8 +10,8 @@ import (
 	"time"
 
 	appservices "github.com/zaidmasri/business-planning-tool/internal/application/services"
-	"github.com/zaidmasri/business-planning-tool/internal/handlers"
 	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/sqlite"
+	"github.com/zaidmasri/business-planning-tool/internal/interface/web"
 	"github.com/zaidmasri/business-planning-tool/internal/middleware"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
@@ -66,11 +66,6 @@ func serve(dbPath, port string) {
 	// Load templates
 	templateCache := loadTemplates()
 
-	// HTTP layer
-	app := handlers.NewApp(planSvc, authSvc, accessSvc, inviteSvc,
-		startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc, hubSvc,
-		templateCache)
-
 	mux := http.NewServeMux()
 
 	// Static files
@@ -81,12 +76,25 @@ func serve(dbPath, port string) {
 	staticFileServer := http.FileServer(http.FS(staticFS))
 	mux.Handle("GET /static/", http.StripPrefix("/static/", staticFileServer))
 
-	// Register all application routes
-	app.RegisterRoutes(mux)
+	// Cross-cutting middleware shared by the controllers below.
+	accessMW := web.NewPlanAccessMiddleware(accessSvc, templateCache)
+	sessionMW := web.NewSessionMiddleware(authSvc)
+
+	// HTTP layer: one self-registering controller per domain.
+	web.NewAuthController(mux, authSvc, templateCache)
+	web.NewPlanController(mux, planSvc, accessSvc, inviteSvc, authSvc, hubSvc, templateCache, accessMW)
+	web.NewInviteController(mux, inviteSvc, planSvc, accessSvc, hubSvc, templateCache, accessMW)
+	web.NewStartingPointController(mux, planSvc, startingPointSvc, templateCache, accessMW)
+	web.NewPayrollController(mux, planSvc, payrollSvc, templateCache, accessMW)
+	web.NewSalesForecastController(mux, planSvc, salesForecastSvc, templateCache, accessMW)
+	web.NewCashFlowController(mux, planSvc, cashFlowSvc, templateCache, accessMW)
+	web.NewOperatingExpensesController(mux, planSvc, opExSvc, templateCache, accessMW)
+
+	mux.HandleFunc("/", web.NotFound(templateCache))
 
 	// Wrap mux with middlewares
 	var httpHandler http.Handler = mux
-	httpHandler = app.AuthMiddleware(httpHandler)
+	httpHandler = sessionMW.Authenticate(httpHandler)
 	httpHandler = middleware.Logger(httpHandler)
 
 	// Configure a robust http server

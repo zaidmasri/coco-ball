@@ -15,7 +15,7 @@ import (
 
 // newTestStore creates a temp-file-backed SQLite connection (migrations
 // applied) and returns a PlanRepository over it, its db path, and a cleanup
-// func, mirroring the pattern in internal/handlers/auth_test.go.
+// func, mirroring the pattern in internal/interface/web/auth_test.go.
 func newTestStore(t *testing.T) (repo repositories.PlanRepository, dbPath string, cleanup func()) {
 	t.Helper()
 
