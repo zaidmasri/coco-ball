@@ -9,10 +9,27 @@ import (
 
 // --- Helper Functions ---
 
+// newVerifiedOwner builds a VerifiedUser for domain-layer tests. NewPlan
+// only requires proof of verification, not an actual database row, so
+// wrapping a freshly-constructed User is sufficient here — the real
+// existence check happens in PlanService.CreatePlan (see
+// plan_service_test.go's TestPlanService_CreatePlan_RejectsUnknownOwner).
+func newVerifiedOwner(t *testing.T) VerifiedUser {
+	t.Helper()
+	user, err := NewUser("owner@example.com")
+	if err != nil {
+		t.Fatalf("failed to create owner user: %v", err)
+	}
+	verified, err := NewVerifiedUser(user)
+	if err != nil {
+		t.Fatalf("failed to verify owner user: %v", err)
+	}
+	return verified
+}
+
 func newValidPlan(t *testing.T) *Plan {
 	t.Helper()
-	ownerID, _ := uuid.NewV7()
-	plan, err := NewPlan("Simple Startup", 1, 2024, ownerID)
+	plan, err := NewPlan("Simple Startup", 1, 2024, newVerifiedOwner(t))
 	if err != nil {
 		t.Fatalf("failed to create valid plan: %v", err)
 	}
@@ -22,7 +39,7 @@ func newValidPlan(t *testing.T) *Plan {
 // --- Tests ---
 
 func TestNewPlan(t *testing.T) {
-	ownerID, _ := uuid.NewV7()
+	owner := newVerifiedOwner(t)
 
 	tests := []struct {
 		testName      string
@@ -63,7 +80,7 @@ func TestNewPlan(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
-			plan, err := NewPlan(tc.planName, tc.startingMonth, tc.startingYear, ownerID)
+			plan, err := NewPlan(tc.planName, tc.startingMonth, tc.startingYear, owner)
 
 			if !errors.Is(err, tc.expectedErr) {
 				t.Errorf("expected error %v, got %v", tc.expectedErr, err)

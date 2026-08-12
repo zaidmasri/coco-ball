@@ -56,7 +56,7 @@ func setupTestApp(t *testing.T) (*http.ServeMux, testRepos, func()) {
 	distributionRepo := sqlite.NewDistributionRepository(conn)
 	operatingExpenseRepo := sqlite.NewOperatingExpenseRepository(conn)
 
-	planSvc := appservices.NewPlanService(planRepo)
+	planSvc := appservices.NewPlanService(planRepo, userRepo)
 	authSvc := appservices.NewAuthService(userRepo, sessionRepo)
 	accessSvc := appservices.NewAccessService(accessRepo)
 	inviteSvc := appservices.NewInviteService(inviteRepo)
@@ -110,7 +110,11 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	fmt.Println("✓ Users created successfully")
 
 	// Create a plan for user1
-	plan, err := domain.NewPlan("User1 Plan", 1, 2024, user1.ID())
+	verifiedOwner, err := domain.NewVerifiedUser(user1)
+	if err != nil {
+		t.Fatalf("Failed to verify user1: %v", err)
+	}
+	plan, err := domain.NewPlan("User1 Plan", 1, 2024, verifiedOwner)
 	if err != nil {
 		t.Fatalf("Failed to create plan: %v", err)
 	}

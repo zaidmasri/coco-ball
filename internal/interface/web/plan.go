@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
@@ -167,24 +168,25 @@ func (c *PlanController) PostSetup(w http.ResponseWriter, r *http.Request) {
 	startMonth, _ := strconv.Atoi(r.PostForm.Get("startMonth"))
 	startYear, _ := strconv.Atoi(r.PostForm.Get("startYear"))
 
-	plan, err := domain.NewPlan(companyName, startMonth, startYear, user.ID())
+	result, err := c.planSvc.CreatePlan(&commands.CreatePlan{
+		Name:          companyName,
+		StartingMonth: startMonth,
+		StartingYear:  startYear,
+		OwnerID:       user.ID(),
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	planID := result.Result.ID
 
-	if err = c.planSvc.Save(plan); err != nil {
-		http.Error(w, "Failed to save plan", http.StatusInternalServerError)
-		return
-	}
-
-	if err := c.accessSvc.GrantAccess(plan.ID(), user.ID(), domain.Owner); err != nil {
+	if err := c.accessSvc.GrantAccess(planID, user.ID(), domain.Owner); err != nil {
 		log.Printf("Failed to grant owner access: %v", err)
 		http.Error(w, "Failed to setup plan access", http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(w, r, "/plan/"+plan.ID().String()+"/starting-point", http.StatusSeeOther)
+	http.Redirect(w, r, "/plan/"+planID.String()+"/starting-point", http.StatusSeeOther)
 }
 
 // PostUpdateSetup POST /plan/{id}/setup (Updates an existing plan)
@@ -200,8 +202,9 @@ func (c *PlanController) PostUpdateSetup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	plan, err := c.planSvc.Get(id)
-	if err != nil {
+	// Existence check up front so a missing plan 404s rather than surfacing
+	// as a 400 from UpdatePlan's internal Get.
+	if _, err := c.planSvc.Get(id); err != nil {
 		renderErrorPage(w, r, c.templateCache, http.StatusNotFound, "Plan not found")
 		return
 	}
@@ -215,13 +218,13 @@ func (c *PlanController) PostUpdateSetup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := plan.ChangeCoreDetails(companyName, startMonth, startYear); err != nil {
+	if _, err := c.planSvc.UpdatePlan(&commands.UpdatePlan{
+		PlanID:        id,
+		Name:          companyName,
+		StartingMonth: startMonth,
+		StartingYear:  startYear,
+	}); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if err := c.planSvc.Save(plan); err != nil {
-		http.Error(w, "Failed to save plan", http.StatusInternalServerError)
 		return
 	}
 
@@ -308,7 +311,7 @@ func (c *PlanController) PostDeletePlan(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := c.planSvc.Delete(id); err != nil {
+	if _, err := c.planSvc.DeletePlan(&commands.DeletePlan{PlanID: id}); err != nil {
 		log.Printf("PlanSvc Delete Error: %v", err)
 		renderErrorPage(w, r, c.templateCache, http.StatusInternalServerError, "Failed to delete plan")
 		return

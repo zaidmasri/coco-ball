@@ -185,10 +185,13 @@ func validateCoreProperties(name string, month, year int) (string, error) {
 }
 
 // NewPlan creates a brand-new Plan with a domain-generated UUIDv7 identity.
-// Use UnmarshalJSON (via plan_json.go) when reconstructing a plan from
-// persisted data — that path sets the existing id directly without calling
-// this constructor, satisfying the rule that validation is write-side only.
-func NewPlan(name string, startingMonth, startingYear int, ownerID uuid.UUID) (*Plan, error) {
+// owner must be a VerifiedUser (see user.go) — proof that the owner is a
+// real, existing User of the system, not just any uuid.UUID a caller
+// supplies. Use UnmarshalJSON (via plan_json.go) when reconstructing a plan
+// from persisted data — that path sets the existing id/ownerID directly
+// without calling this constructor, satisfying the rule that validation is
+// write-side only.
+func NewPlan(name string, startingMonth, startingYear int, owner VerifiedUser) (*Plan, error) {
 	cleanName, err := validateCoreProperties(name, startingMonth, startingYear)
 	if err != nil {
 		return nil, err
@@ -204,7 +207,7 @@ func NewPlan(name string, startingMonth, startingYear int, ownerID uuid.UUID) (*
 		name:          cleanName,
 		startingMonth: startingMonth,
 		startingYear:  startingYear,
-		ownerID:       ownerID,
+		ownerID:       owner.ID(),
 		// Always initialize slices so they aren't nil
 		revenues:        make([]RevenueStream, 0),
 		opEx:            make([]Cost, 0),
@@ -219,7 +222,7 @@ func NewPlan(name string, startingMonth, startingYear int, ownerID uuid.UUID) (*
 		distributions:   make([]Distribution, 0),
 	}
 
-	p.recordEvent(domevents.NewPlanCreated(id, cleanName, ownerID))
+	p.recordEvent(domevents.NewPlanCreated(id, cleanName, owner.ID()))
 	return p, nil
 }
 

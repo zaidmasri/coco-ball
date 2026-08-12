@@ -52,7 +52,7 @@ func serve(dbPath, port string) {
 	operatingExpenseRepo := sqlite.NewOperatingExpenseRepository(conn)
 
 	// Application services
-	planSvc := appservices.NewPlanService(planRepo)
+	planSvc := appservices.NewPlanService(planRepo, userRepo)
 	authSvc := appservices.NewAuthService(userRepo, sessionRepo)
 	accessSvc := appservices.NewAccessService(accessRepo)
 	inviteSvc := appservices.NewInviteService(inviteRepo)
