@@ -382,7 +382,11 @@ func hydratePlan(ctx context.Context, queries *db.Queries, plan *domain.Plan) er
 	}
 	opEx := make([]domain.Cost, len(opExRows))
 	for i, e := range opExRows {
-		opEx[i] = domain.Cost{
+		id, err := uuid.Parse(e.ID)
+		if err != nil {
+			return fmt.Errorf("failed to parse operating expense id: %w", err)
+		}
+		cost := domain.Cost{
 			Name:               e.Name,
 			BaseAmountPerMonth: mustUSD(e.MonthlyAmount),
 			Growth: domain.GrowthStrategy{
@@ -390,6 +394,8 @@ func hydratePlan(ctx context.Context, queries *db.Queries, plan *domain.Plan) er
 				AnnualRate: e.AnnualRate,
 			},
 		}
+		cost.SetID(id)
+		opEx[i] = cost
 	}
 
 	plan.LoadOpExData(opEx)

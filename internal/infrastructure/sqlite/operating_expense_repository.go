@@ -77,7 +77,7 @@ func (r *OperatingExpenseRepository) FindOperatingExpenseDraft(planID uuid.UUID)
 
 	return &repositories.OperatingExpenseItem{
 		ID:          id,
-		Cost:        operatingExpenseFromRow(row.Name, row.MonthlyAmount, row.GrowthType, row.AnnualRate),
+		Cost:        operatingExpenseFromRow(id, row.Name, row.MonthlyAmount, row.GrowthType, row.AnnualRate),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -99,7 +99,7 @@ func (r *OperatingExpenseRepository) GetOperatingExpense(itemID uuid.UUID) (*rep
 
 	return &repositories.OperatingExpenseItem{
 		ID:          id,
-		Cost:        operatingExpenseFromRow(row.Name, row.MonthlyAmount, row.GrowthType, row.AnnualRate),
+		Cost:        operatingExpenseFromRow(id, row.Name, row.MonthlyAmount, row.GrowthType, row.AnnualRate),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -142,7 +142,7 @@ func (r *OperatingExpenseRepository) ListCompleteOperatingExpenses(planID uuid.U
 		}
 		items[i] = repositories.OperatingExpenseItem{
 			ID:          id,
-			Cost:        operatingExpenseFromRow(row.Name, row.MonthlyAmount, row.GrowthType, row.AnnualRate),
+			Cost:        operatingExpenseFromRow(id, row.Name, row.MonthlyAmount, row.GrowthType, row.AnnualRate),
 			Status:      repositories.ItemStatus(row.Status),
 			CurrentStep: int(row.CurrentStep),
 		}
@@ -164,8 +164,12 @@ func (r *OperatingExpenseRepository) DeleteOperatingExpense(itemID uuid.UUID) er
 	return nil
 }
 
-func operatingExpenseFromRow(name string, monthlyAmount int64, growthType string, annualRate float64) domain.Cost {
-	return domain.Cost{
+// operatingExpenseFromRow reconstructs the Cost value stored in a wizard row,
+// assigning it the row's own ID via SetID. Rows may be incomplete drafts
+// (empty name, zero growth type), so this deliberately does not go through
+// the validating NewCost constructor.
+func operatingExpenseFromRow(id uuid.UUID, name string, monthlyAmount int64, growthType string, annualRate float64) domain.Cost {
+	cost := domain.Cost{
 		Name:               name,
 		BaseAmountPerMonth: mustUSD(monthlyAmount),
 		Growth: domain.GrowthStrategy{
@@ -173,4 +177,6 @@ func operatingExpenseFromRow(name string, monthlyAmount int64, growthType string
 			AnnualRate: annualRate,
 		},
 	}
+	cost.SetID(id)
+	return cost
 }

@@ -1,8 +1,11 @@
 package entities
 
 import (
+	"fmt"
 	"math"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // AnnualGrowth captures a Year 2 / Year 3 (etc.) growth rate schedule that
@@ -30,10 +33,61 @@ func (g GrowthStrategy) AnnualRatePercent() float64 {
 	return g.AnnualRate * 100
 }
 
+// Cost is a repeatable line item used for both Operating Expenses and COGS.
+// It carries its own identity (id) so a wizard row and the domain value it
+// stores can be referenced by the same UUID — see NewCost.
 type Cost struct {
+	id                 uuid.UUID
 	Name               string
 	BaseAmountPerMonth Money
 	Growth             GrowthStrategy
+}
+
+func (c Cost) ID() uuid.UUID { return c.id }
+
+// SetID overrides a Cost's identity. Used only by repository implementations
+// reconstructing a Cost already persisted under a known ID (the wizard
+// item's row ID) — mirrors User.SetID's reconstruction pattern. Reconstructed
+// rows may be incomplete drafts, so this deliberately bypasses NewCost's
+// validation.
+func (c *Cost) SetID(id uuid.UUID) { c.id = id }
+
+// validate checks a cost's business invariants (mirrors Plan.validate()).
+func (c Cost) validate() error {
+	if strings.TrimSpace(c.Name) == "" {
+		return ErrInvalidName
+	}
+	if c.BaseAmountPerMonth.IsNegative() {
+		return ErrNegativeAmount
+	}
+	if c.Growth.Type != FlatGrowth && c.Growth.Type != AnnualStepPercent {
+		return ErrInvalidGrowthType
+	}
+	return nil
+}
+
+// NewCost creates a new Cost line item with a domain-generated UUIDv7
+// identity, validating name/amount/growth against the same invariants a
+// persisted Cost must satisfy. Mirrors NewPlan's shape: generate the id,
+// build the value, validate before returning — invalid states never leave
+// this constructor. Use SetID (via a repository implementation) instead when
+// reconstructing an already-persisted, possibly-incomplete draft.
+func NewCost(name string, baseAmount Money, growth GrowthStrategy) (Cost, error) {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return Cost{}, fmt.Errorf("failed to generate cost id: %w", err)
+	}
+
+	c := Cost{
+		id:                 id,
+		Name:               strings.TrimSpace(name),
+		BaseAmountPerMonth: baseAmount,
+		Growth:             growth,
+	}
+	if err := c.validate(); err != nil {
+		return Cost{}, err
+	}
+	return c, nil
 }
 
 func (c Cost) ProjectedAmount(month MonthIndex) Money {
@@ -182,24 +236,9 @@ func (p *Plan) OpEx() []Cost {
 	return res
 }
 
-// ValidateOpExpense checks a Cost before it's persisted as an Operating
-// Expense line item.
-func ValidateOpExpense(cost Cost) error {
-	if strings.TrimSpace(cost.Name) == "" {
-		return ErrInvalidName
-	}
-	if cost.BaseAmountPerMonth.IsNegative() {
-		return ErrNegativeAmount
-	}
-	if cost.Growth.Type != FlatGrowth && cost.Growth.Type != AnnualStepPercent {
-		return ErrInvalidGrowthType
-	}
-	return nil
-}
-
 func (p *Plan) AddOpEx(name string, baseAmount Money, growth GrowthStrategy) error {
-	cost := Cost{Name: name, BaseAmountPerMonth: baseAmount, Growth: growth}
-	if err := ValidateOpExpense(cost); err != nil {
+	cost, err := NewCost(name, baseAmount, growth)
+	if err != nil {
 		return err
 	}
 	p.opEx = append(p.opEx, cost)
@@ -207,16 +246,10 @@ func (p *Plan) AddOpEx(name string, baseAmount Money, growth GrowthStrategy) err
 }
 
 func (p *Plan) AddCOGS(name string, baseAmount Money, growth GrowthStrategy) error {
-	if strings.TrimSpace(name) == "" {
-		return ErrInvalidName
+	cost, err := NewCost(name, baseAmount, growth)
+	if err != nil {
+		return err
 	}
-	if baseAmount.IsNegative() {
-		return ErrNegativeAmount
-	}
-	if growth.Type != FlatGrowth && growth.Type != AnnualStepPercent {
-		return ErrInvalidGrowthType
-	}
-
-	p.cogs = append(p.cogs, Cost{Name: name, BaseAmountPerMonth: baseAmount, Growth: growth})
+	p.cogs = append(p.cogs, cost)
 	return nil
 }

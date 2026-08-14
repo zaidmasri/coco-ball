@@ -308,26 +308,36 @@ Note: the Makefile comments indicate the production image (`docker-compose.yml`)
 │   │   │   └── plan_service.go, auth_service.go, access_service.go, invite_service.go,
 │   │   │       hub_completion_service.go, starting_point_service.go, payroll_service.go,
 │   │   │       sales_forecast_service.go, cash_flow_service.go, operating_expenses_service.go
-│   │   ├── commands/            # Write-side command DTOs — currently Plan only, one file per
-│   │   │   │                      command (mirrors go-ddd's create_product_command.go layout)
-│   │   │   ├── create_plan_command.go  # CreatePlan + CreatePlanResult
-│   │   │   ├── update_plan_command.go  # UpdatePlan + UpdatePlanResult
-│   │   │   └── delete_plan_command.go  # DeletePlan + DeletePlanResult
-│   │   │                          Wired through PlanController and PlanService (see
+│   │   ├── commands/            # Write-side command DTOs — Plan and Operating Expenses so far,
+│   │   │   │                      one file per command (mirrors go-ddd's
+│   │   │   │                      create_product_command.go layout)
+│   │   │   ├── create_plan_command.go, update_plan_command.go, delete_plan_command.go
+│   │   │   │                      # CreatePlan/UpdatePlan/DeletePlan + Result wrappers
+│   │   │   └── create_operating_expense_command.go, update_operating_expense_command.go,
+│   │   │       delete_operating_expense_command.go
+│   │   │                          # CreateOperatingExpense/UpdateOperatingExpense/
+│   │   │                          # DeleteOperatingExpense + Result wrappers
+│   │   │                          Wired through PlanController/PlanService and
+│   │   │                          OperatingExpensesController/OperatingExpensesService (see
 │   │   │                          "Application Layer: go-ddd Comparison" below)
 │   │   ├── common/               # Output DTOs shared between command/query sides
-│   │   │   └── plan_result.go   # PlanResult — thin write-ack shape, not the Plan entity
+│   │   │   ├── plan_result.go   # PlanResult — thin write-ack shape, not the Plan entity
+│   │   │   └── operating_expense_result.go # OperatingExpenseResult — same shape, for Cost
 │   │   ├── mapper/                # Entity → Result DTO conversion
-│   │   │   └── plan_result.go   # NewPlanResultFromEntity
+│   │   │   ├── plan_result.go   # NewPlanResultFromEntity
+│   │   │   └── operating_expense_result.go # NewOperatingExpenseResultFromEntity
 │   │   └── services/            # Application service implementations (delegate to repositories)
-│   │       ├── plan_service.go  # Only service with domain construction/validation + commands
+│   │       ├── plan_service.go  # Domain construction/validation + commands for Plan
 │   │       ├── plan_service_test.go # App-layer tests (real temp-file SQLite)
 │   │       ├── auth_service.go  # Session expiry check lives here (not in infrastructure)
 │   │       ├── access_service.go # Access level validation lives here (not in infrastructure)
+│   │       ├── operating_expenses_service.go # CreateOperatingExpense/UpdateOperatingExpense
+│   │       │   are the only callers of domain.NewCost; hub-summary/step-draft methods remain
+│   │       │   thin pass-throughs (see roadmap below for why)
 │   │       └── invite_service.go, hub_completion_service.go, starting_point_service.go,
-│   │           payroll_service.go, sales_forecast_service.go, cash_flow_service.go,
-│   │           operating_expenses_service.go  # Thin CRUD pass-throughs over wizard
-│   │           sub-entities — no command/query DTOs yet, see roadmap below
+│   │           payroll_service.go, sales_forecast_service.go, cash_flow_service.go
+│   │           # Still thin CRUD pass-throughs over wizard sub-entities — no command/query
+│   │           # DTOs yet, see roadmap below
 │   ├── interface/web/           # HTTP controllers — one struct per domain, registers its own routes
 │   │   ├── plan.go              # PlanController: plan lifecycle (setup/edit/delete) + report pages
 │   │   ├── auth.go              # AuthController: login, signup, logout, profile
@@ -558,20 +568,73 @@ was accepted as the owner, with nothing checking it actually named an existing U
   mutate* domain objects at the edge) — `PostSetup`/`PostUpdateSetup`/`PostDeletePlan` no longer
   do that; the read-only handlers never did.
 
-**Roadmap: extending the command pattern to the other 9 domains.** Scoped out of this pass on
-purpose (see the dated session summary below for why) — `access`, `auth`, `invite`,
-`hub_completion`, `starting_point`, `payroll`, `sales_forecast`, `cash_flow`,
-`operating_expenses` services all still take plain scalar args and pre-built domain
-value-object structs (`SalaryRole`, `Product`, `CapitalAsset`, etc.), with **no domain-level
-constructors or validation for those wizard sub-entities** — they're populated and mutated as part
-of `Plan`'s `Add*`/`Clear*` methods, not independently constructed like `Plan`/`User`/`Money` are.
-Retrofitting `CreateSalaryRoleCommand`-style DTOs onto them now would be cargo-culting go-ddd's
-shape without its actual payoff (nothing to validate independently — the invariant-guarding is
-what the pattern is *for*). The real prerequisite, already flagged in Known Limitations below
-("Wizard items have no domain-level ID"), is giving wizard sub-entities their own `uuid.UUID` and
-constructors first. Once that lands for a given sub-entity, the same three-step recipe used here
-for `Plan` applies: (1) command DTO + Result wrapper, (2) service method that's the only caller of
-the new constructor, (3) controller builds the command instead of touching the entity.
+**Roadmap: extending the command pattern to the other 9 domains.** `access`, `auth`, `invite`,
+`hub_completion`, `starting_point`, `payroll`, `sales_forecast`, `cash_flow` services still take
+plain scalar args and pre-built domain value-object structs (`SalaryRole`, `Product`,
+`CapitalAsset`, etc.), with **no domain-level constructors or validation for those wizard
+sub-entities** — they're populated and mutated as part of `Plan`'s `Add*`/`Clear*` methods, not
+independently constructed like `Plan`/`User`/`Money` are. Retrofitting `CreateXCommand`-style DTOs
+onto them now would be cargo-culting go-ddd's shape without its actual payoff (nothing to validate
+independently — the invariant-guarding is what the pattern is *for*). The real prerequisite,
+flagged in Known Limitations below ("Wizard items have no domain-level ID"), is giving each wizard
+sub-entity its own `uuid.UUID` and constructor first. Once that lands, the same three-step recipe
+used for `Plan` applies: (1) command DTO + Result wrapper, (2) service method that's the only
+caller of the new constructor, (3) controller builds the command instead of touching the entity.
+
+**Operating Expenses (2026-08-12, continued) — the recipe proven on a second domain.** Operating
+Expenses was picked deliberately as the smallest wizard hub (a single repeatable `Cost` list, per
+`SectionOperatingExpenses`'s doc comment in `plan.go`) to prove the `Plan` recipe generalizes
+before tackling the larger hubs. What changed:
+- **Prerequisite closed for `Cost`**: `entities.Cost` (`plan_growth.go`, shared by Operating
+  Expenses and the still-unwired COGS field) gained an unexported `id uuid.UUID`, an `ID()`
+  getter, and `NewCost(name, baseAmount, growth) (Cost, error)` — same shape as `NewPlan`:
+  generates a UUIDv7, validates invariants (empty name / negative amount / invalid growth type),
+  refuses to return an invalid value. The old free function `ValidateOpExpense` was deleted (dead
+  code once `AddOpEx`/`AddCOGS` routed through `NewCost` instead of hand-rolling the same three
+  checks). `Cost` also gained `SetID(id)` (pointer receiver, no validation) for the *reconstruction*
+  path — mirrors `User.SetID`'s existing convention (`NewUser` then override the ID) — because rows
+  read back from SQLite are sometimes incomplete wizard drafts (empty name, no growth chosen yet)
+  that would fail `NewCost`'s validation. `operatingExpenseFromRow` (sqlite) and the OpEx
+  reconstruction loop in `plan_repository.go`'s `LoadPlanChildren`-equivalent both now thread the
+  row's own ID through `SetID` so `item.Cost.ID()` always equals the wizard row's ID — closing the
+  domain-level-ID gap for this one sub-entity.
+- **Commands**: `commands/create_operating_expense_command.go` / `update_...` / `delete_...`, one
+  file each, matching `Plan`'s layout exactly. `common.OperatingExpenseResult` +
+  `mapper.NewOperatingExpenseResultFromEntity` mirror `PlanResult`/`NewPlanResultFromEntity`.
+  Command fields use `domain.Money`/`domain.GrowthStrategy` directly rather than further-decomposed
+  primitives — consistent with how this codebase already treats `Money` as a pervasive value type
+  at every layer (unlike `Plan`'s command, which only ever had primitive fields to begin with).
+- **Service**: `OperatingExpensesService.CreateOperatingExpense`/`UpdateOperatingExpense` are now
+  the only code that calls `domain.NewCost`; `DeleteOperatingExpense`'s signature changed from a
+  bare `(uuid.UUID) error` pass-through to `(*commands.DeleteOperatingExpense)
+  (*commands.DeleteOperatingExpenseResult, error)`, matching `DeletePlan`.
+- **Controller — the one deliberate divergence from a literal Create/Update/Delete mapping**:
+  Operating Expenses is a 3-step wizard (name → amount → growth), not a single-shot form like
+  `Plan`'s setup page. The first two steps only ever hold a *partial* `Cost` (no growth strategy
+  yet), which would fail `NewCost`'s validation — so they still go through the pre-existing raw
+  `SaveOperatingExpenseStep(itemID, cost, step, StatusDraft)` pass-through unchanged, since there is
+  no valid domain entity to construct until the wizard finishes. Only the final "growth" step —
+  where a full name/amount/growth triple first exists — now builds a `CreateOperatingExpense` or
+  `UpdateOperatingExpense` command (chosen by whether the item was already complete) instead of
+  calling the deleted `domain.ValidateOpExpense` directly. `PostOperatingExpenseDelete` builds a
+  `DeleteOperatingExpense` command. This is the shape future wizard-hub work should expect: the
+  command pattern applies at the point a full valid entity exists, not to every intermediate
+  step-save in a multi-step form.
+- **Verified**: `go build ./...` / `go test ./...` pass (new `TestNewCost`/`TestCost_SetID`/
+  `TestPlan_AddOpEx_AssignsID` in `plan_growth_test.go`), plus live in a browser against a scratch
+  DB — created an expense through all 3 steps (draft→complete via `CreateOperatingExpense`),
+  edited it back through the wizard (same row updated via `UpdateOperatingExpense`, no duplicate
+  row, ID stable across the edit), and deleted it (soft-deleted, `deleted_at` set, disappears from
+  the list).
+- **Next hub**: Starting Point (`internal/interface/web/starting_point.go`) is next in line, and is
+  a bigger step up in shape, not just size — it has **three** independent sub-entity types
+  (`CapitalAsset`, `StartupCost`, `FundingSource`), each needing its own `NewX` constructor plus its
+  own three command files/service methods (so nine new command files total, not three), and a
+  fourth singleton section (`StartingBalances`, cash-on-hand) that has no wizard-item ID at all
+  today and doesn't obviously need one (it's a per-plan singleton row, not a repeatable list — worth
+  confirming that reasoning before assuming it needs the same treatment). Expect to reuse the same
+  "only the step that completes a full entity constructs it" pattern established here for any of
+  the three that are also multi-step wizards.
 
 **Idempotency (chapter 8) is the natural next increment if commands expand.** The
 `idempotency_keys` table exists (migration 49) but nothing reserves/checks it yet (see the
@@ -638,7 +701,7 @@ step, not bolted onto this pass.
 - **Collaboration is per-plan, not org-wide** - there is no workspace/team entity above individual plans; each plan has its own independent set of invites/access grants
 - **SQLite only** - single-file database; fine for the current single-instance Docker deployment but no connection pooling or horizontal-scaling story if that becomes necessary
 - **No handler-level test coverage for report/form pages or invites** - `internal/handlers/auth_test.go` is the only handler test file; the report pages, all form POST handlers, and the invite accept/reject flow are exercised only by manual browser testing during development, not by automated tests
-- **Wizard items have no domain-level ID** - `CapitalAsset`, `SalaryRole`, `Product`, etc. carry no `uuid.UUID` in the domain struct; the ID lives only in the `repositories.*Item` wrapper. These are entities within the Plan aggregate boundary and should eventually carry their own ID in the domain (so `Plan.futurePurchases []CapitalAsset` holds identifiable entities). Doing so requires updating all store serialization, repository interfaces, and handler code. Tracked in `repositories/wizard_item.go`'s package comment.
+- **Most wizard items still have no domain-level ID** - `CapitalAsset`, `SalaryRole`, `Product`, etc. carry no `uuid.UUID` in the domain struct; the ID lives only in the `repositories.*Item` wrapper. `Cost` (used for Operating Expenses and COGS) is now the one exception — it carries its own `id` + `NewCost` constructor + `SetID` reconstruction hook, see "Application Layer: go-ddd Comparison" above. The rest are entities within the Plan aggregate boundary and should eventually carry their own ID in the domain (so `Plan.futurePurchases []CapitalAsset` holds identifiable entities). Doing so requires updating all store serialization, repository interfaces, and handler code. Tracked in `repositories/wizard_item.go`'s package comment.
 
 ### Questions to Ask If Stuck
 
@@ -649,8 +712,8 @@ step, not bolted onto this pass.
 
 ---
 
-**Last Updated**: 2026-08-12 (continued)
-**Session Focus**: Wired the dead `commands`/`queries` DTOs from 2026-08-07 into `Plan`'s actual create/update/delete flow (see "Application Layer: go-ddd Comparison" above and the matching dated Session Summaries at the bottom of this file), deleted the `queries` package with documented reasoning, corrected the drift between this document and the post-`refactor/web-controllers` directory layout, split `commands/plan.go` into one file per command to match go-ddd's layout, and added the `VerifiedUser` opaque token so `PlanService.CreatePlan` actually confirms an owner is a real User before assigning them (mirroring go-ddd's `ValidatedSeller` pattern).
+**Last Updated**: 2026-08-12 (continued further)
+**Session Focus**: Extended the go-ddd command pattern from `Plan` to Operating Expenses — the smallest wizard hub — to prove the recipe generalizes before tackling the larger hubs. Closed the actual prerequisite first (`entities.Cost` gained its own `uuid.UUID` + validating `NewCost` constructor, mirroring `Plan.validate()`/`NewPlan`), then applied the three-step recipe: `commands/create_operating_expense_command.go`/`update_...`/`delete_...` + `common.OperatingExpenseResult` + mapper; `OperatingExpensesService.CreateOperatingExpense`/`UpdateOperatingExpense`/`DeleteOperatingExpense` as the only code allowed to construct/mutate the entity; `OperatingExpensesController` builds commands from parsed form data at the wizard step that actually completes a valid `Cost`, rather than validating a hand-mutated struct directly. See "Application Layer: go-ddd Comparison" above for the full writeup, including the one deliberate divergence (multi-step wizard drafts still save partial fields via the pre-existing raw pass-through, since there's no valid entity to construct until the final step) and what's different about Starting Point, next in line.
 **Total Remaining Items**: ~28 (across all categories)
 **Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → ~~Data Persistence~~ ✅ → ~~Docker Containerization~~ ✅ → ~~DDD/CQRS Architecture~~ ✅ → Testing → Form Validation → Income Tax Modeling
 

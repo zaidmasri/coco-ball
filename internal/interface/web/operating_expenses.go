@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -245,33 +246,47 @@ func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWr
 
 	finishNow := step == "growth"
 
-	if finishNow {
-		if err := domain.ValidateOpExpense(cost); err != nil {
-			renderStepError(err.Error())
+	// The "name" and "amount" steps only ever hold part of a valid Cost (no
+	// growth strategy chosen yet), so they're saved as a raw draft via the
+	// pass-through below rather than through Create/UpdateOperatingExpense -
+	// there's no valid domain entity to construct until the wizard finishes.
+	if !finishNow {
+		if err := c.opExSvc.SaveOperatingExpenseStep(itemID, cost, idx+1, repositories.StatusDraft); err != nil {
+			log.Printf("Failed to save operating expense step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
 			return
 		}
-	}
-
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-		newCurrentStep = len(operatingExpenseSteps)
-	}
-
-	if err := c.opExSvc.SaveOperatingExpenseStep(itemID, cost, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save operating expense step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.OperatingExpensesStepURL(planID, itemID, nextStepName(operatingExpenseSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The "growth" step completes the wizard: name and amount are already
+	// gathered from prior steps, so this is the first point a full Cost
+	// exists. CreateOperatingExpense/UpdateOperatingExpense are the only
+	// code allowed to construct/mutate it (via domain.NewCost).
 	if wasComplete {
+		if _, err := c.opExSvc.UpdateOperatingExpense(&commands.UpdateOperatingExpense{
+			ItemID:             itemID,
+			Name:               cost.Name,
+			BaseAmountPerMonth: cost.BaseAmountPerMonth,
+			Growth:             cost.Growth,
+			CurrentStep:        len(operatingExpenseSteps),
+		}); err != nil {
+			renderStepError(err.Error())
+			return
+		}
 		http.Redirect(w, r, views.OperatingExpensesListURL(planID), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.opExSvc.CreateOperatingExpense(&commands.CreateOperatingExpense{
+		ItemID:             itemID,
+		Name:               cost.Name,
+		BaseAmountPerMonth: cost.BaseAmountPerMonth,
+		Growth:             cost.Growth,
+		CurrentStep:        len(operatingExpenseSteps),
+	}); err != nil {
+		renderStepError(err.Error())
 		return
 	}
 
@@ -291,7 +306,7 @@ func (c *OperatingExpensesController) PostOperatingExpenseDelete(w http.Response
 		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "Invalid item ID")
 		return
 	}
-	if err := c.opExSvc.DeleteOperatingExpense(itemID); err != nil {
+	if _, err := c.opExSvc.DeleteOperatingExpense(&commands.DeleteOperatingExpense{ItemID: itemID}); err != nil {
 		log.Printf("Failed to delete operating expense %s: %v", itemID, err)
 	}
 	http.Redirect(w, r, views.OperatingExpensesListURL(planID), http.StatusSeeOther)

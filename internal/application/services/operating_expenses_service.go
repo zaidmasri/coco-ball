@@ -2,7 +2,9 @@ package services
 
 import (
 	"github.com/google/uuid"
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
+	"github.com/zaidmasri/business-planning-tool/internal/application/mapper"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
@@ -60,6 +62,38 @@ func (s *operatingExpensesService) SaveOperatingExpenseStep(itemID uuid.UUID, co
 func (s *operatingExpensesService) ListCompleteOperatingExpenses(planID uuid.UUID) ([]repositories.OperatingExpenseItem, error) {
 	return s.operatingExpenses.ListCompleteOperatingExpenses(planID)
 }
-func (s *operatingExpensesService) DeleteOperatingExpense(itemID uuid.UUID) error {
-	return s.operatingExpenses.DeleteOperatingExpense(itemID)
+
+func (s *operatingExpensesService) CreateOperatingExpense(cmd *commands.CreateOperatingExpense) (*commands.CreateOperatingExpenseResult, error) {
+	cost, err := domain.NewCost(cmd.Name, cmd.BaseAmountPerMonth, cmd.Growth)
+	if err != nil {
+		return nil, err
+	}
+	cost.SetID(cmd.ItemID)
+
+	if err := s.operatingExpenses.SaveOperatingExpenseStep(cmd.ItemID, cost, cmd.CurrentStep, repositories.StatusComplete); err != nil {
+		return nil, err
+	}
+
+	return &commands.CreateOperatingExpenseResult{Result: mapper.NewOperatingExpenseResultFromEntity(cost)}, nil
+}
+
+func (s *operatingExpensesService) UpdateOperatingExpense(cmd *commands.UpdateOperatingExpense) (*commands.UpdateOperatingExpenseResult, error) {
+	cost, err := domain.NewCost(cmd.Name, cmd.BaseAmountPerMonth, cmd.Growth)
+	if err != nil {
+		return nil, err
+	}
+	cost.SetID(cmd.ItemID)
+
+	if err := s.operatingExpenses.SaveOperatingExpenseStep(cmd.ItemID, cost, cmd.CurrentStep, repositories.StatusComplete); err != nil {
+		return nil, err
+	}
+
+	return &commands.UpdateOperatingExpenseResult{Result: mapper.NewOperatingExpenseResultFromEntity(cost)}, nil
+}
+
+func (s *operatingExpensesService) DeleteOperatingExpense(cmd *commands.DeleteOperatingExpense) (*commands.DeleteOperatingExpenseResult, error) {
+	if err := s.operatingExpenses.DeleteOperatingExpense(cmd.ItemID); err != nil {
+		return nil, err
+	}
+	return &commands.DeleteOperatingExpenseResult{Success: true}, nil
 }
