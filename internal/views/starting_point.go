@@ -203,7 +203,7 @@ func cashOnHandAnsweredFields(b domain.StartingBalances, uptoStep string) []Answ
 
 // --- URL helpers ---
 //
-// Exported so both this package's builders and internal/handlers can build
+// Exported so both this package's builders and internal/interface/web can build
 // Starting Point URLs from the same single implementation, rather than
 // each maintaining its own copy of the same path patterns.
 

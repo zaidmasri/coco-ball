@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"github.com/google/uuid"
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
@@ -24,5 +25,11 @@ type OperatingExpensesService interface {
 	GetOperatingExpense(itemID uuid.UUID) (*repositories.OperatingExpenseItem, error)
 	SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status repositories.ItemStatus) error
 	ListCompleteOperatingExpenses(planID uuid.UUID) ([]repositories.OperatingExpenseItem, error)
-	DeleteOperatingExpense(itemID uuid.UUID) error
+
+	// CreateOperatingExpense/UpdateOperatingExpense/DeleteOperatingExpense
+	// are the only code allowed to construct or mutate the domain.Cost
+	// entity for an Operating Expense item — see plan_growth.go's NewCost.
+	CreateOperatingExpense(cmd *commands.CreateOperatingExpense) (*commands.CreateOperatingExpenseResult, error)
+	UpdateOperatingExpense(cmd *commands.UpdateOperatingExpense) (*commands.UpdateOperatingExpenseResult, error)
+	DeleteOperatingExpense(cmd *commands.DeleteOperatingExpense) (*commands.DeleteOperatingExpenseResult, error)
 }

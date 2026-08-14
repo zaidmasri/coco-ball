@@ -3,7 +3,100 @@ package entities
 import (
 	"errors"
 	"testing"
+
+	"github.com/google/uuid"
 )
+
+func TestNewCost(t *testing.T) {
+	tests := []struct {
+		testName    string
+		costName    string
+		baseAmount  Money
+		growth      GrowthStrategy
+		expectedErr error
+	}{
+		{
+			testName:    "Valid cost",
+			costName:    "Rent",
+			baseAmount:  mustUSD(1500),
+			growth:      GrowthStrategy{Type: FlatGrowth},
+			expectedErr: nil,
+		},
+		{
+			testName:    "Fails on empty name",
+			costName:    "   ",
+			baseAmount:  mustUSD(1500),
+			growth:      GrowthStrategy{Type: FlatGrowth},
+			expectedErr: ErrInvalidName,
+		},
+		{
+			testName:    "Fails on negative amount",
+			costName:    "Rent",
+			baseAmount:  mustUSD(-1),
+			growth:      GrowthStrategy{Type: FlatGrowth},
+			expectedErr: ErrNegativeAmount,
+		},
+		{
+			testName:    "Fails on invalid growth type",
+			costName:    "Rent",
+			baseAmount:  mustUSD(1500),
+			growth:      GrowthStrategy{Type: "FakeGrowth"},
+			expectedErr: ErrInvalidGrowthType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			cost, err := NewCost(tt.costName, tt.baseAmount, tt.growth)
+			if !errors.Is(err, tt.expectedErr) {
+				t.Fatalf("expected error %v, got %v", tt.expectedErr, err)
+			}
+			if tt.expectedErr != nil {
+				return
+			}
+			if cost.ID() == uuid.Nil {
+				t.Error("expected NewCost to generate a non-nil id")
+			}
+		})
+	}
+}
+
+func TestCost_SetID(t *testing.T) {
+	cost, err := NewCost("Rent", mustUSD(1500), GrowthStrategy{Type: FlatGrowth})
+	if err != nil {
+		t.Fatalf("failed to create cost: %v", err)
+	}
+	originalID := cost.ID()
+
+	newID, err := uuid.NewV7()
+	if err != nil {
+		t.Fatalf("failed to generate id: %v", err)
+	}
+	cost.SetID(newID)
+
+	if cost.ID() == originalID {
+		t.Error("expected SetID to change the cost's id")
+	}
+	if cost.ID() != newID {
+		t.Errorf("expected id %s, got %s", newID, cost.ID())
+	}
+}
+
+func TestPlan_AddOpEx_AssignsID(t *testing.T) {
+	plan := newValidPlan(t)
+
+	if err := plan.AddOpEx("Rent", mustUSD(1500), GrowthStrategy{Type: FlatGrowth}); err != nil {
+		t.Fatalf("AddOpEx failed: %v", err)
+	}
+
+	opEx := plan.OpEx()
+	if len(opEx) != 1 {
+		t.Fatalf("expected 1 opex item, got %d", len(opEx))
+	}
+	if opEx[0].ID() == uuid.Nil {
+		t.Error("expected AddOpEx to assign a non-nil id via NewCost")
+	}
+}
 
 func TestPlan_TotalExpenses(t *testing.T) {
 	plan := newValidPlan(t)

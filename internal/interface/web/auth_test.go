@@ -1,4 +1,4 @@
-package handlers
+package web
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ type testRepos struct {
 	access repositories.AccessRepository
 }
 
-func setupTestApp(t *testing.T) (*App, testRepos, func()) {
+func setupTestApp(t *testing.T) (*http.ServeMux, testRepos, func()) {
 	tmpDir := filepath.Join(os.TempDir(), "northbasis_auth_test")
 	os.MkdirAll(tmpDir, 0755)
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -56,7 +56,7 @@ func setupTestApp(t *testing.T) (*App, testRepos, func()) {
 	distributionRepo := sqlite.NewDistributionRepository(conn)
 	operatingExpenseRepo := sqlite.NewOperatingExpenseRepository(conn)
 
-	planSvc := appservices.NewPlanService(planRepo)
+	planSvc := appservices.NewPlanService(planRepo, userRepo)
 	authSvc := appservices.NewAuthService(userRepo, sessionRepo)
 	accessSvc := appservices.NewAccessService(accessRepo)
 	inviteSvc := appservices.NewInviteService(inviteRepo)
@@ -72,20 +72,20 @@ func setupTestApp(t *testing.T) (*App, testRepos, func()) {
 	errorTmpl, _ := template.New("error.html").Parse("<html><body>Error: {{.Message}}</body></html>")
 	templateCache["error.html"] = errorTmpl
 
-	app := NewApp(planSvc, authSvc, accessSvc, inviteSvc,
-		startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc, hubSvc,
-		templateCache)
+	mux := http.NewServeMux()
+	accessMW := NewPlanAccessMiddleware(accessSvc, templateCache)
+	NewPlanController(mux, planSvc, accessSvc, inviteSvc, authSvc, hubSvc, templateCache, accessMW)
 
 	cleanup := func() {
 		conn.Close()
 		os.Remove(dbPath)
 	}
 
-	return app, testRepos{plans: planRepo, users: userRepo, access: accessRepo}, cleanup
+	return mux, testRepos{plans: planRepo, users: userRepo, access: accessRepo}, cleanup
 }
 
 func TestUserAuthorizationFlow(t *testing.T) {
-	app, s, cleanup := setupTestApp(t)
+	mux, s, cleanup := setupTestApp(t)
 	defer cleanup()
 
 	// Create two users
@@ -110,7 +110,11 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	fmt.Println("✓ Users created successfully")
 
 	// Create a plan for user1
-	plan, err := domain.NewPlan("User1 Plan", 1, 2024, user1.ID())
+	verifiedOwner, err := domain.NewVerifiedUser(user1)
+	if err != nil {
+		t.Fatalf("Failed to verify user1: %v", err)
+	}
+	plan, err := domain.NewPlan("User1 Plan", 1, 2024, verifiedOwner)
 	if err != nil {
 		t.Fatalf("Failed to create plan: %v", err)
 	}
@@ -131,8 +135,6 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	fmt.Println("✓ Plan created for user1 with owner access")
 
 	// Setup HTTP server with routes
-	mux := http.NewServeMux()
-	app.RegisterRoutes(mux)
 	server := httptest.NewServer(mux)
 	defer server.Close()
 

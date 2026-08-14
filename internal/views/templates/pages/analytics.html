@@ -416,9 +416,9 @@
                 <td>Profitability (Year 1 Net Income)</td>
                 <td class="text-end">{{ formatMoney (index .Annuals 0).NetIncome }}</td>
                 <td
-                  class="small {{ if lt (index .Annuals 0).NetIncome 0 }}text-warning{{ else }}text-success{{ end }}"
+                  class="small {{ if (index .Annuals 0).NetIncome.IsNegative }}text-warning{{ else }}text-success{{ end }}"
                 >
-                  {{ if lt (index .Annuals 0).NetIncome 0 }}The business is not
+                  {{ if (index .Annuals 0).NetIncome.IsNegative }}The business is not
                   showing a profit in Year 1.{{ else }}The business is
                   profitable in Year 1.{{ end }}
                 </td>

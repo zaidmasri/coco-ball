@@ -55,6 +55,37 @@ func NewUser(email string) (*User, error) {
 	}, nil
 }
 
+// VerifiedUser is an opaque token proving a uuid.UUID names a real, existing
+// User of the system — not just any uuid.UUID a caller happens to supply.
+// It can only be produced by wrapping a *User a repository lookup actually
+// returned (see UserRepository.GetUser); there is no constructor that
+// accepts a bare uuid.UUID. Plan.NewPlan requires a VerifiedUser as its
+// owner parameter, so a plan can never be created for a user that hasn't
+// been confirmed to exist — the same "invalid states unrepresentable"
+// pattern as ValidatedPlan (plan.go), mirroring go-ddd's ValidatedSeller
+// (a Product can only be created against a Seller that passed validation).
+type VerifiedUser struct {
+	user *User
+}
+
+// NewVerifiedUser wraps a User the caller has already confirmed exists — in
+// practice, a *User returned by UserRepository.GetUser. It does not perform
+// the existence check itself: the domain layer has no database access, so
+// that check belongs to the application service calling this (see
+// PlanService.CreatePlan).
+func NewVerifiedUser(u *User) (VerifiedUser, error) {
+	if u == nil {
+		return VerifiedUser{}, ErrUserNotFound
+	}
+	return VerifiedUser{user: u}, nil
+}
+
+// ID returns the verified user's identity.
+func (vu VerifiedUser) ID() uuid.UUID { return vu.user.ID() }
+
+// User returns the wrapped user.
+func (vu VerifiedUser) User() *User { return vu.user }
+
 func (u *User) ID() uuid.UUID          { return u.id }
 func (u *User) Email() string          { return u.email }
 func (u *User) FirstName() string      { return u.firstName }

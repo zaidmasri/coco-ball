@@ -3,14 +3,11 @@ package entities
 import (
 	"math"
 	"testing"
-
-	"github.com/google/uuid"
 )
 
 func newProjectionPlan(t *testing.T) *Plan {
 	t.Helper()
-	ownerID, _ := uuid.NewV7()
-	plan, err := NewPlan("Projection Co", 1, 2024, ownerID)
+	plan, err := NewPlan("Projection Co", 1, 2024, newVerifiedOwner(t))
 	if err != nil {
 		t.Fatalf("failed to create plan: %v", err)
 	}
