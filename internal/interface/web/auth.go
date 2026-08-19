@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
@@ -116,6 +117,9 @@ func NewAuthController(mux *http.ServeMux, authSvc ifaces.AuthService, templateC
 	mux.HandleFunc("POST /signup", c.PostSignup)
 	mux.HandleFunc("POST /logout", c.PostLogout)
 	mux.HandleFunc("GET /profile", c.GetProfile)
+	mux.HandleFunc("GET /profile/edit", c.GetProfileEdit)
+	mux.HandleFunc("POST /profile/edit", c.PostProfileEdit)
+	mux.HandleFunc("POST /profile/delete", c.PostProfileDelete)
 
 	return c
 }
@@ -221,22 +225,20 @@ func (c *AuthController) PostSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create user with password
-	userCreds, err := domain.NewUserWithPassword(email, firstName, lastName, password)
+	result, err := c.authSvc.CreateUser(&commands.CreateUser{
+		Email:     email,
+		FirstName: firstName,
+		LastName:  lastName,
+		Password:  password,
+	})
 	if err != nil {
 		page := views.BuildSignupPageWithError(email, firstName, lastName, err.Error())
 		views.RenderSignupPage(w, c.templateCache, page)
 		return
 	}
 
-	// Save user
-	if err := c.authSvc.SaveUserWithPassword(userCreds); err != nil {
-		log.Printf("Failed to save user: %v", err)
-		http.Error(w, "Failed to create account", http.StatusInternalServerError)
-		return
-	}
-
 	// Create and save session
-	session, err := domain.NewSession(userCreds.ID(), sessionDuration)
+	session, err := domain.NewSession(result.Result.ID, sessionDuration)
 	if err != nil {
 		log.Printf("Failed to create session: %v", err)
 		http.Error(w, "Session creation failed", http.StatusInternalServerError)
@@ -278,4 +280,72 @@ func (c *AuthController) GetProfile(w http.ResponseWriter, r *http.Request) {
 
 	page := views.BuildProfilePage(user)
 	views.RenderProfilePage(w, c.templateCache, page)
+}
+
+// GetProfileEdit displays the profile page with the name fields editable
+func (c *AuthController) GetProfileEdit(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	page := views.BuildProfileEditPage(user, "")
+	views.RenderProfilePage(w, c.templateCache, page)
+}
+
+// PostProfileEdit handles the profile name edit form submission
+func (c *AuthController) PostProfileEdit(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	firstName := r.PostForm.Get("firstName")
+	lastName := r.PostForm.Get("lastName")
+
+	if _, err := c.authSvc.UpdateUser(&commands.UpdateUser{
+		UserID:    user.ID(),
+		FirstName: firstName,
+		LastName:  lastName,
+	}); err != nil {
+		page := views.BuildProfileEditPage(user, err.Error())
+		page.FirstName = firstName
+		page.LastName = lastName
+		views.RenderProfilePage(w, c.templateCache, page)
+		return
+	}
+
+	http.Redirect(w, r, "/profile", http.StatusSeeOther)
+}
+
+// PostProfileDelete deletes the logged-in user's own account and clears
+// their session. Plans they own are left in place - see AGENTS.md's
+// "Application Layer: go-ddd Comparison" section for why deletion isn't
+// blocked by plan ownership.
+func (c *AuthController) PostProfileDelete(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.authSvc.DeleteUser(&commands.DeleteUser{UserID: user.ID()}); err != nil {
+		log.Printf("Failed to delete user: %v", err)
+		page := views.BuildProfilePageWithDeleteError(user, err.Error())
+		views.RenderProfilePage(w, c.templateCache, page)
+		return
+	}
+
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		_ = c.authSvc.DeleteSession(cookie.Value)
+	}
+	clearSessionCookie(w)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

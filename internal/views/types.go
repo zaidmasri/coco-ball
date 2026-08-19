@@ -95,10 +95,18 @@ type AnalyticsPage struct {
 	BalanceSheetBalances   bool
 }
 
-// ProfilePage is the data for the profile page
+// ProfilePage is the data for the profile page. The same page/template
+// serves the plain display view, the name-edit form (Editing), and the
+// delete-account error case (DeleteError) - see BuildProfilePage/
+// BuildProfileEditPage/BuildProfilePageWithDeleteError.
 type ProfilePage struct {
-	Title string
-	User  *domain.User
+	Title        string
+	User         *domain.User
+	Editing      bool
+	ErrorMessage string
+	FirstName    string
+	LastName     string
+	DeleteError  string
 }
 
 // ErrorPage is the data for error pages

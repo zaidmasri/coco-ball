@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createUser = `-- name: CreateUser :exec
@@ -32,8 +33,35 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	return err
 }
 
+const deletePlanAccessByUser = `-- name: DeletePlanAccessByUser :exec
+DELETE FROM plan_access WHERE user_id = ?
+`
+
+func (q *Queries) DeletePlanAccessByUser(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deletePlanAccessByUser, userID)
+	return err
+}
+
+const deleteSessionsByUser = `-- name: DeleteSessionsByUser :exec
+DELETE FROM sessions WHERE user_id = ?
+`
+
+func (q *Queries) DeleteSessionsByUser(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteSessionsByUser, userID)
+	return err
+}
+
+const deleteUserCredentialsByEmail = `-- name: DeleteUserCredentialsByEmail :exec
+DELETE FROM users_credentials WHERE email = ?
+`
+
+func (q *Queries) DeleteUserCredentialsByEmail(ctx context.Context, email string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserCredentialsByEmail, email)
+	return err
+}
+
 const getUserByID = `-- name: GetUserByID :one
-SELECT email, first_name, last_name FROM users WHERE id = ?
+SELECT email, first_name, last_name FROM users WHERE id = ? AND deleted_at IS NULL
 `
 
 type GetUserByIDRow struct {
@@ -53,7 +81,7 @@ const getUserCredentialsByEmail = `-- name: GetUserCredentialsByEmail :one
 SELECT u.id, uc.password_hash
 FROM users u
 JOIN users_credentials uc ON u.email = uc.email
-WHERE LOWER(u.email) = ?
+WHERE LOWER(u.email) = ? AND u.deleted_at IS NULL
 `
 
 type GetUserCredentialsByEmailRow struct {
@@ -69,7 +97,7 @@ func (q *Queries) GetUserCredentialsByEmail(ctx context.Context, email string) (
 }
 
 const getUserIDByEmail = `-- name: GetUserIDByEmail :one
-SELECT id FROM users WHERE LOWER(email) = ?
+SELECT id FROM users WHERE LOWER(email) = ? AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserIDByEmail(ctx context.Context, email string) (string, error) {
@@ -77,6 +105,38 @@ func (q *Queries) GetUserIDByEmail(ctx context.Context, email string) (string, e
 	var id string
 	err := row.Scan(&id)
 	return id, err
+}
+
+const softDeleteUser = `-- name: SoftDeleteUser :execrows
+UPDATE users SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL
+`
+
+type SoftDeleteUserParams struct {
+	DeletedAt sql.NullInt64 `db:"deleted_at" json:"deleted_at"`
+	ID        string        `db:"id" json:"id"`
+}
+
+func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, softDeleteUser, arg.DeletedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updateUserName = `-- name: UpdateUserName :exec
+UPDATE users SET first_name = ?, last_name = ? WHERE id = ?
+`
+
+type UpdateUserNameParams struct {
+	FirstName string `db:"first_name" json:"first_name"`
+	LastName  string `db:"last_name" json:"last_name"`
+	ID        string `db:"id" json:"id"`
+}
+
+func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserName, arg.FirstName, arg.LastName, arg.ID)
+	return err
 }
 
 const upsertUserCredentials = `-- name: UpsertUserCredentials :exec

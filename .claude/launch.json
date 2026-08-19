@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "serve-scratch",
+      "runtimeExecutable": "go",
+      "runtimeArgs": [
+        "run",
+        "./cmd/cli",
+        "serve",
+        "--db",
+        "/private/tmp/claude-501/-Users-zaidmasri-Developer-github-com-zaidmasri-northbasis-com/b871b614-c09e-4d66-9db3-2fdccf15d10c/scratchpad/northbasis-scratch.db",
+        "--port",
+        ":8090"
+      ],
+      "port": 8090
+    }
+  ]
+}

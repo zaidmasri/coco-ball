@@ -126,6 +126,30 @@ func BuildProfilePage(user *domain.User) ProfilePage {
 	}
 }
 
+// BuildProfileEditPage creates a ProfilePage with the name fields editable,
+// pre-filled from the user, and an optional error message from a failed
+// submission.
+func BuildProfileEditPage(user *domain.User, errMsg string) ProfilePage {
+	return ProfilePage{
+		Title:        "Edit Profile | Business Planning Tool",
+		User:         user,
+		Editing:      true,
+		ErrorMessage: errMsg,
+		FirstName:    user.FirstName(),
+		LastName:     user.LastName(),
+	}
+}
+
+// BuildProfilePageWithDeleteError creates a ProfilePage in display mode with
+// a Danger Zone error message from a failed account deletion attempt.
+func BuildProfilePageWithDeleteError(user *domain.User, errMsg string) ProfilePage {
+	return ProfilePage{
+		Title:       "Profile | Business Planning Tool",
+		User:        user,
+		DeleteError: errMsg,
+	}
+}
+
 // BuildErrorPage creates an ErrorPage
 func BuildErrorPage(r *http.Request, statusCode int, message string) ErrorPage {
 	statusText := http.StatusText(statusCode)

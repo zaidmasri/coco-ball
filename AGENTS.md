@@ -66,6 +66,7 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [x] User registration/signup flow (now requires first and last name in addition to email/password)
 - [x] Session-based auth with cookies
 - [x] User profile page (GET `/profile`)
+- [x] User profile editing (GET/POST `/profile/edit`, first/last name only) and self-service account deletion (POST `/profile/delete`) — see "Application Layer: go-ddd Comparison" below for the User worked example
 - [x] Logout as POST (proper state-modifying HTTP semantics)
 - [x] User Authorization - Ensure users can only access their own plans (access control middleware enforces Owner/Editor/Viewer roles)
 
@@ -103,6 +104,8 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - [x] Login page (GET/POST `/login`) - User authentication
 - [x] Signup page (GET/POST `/signup`) - User registration
 - [x] Profile page (GET `/profile`) - User profile display
+- [x] Profile edit (GET/POST `/profile/edit`) - Update first/last name
+- [x] Account deletion (POST `/profile/delete`) - Self-service account deletion, clears the session
 - [x] Logout endpoint (POST `/logout`) - Session termination
 - [x] Plan setup form (POST `/plan/setup`) - Create new plan
 - [x] Setup page (GET/POST `/plan/{id}/setup`) - Edit plan core details (name, starting month/year)
@@ -157,7 +160,7 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 ### User Management
 - [x] User model and database table
 - [x] User role-based access control (Owner, Editor, Viewer — per-plan via `plan_access`/invites, not a global Admin role)
-- [ ] User profile management (profile page is currently display-only — no edit form)
+- [x] User profile management (profile page now supports editing first/last name and self-service account deletion — see `/profile/edit`, `/profile/delete`)
 - [ ] User preferences/settings
 - [ ] Workspace/organization support (still no multi-plan "team" grouping above individual plan invites — see Teams & Collaboration above for what exists today)
 - [ ] Audit logging for plan changes
@@ -280,7 +283,8 @@ Note: the Makefile comments indicate the production image (`docker-compose.yml`)
 │   │   │   ├── errors.go        # ErrValidation sentinel
 │   │   │   ├── plan.go          # Plan aggregate root, business logic, ValidatedPlan
 │   │   │   ├── plan_*.go        # Plan companion files (payroll, cash flow, sales forecast, starting point, json)
-│   │   │   ├── user.go          # User aggregate root (id, email, first/last name, access levels) + VerifiedUser opaque token
+│   │   │   ├── user.go          # User aggregate root (id, email, first/last name, access levels)
+│   │   │   │                      + VerifiedUser opaque token + ChangeName (validated update)
 │   │   │   ├── session.go       # Session domain model + NewUserWithPassword
 │   │   │   ├── invite.go        # PlanInvite domain model (teams & collaboration)
 │   │   │   ├── projection.go    # Month-by-month financial projection engine
@@ -289,7 +293,7 @@ Note: the Makefile comments indicate the production image (`docker-compose.yml`)
 │   │   │   ├── base_event.go    # DomainEvent interface, BaseEvent
 │   │   │   ├── plan_events.go   # PlanCreated, PlanUpdated, PlanDeleted (unused so far)
 │   │   │   ├── invite_events.go # UserInvitedToPlan
-│   │   │   └── user_events.go   # UserRegistered
+│   │   │   └── user_events.go   # UserRegistered, UserUpdated
 │   │   └── repositories/        # Repository interfaces (one file per aggregate/sub-entity boundary)
 │   │       ├── plan.go          # PlanRepository
 │   │       ├── access.go        # AccessRepository
@@ -308,28 +312,36 @@ Note: the Makefile comments indicate the production image (`docker-compose.yml`)
 │   │   │   └── plan_service.go, auth_service.go, access_service.go, invite_service.go,
 │   │   │       hub_completion_service.go, starting_point_service.go, payroll_service.go,
 │   │   │       sales_forecast_service.go, cash_flow_service.go, operating_expenses_service.go
-│   │   ├── commands/            # Write-side command DTOs — Plan and Operating Expenses so far,
-│   │   │   │                      one file per command (mirrors go-ddd's
+│   │   ├── commands/            # Write-side command DTOs — Plan, Operating Expenses, and User
+│   │   │   │                      so far, one file per command (mirrors go-ddd's
 │   │   │   │                      create_product_command.go layout)
 │   │   │   ├── create_plan_command.go, update_plan_command.go, delete_plan_command.go
 │   │   │   │                      # CreatePlan/UpdatePlan/DeletePlan + Result wrappers
-│   │   │   └── create_operating_expense_command.go, update_operating_expense_command.go,
-│   │   │       delete_operating_expense_command.go
-│   │   │                          # CreateOperatingExpense/UpdateOperatingExpense/
-│   │   │                          # DeleteOperatingExpense + Result wrappers
-│   │   │                          Wired through PlanController/PlanService and
-│   │   │                          OperatingExpensesController/OperatingExpensesService (see
-│   │   │                          "Application Layer: go-ddd Comparison" below)
+│   │   │   ├── create_operating_expense_command.go, update_operating_expense_command.go,
+│   │   │   │   delete_operating_expense_command.go
+│   │   │   │                      # CreateOperatingExpense/UpdateOperatingExpense/
+│   │   │   │                      # DeleteOperatingExpense + Result wrappers
+│   │   │   └── create_user_command.go, update_user_command.go, delete_user_command.go
+│   │   │                          # CreateUser/UpdateUser/DeleteUser + Result wrappers
+│   │   │                          Wired through PlanController/PlanService,
+│   │   │                          OperatingExpensesController/OperatingExpensesService, and
+│   │   │                          AuthController/AuthService (see "Application Layer: go-ddd
+│   │   │                          Comparison" below)
 │   │   ├── common/               # Output DTOs shared between command/query sides
 │   │   │   ├── plan_result.go   # PlanResult — thin write-ack shape, not the Plan entity
-│   │   │   └── operating_expense_result.go # OperatingExpenseResult — same shape, for Cost
+│   │   │   ├── operating_expense_result.go # OperatingExpenseResult — same shape, for Cost
+│   │   │   └── user_result.go   # UserResult — same shape, for User (no password hash)
 │   │   ├── mapper/                # Entity → Result DTO conversion
 │   │   │   ├── plan_result.go   # NewPlanResultFromEntity
-│   │   │   └── operating_expense_result.go # NewOperatingExpenseResultFromEntity
+│   │   │   ├── operating_expense_result.go # NewOperatingExpenseResultFromEntity
+│   │   │   └── user_result.go   # NewUserResultFromEntity
 │   │   └── services/            # Application service implementations (delegate to repositories)
 │   │       ├── plan_service.go  # Domain construction/validation + commands for Plan
 │   │       ├── plan_service_test.go # App-layer tests (real temp-file SQLite)
-│   │       ├── auth_service.go  # Session expiry check lives here (not in infrastructure)
+│   │       ├── auth_service.go  # Session expiry check lives here (not in infrastructure);
+│   │       │   CreateUser/UpdateUser/DeleteUser are the only callers of
+│   │       │   domain.NewUserWithPassword/User.ChangeName
+│   │       ├── auth_service_test.go # App-layer tests (real temp-file SQLite)
 │   │       ├── access_service.go # Access level validation lives here (not in infrastructure)
 │   │       ├── operating_expenses_service.go # CreateOperatingExpense/UpdateOperatingExpense
 │   │       │   are the only callers of domain.NewCost; hub-summary/step-draft methods remain
@@ -636,6 +648,69 @@ before tackling the larger hubs. What changed:
   "only the step that completes a full entity constructs it" pattern established here for any of
   the three that are also multi-step wizards.
 
+**User (2026-08-14) — the recipe applied to the second aggregate root, plus its first Update/
+Delete lifecycle.** `User` was the other aggregate root from day one (`AggregateRoot` marker,
+`UserRegistered` domain event) but had zero command-pattern wiring: `PostSignup` called
+`domain.NewUserWithPassword` directly from the HTTP layer — the same violation `Plan`/Operating
+Expenses fixed — and there was no Update or Delete path for a user's own account at all (the
+profile page was read-only with a disabled "Delete Account" button). This closed both gaps.
+- **Domain**: `User.ChangeName(firstName, lastName string) error` added to `user.go`, mirroring
+  `Plan.ChangeCoreDetails` exactly (validate → mutate only after validation passes → record a
+  domain event). `SetFirstName`/`SetLastName` remain reconstruction-only (no validation, used by
+  `UserRepository.GetUser` to rehydrate a row) — `ChangeName` is the new validated entry point.
+  `events/user_events.go` gained `UserUpdated`, same shape as `PlanUpdated`. Deletion does **not**
+  get an analogous domain event: `PlanDeleted` is declared in `plan_events.go` but was confirmed
+  (by grep) to never actually be emitted — `PlanRepository.Delete` is a plain multi-table SQL
+  operation with no domain-event step — so `DeleteUser` follows that same precedent rather than
+  inventing a `UserDeleted` event nothing would ever drain.
+- **Commands**: `commands/create_user_command.go`/`update_...`/`delete_...`, one file each,
+  matching `Plan`/Operating Expenses' layout. `common.UserResult` (no password hash — the entity
+  never crosses into the interface layer) + `mapper.NewUserResultFromEntity` mirror
+  `PlanResult`/`OperatingExpenseResult`.
+- **Service**: `AuthService.CreateUser`/`UpdateUser`/`DeleteUser` are the only code allowed to
+  call `domain.NewUserWithPassword`/`User.ChangeName`/the repository's delete — no new
+  `UserService` was introduced, since User's lifecycle already lived in `AuthService`. The
+  "email already registered" existence check for signup stays in `AuthController` (it's a read via
+  the pre-existing `GetUserWithPassword`, not a construct/mutate call — unlike `verifyOwner`'s
+  `VerifiedUser` type-safety reason, there's no analogous type-level guarantee to enforce here).
+- **Repository**: `UserRepository.UpdateUser`/`DeleteUser` added, mirroring `PlanRepository.Save`/
+  `Delete`'s transaction shape. `connection.go` never sets `PRAGMA foreign_keys = ON` (confirmed
+  by reading it), so the schema's `ON DELETE CASCADE`s on `sessions.user_id`/`plan_access.user_id`/
+  `users_credentials.email` are decorative — `DeleteUser` explicitly clears those three tables
+  itself inside one transaction before soft-deleting the `users` row, same hand-rolled pattern as
+  `PlanRepository.Delete`.
+- **No ownership guard on delete — a deliberate product decision, asked and confirmed rather than
+  assumed.** `Plan.ownerID` lives inside the plan's JSON blob, not a DB-level FK, so deleting a
+  user who owns plans is allowed: their `plan_access` row for each plan is removed like any other
+  membership, but the plan itself is left in place with no remaining Owner. Verified live and by
+  `TestAuthService_DeleteUser_OwningPlanIsAllowed` (`auth_service_test.go`) that the plan survives
+  and only the access row disappears.
+- **Schema gotcha found by live testing, not by inspection**: `users.email` originally had a
+  blanket `UNIQUE` constraint. Migration `0002_user_soft_delete.sql` added `deleted_at`, but a
+  first pass left the blanket `UNIQUE` in place — which meant a soft-deleted row permanently
+  squatted on its email, silently breaking re-signup (`INSERT OR IGNORE` on the `users` row
+  no-opped against the leftover UNIQUE-constrained row, while `users_credentials` still got
+  upserted, producing a login-impossible half-created account with a session pointing at a user ID
+  that was never actually persisted). Caught by driving the delete → re-signup flow in a real
+  browser against a scratch DB — a build/vet/test pass alone did not surface it, since the existing
+  automated tests didn't exercise that specific sequence and the deleted_at filter alone doesn't
+  fail loudly, it silently misbehaves at the SQL layer. Fixed by rebuilding the `users` table
+  without the column-level `UNIQUE` (SQLite can't `ALTER` one away, so the migration does the
+  create-copy-drop-rename dance) and adding a partial unique index instead —
+  `CREATE UNIQUE INDEX idx_users_email_active ON users(email) WHERE deleted_at IS NULL` — which
+  keeps uniqueness among active accounts while freeing a deleted account's email for reuse.
+  Regression-tested by `TestAuthService_CreateUser_ReusesEmailAfterDelete`.
+- **Verified**: `go build ./...` / `go vet ./...` / `go test ./...` pass (new `TestUser_ChangeName`
+  in `user_test.go`; `TestAuthService_CreateUser`/`_RejectsWeakPassword`, `TestAuthService_UpdateUser`/
+  `_RejectsEmptyName`, `TestAuthService_DeleteUser`, `TestAuthService_DeleteUser_OwningPlanIsAllowed`,
+  `TestAuthService_CreateUser_ReusesEmailAfterDelete` in `auth_service_test.go`, a real temp-file
+  SQLite fixture like `plan_service_test.go`'s), plus live in a browser against a scratch DB: signed
+  up, edited the name via `/profile/edit` (confirmed persisted and redisplayed), deleted the account
+  via `/profile/delete` (confirmed the session cookie cleared, redirect to `/` fired, `deleted_at`
+  set — not gone — in `sqlite3`, and `sessions`/`plan_access`/`users_credentials` rows actually
+  removed), then signed up again with the same email and confirmed it created a genuinely new,
+  independently-usable account rather than colliding with the deleted row.
+
 **Idempotency (chapter 8) is the natural next increment if commands expand.** The
 `idempotency_keys` table exists (migration 49) but nothing reserves/checks it yet (see the
 Idempotency section above). `CreatePlan` is exactly the shape that would carry an
@@ -689,6 +764,7 @@ step, not bolted onto this pass.
 - **DDD / CQRS Architecture Implemented (2026-08-07)**: Added `internal/domain/repositories/` (repository interfaces), `internal/application/interfaces/` (service interfaces), and `internal/application/services/` (implementations). All wizard-item Delete methods now use soft-delete (`deleted_at`). Business logic (session expiry, access-level validation) moved from `internal/store/` into the service layer. `Find*` vs `Get*` naming convention enforced: nine methods that returned `nil, nil` on not-found renamed from `Get*Draft` to `Find*Draft` across all four layers. UUIDv7 adopted in all domain constructors. ValidatedPlan opaque token pattern applied to PlanRepository.Save. Domain events (`DomainEvent`, `PlanCreated`/`PlanUpdated`/`PlanDeleted`) in `internal/domain/events.go`. Transactional outbox via `outbox_events` table (migration 48). Idempotency schema via `idempotency_keys` table (migration 49). CQRS command/query types in `internal/application/commands/` and `internal/application/queries/`. Application-layer tests in `internal/application/services/plan_service_test.go` (real temp-file `SQLiteStore`).
 - **`github.com/google/uuid` Permitted in Domain Layer (2026-08-07)**: The "zero third-party" rule for the domain layer has one explicit carve-out: `github.com/google/uuid`. It is a pure value type (no DB driver, no HTTP framework coupling), stable, and pervasive across all layers; banning it from the domain would force awkward string conversions at every boundary. All other third-party imports remain prohibited in `internal/domain/`.
 - **Read-After-Write Deferred (2026-08-07)**: Rule 4 (re-read from DB after insert/update before returning to caller) was not implemented. All write methods still return only `error`. The application uses POST-redirect-GET everywhere — the next `Get*` handler re-reads from the DB — so the intent is satisfied at the HTTP level. Cascading the change through 19 repository interfaces, 10 service implementations, and all callers is out of scope for this session. This is a known gap; document it rather than silently violate it.
+- **`users.email` uniqueness moved from a column constraint to a partial index (2026-08-14)**: Adding soft-delete to `users` (migration `0002_user_soft_delete.sql`) exposed a real bug — the pre-existing blanket `email UNIQUE` meant a soft-deleted account permanently squatted on its email, silently breaking re-signup. Fixed by rebuilding the table without the column-level `UNIQUE` and adding `CREATE UNIQUE INDEX idx_users_email_active ON users(email) WHERE deleted_at IS NULL` instead. See "Application Layer: go-ddd Comparison" → the User entry for the full story and how it was caught.
 
 ### Known Limitations
 
@@ -712,9 +788,9 @@ step, not bolted onto this pass.
 
 ---
 
-**Last Updated**: 2026-08-12 (continued further)
-**Session Focus**: Extended the go-ddd command pattern from `Plan` to Operating Expenses — the smallest wizard hub — to prove the recipe generalizes before tackling the larger hubs. Closed the actual prerequisite first (`entities.Cost` gained its own `uuid.UUID` + validating `NewCost` constructor, mirroring `Plan.validate()`/`NewPlan`), then applied the three-step recipe: `commands/create_operating_expense_command.go`/`update_...`/`delete_...` + `common.OperatingExpenseResult` + mapper; `OperatingExpensesService.CreateOperatingExpense`/`UpdateOperatingExpense`/`DeleteOperatingExpense` as the only code allowed to construct/mutate the entity; `OperatingExpensesController` builds commands from parsed form data at the wizard step that actually completes a valid `Cost`, rather than validating a hand-mutated struct directly. See "Application Layer: go-ddd Comparison" above for the full writeup, including the one deliberate divergence (multi-step wizard drafts still save partial fields via the pre-existing raw pass-through, since there's no valid entity to construct until the final step) and what's different about Starting Point, next in line.
-**Total Remaining Items**: ~28 (across all categories)
+**Last Updated**: 2026-08-14
+**Session Focus**: Extended the go-ddd command pattern to `User` — the second aggregate root — giving it full Create/Update/Delete through `AuthController`/`AuthService`, plus building the Update (profile name edit) and Delete (self-service account deletion) features that didn't exist at all before this session. See "Application Layer: go-ddd Comparison" above (the User entry) for the full writeup, including the `users.email` uniqueness bug this session's live browser testing caught and fixed, and the deliberate no-ownership-guard decision on delete.
+**Total Remaining Items**: ~27 (across all categories)
 **Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → ~~Data Persistence~~ ✅ → ~~Docker Containerization~~ ✅ → ~~DDD/CQRS Architecture~~ ✅ → Testing → Form Validation → Income Tax Modeling
 
 ## Session Summary (2026-07-29)
@@ -1057,3 +1133,58 @@ go-ddd's `ValidatedSeller` pattern (chapter 4: `NewProduct` requires a `Validate
   invite acceptance) were not touched — same reasoning as the broader roadmap above: extend the
   pattern deliberately, one call site at a time, when it's actually load-bearing, not everywhere
   a `uuid.UUID` appears.
+
+## Session Summary (2026-08-14): User Create/Update/Delete via the go-ddd Command Pattern
+
+### What Prompted It
+`User` is the second aggregate root (`Plan` is the first, already fully wired) but had zero
+command-pattern wiring — `PostSignup` called `domain.NewUserWithPassword` directly from the HTTP
+layer — and no Update or Delete path existed at all for a user's own account: the profile page
+was read-only, with a disabled "Delete Account" button. This session gave `User` full
+Create/Update/Delete through the same recipe already proven on `Plan` and Operating Expenses,
+using `AuthService` (not a new `UserService` — User's lifecycle already lived there).
+
+### What Shipped
+See the new "User (2026-08-14)" entry under "Application Layer: go-ddd Comparison" above for the
+full writeup; summary here:
+1. **Domain**: `User.ChangeName(firstName, lastName)` (mirrors `Plan.ChangeCoreDetails`) + a new
+   `UserUpdated` domain event. Deletion deliberately does not get an analogous event —
+   `PlanDeleted` was confirmed (by grep) to be declared but never emitted, so `DeleteUser` follows
+   that same precedent rather than inventing dead code.
+2. **Commands/common/mapper**: `create_user_command.go`/`update_...`/`delete_...` +
+   `common.UserResult` + `mapper.NewUserResultFromEntity`, matching Operating Expenses' file
+   layout exactly.
+3. **Repository**: `UserRepository.UpdateUser`/`DeleteUser` added. `DeleteUser` explicitly clears
+   `sessions`/`plan_access`/`users_credentials` for the user (foreign keys aren't enforced —
+   `PRAGMA foreign_keys` is never turned on) before soft-deleting the `users` row itself, mirroring
+   `PlanRepository.Delete`'s hand-rolled multi-table transaction. Migration
+   `0002_user_soft_delete.sql` adds `deleted_at` to `users` (the only business-entity table that
+   didn't already have it).
+4. **Product decision, asked rather than assumed**: whether deleting a user who owns plans should
+   be blocked. Confirmed with the user: no ownership guard — deletion is always allowed, plans are
+   left in place with their `plan_access` row for that user removed like any other membership.
+5. **A real bug caught by live browser testing, not by `go test`**: the first version of the
+   soft-delete migration left `users.email`'s blanket `UNIQUE` constraint in place, which meant a
+   soft-deleted account permanently squatted on its email — re-signup with that email silently
+   half-succeeded (credentials upserted, but the `users` row insert was swallowed by
+   `INSERT OR IGNORE`, and the session ended up pointing at a user ID that was never actually
+   persisted). Caught by driving signup → delete → re-signup in a real browser against a scratch
+   DB and inspecting `sqlite3` directly; the automated test suite alone did not exercise that
+   sequence. Fixed by rebuilding `users` without the column-level `UNIQUE` and adding
+   `CREATE UNIQUE INDEX idx_users_email_active ON users(email) WHERE deleted_at IS NULL`, plus a
+   regression test (`TestAuthService_CreateUser_ReusesEmailAfterDelete`).
+6. **Verified**: `go build ./...` / `go vet ./...` / `go test ./...` pass, including new tests in
+   `user_test.go` and `auth_service_test.go` (real temp-file SQLite, same pattern as
+   `plan_service_test.go`). Live in a browser against a scratch DB (a fresh `.claude/launch.json`
+   config, not the dev DB): signup → edit profile name via `/profile/edit` (confirmed persisted and
+   redisplayed) → delete account via `/profile/delete` (confirmed session cookie cleared, redirect
+   to `/` fired, row soft-deleted not gone, `sessions`/`plan_access`/`users_credentials` rows
+   actually removed) → signed up again with the same email and confirmed it produced a genuinely
+   new, independently-usable account.
+
+### Deliberately Deferred
+- Email/password change remain out of scope — `users_credentials` is keyed by `email`, so changing
+  it would require re-keying that row too; Update is scoped to first/last name only, matching what
+  the profile page actually displays.
+- No UI surfaces "you own N plans" before a delete — the confirm() dialog on the button is the only
+  friction point, consistent with the no-ownership-guard decision above.

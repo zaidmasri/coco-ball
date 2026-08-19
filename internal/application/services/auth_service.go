@@ -2,7 +2,9 @@ package services
 
 import (
 	"github.com/google/uuid"
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
+	"github.com/zaidmasri/business-planning-tool/internal/application/mapper"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
@@ -39,3 +41,40 @@ func (s *authService) GetSession(sessionID string) (*domain.Session, error) {
 	return sess, nil
 }
 func (s *authService) DeleteSession(sessionID string) error { return s.sessions.DeleteSession(sessionID) }
+
+func (s *authService) CreateUser(cmd *commands.CreateUser) (*commands.CreateUserResult, error) {
+	userCreds, err := domain.NewUserWithPassword(cmd.Email, cmd.FirstName, cmd.LastName, cmd.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.users.SaveUserWithPassword(userCreds); err != nil {
+		return nil, err
+	}
+
+	return &commands.CreateUserResult{Result: mapper.NewUserResultFromEntity(userCreds.User)}, nil
+}
+
+func (s *authService) UpdateUser(cmd *commands.UpdateUser) (*commands.UpdateUserResult, error) {
+	user, err := s.users.GetUser(cmd.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := user.ChangeName(cmd.FirstName, cmd.LastName); err != nil {
+		return nil, err
+	}
+
+	if err := s.users.UpdateUser(user); err != nil {
+		return nil, err
+	}
+
+	return &commands.UpdateUserResult{Result: mapper.NewUserResultFromEntity(user)}, nil
+}
+
+func (s *authService) DeleteUser(cmd *commands.DeleteUser) (*commands.DeleteUserResult, error) {
+	if err := s.users.DeleteUser(cmd.UserID); err != nil {
+		return nil, err
+	}
+	return &commands.DeleteUserResult{Success: true}, nil
+}

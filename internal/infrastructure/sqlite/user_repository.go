@@ -133,3 +133,79 @@ func (r *UserRepository) GetUserWithPassword(email string) (*domain.UserWithPass
 
 	return &domain.UserWithPassword{User: user, PasswordHash: row.PasswordHash}, nil
 }
+
+// UpdateUser persists a user's changed first/last name and atomically writes
+// any accumulated domain events to the outbox table, in one transaction.
+// Mirrors PlanRepository.Save's shape.
+func (r *UserRepository) UpdateUser(u *domain.User) error {
+	ctx := context.Background()
+
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := r.queries.WithTx(tx)
+	now := time.Now().Unix()
+
+	if err := qtx.UpdateUserName(ctx, db.UpdateUserNameParams{
+		FirstName: u.FirstName(),
+		LastName:  u.LastName(),
+		ID:        u.ID().String(),
+	}); err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+
+	if err := insertOutboxEvents(ctx, qtx, u.PullEvents(), now); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// DeleteUser soft-deletes a user and hard-deletes every row referencing them
+// that isn't cascaded by the database itself (foreign_keys is not enabled on
+// the connection — see connection.go), in one transaction. Plans the user
+// owns are left untouched: their plan_access row for this user is removed
+// like any other, but the plan itself is not deleted or reassigned.
+func (r *UserRepository) DeleteUser(id uuid.UUID) error {
+	ctx := context.Background()
+
+	user, err := r.GetUser(id)
+	if err != nil {
+		return err
+	}
+
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := r.queries.WithTx(tx)
+	idStr := id.String()
+
+	if err := qtx.DeleteSessionsByUser(ctx, idStr); err != nil {
+		return fmt.Errorf("failed to delete user sessions: %w", err)
+	}
+	if err := qtx.DeletePlanAccessByUser(ctx, idStr); err != nil {
+		return fmt.Errorf("failed to delete user plan access: %w", err)
+	}
+	if err := qtx.DeleteUserCredentialsByEmail(ctx, user.Email()); err != nil {
+		return fmt.Errorf("failed to delete user credentials: %w", err)
+	}
+
+	affected, err := qtx.SoftDeleteUser(ctx, db.SoftDeleteUserParams{
+		DeletedAt: sql.NullInt64{Int64: time.Now().Unix(), Valid: true},
+		ID:        idStr,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+	if affected == 0 {
+		return domain.ErrUserNotFound
+	}
+
+	return tx.Commit()
+}

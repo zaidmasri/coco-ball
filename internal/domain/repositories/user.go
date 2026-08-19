@@ -11,4 +11,6 @@ type UserRepository interface {
 	GetUserByEmail(email string) (*domain.User, error)
 	SaveUserWithPassword(u *domain.UserWithPassword) error
 	GetUserWithPassword(email string) (*domain.UserWithPassword, error)
+	UpdateUser(u *domain.User) error
+	DeleteUser(id uuid.UUID) error
 }

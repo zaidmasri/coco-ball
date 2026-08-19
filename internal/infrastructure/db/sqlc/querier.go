@@ -30,12 +30,15 @@ type Querier interface {
 	DeleteOperatingExpense(ctx context.Context, arg DeleteOperatingExpenseParams) (int64, error)
 	DeletePayrollTaxRatesByPlan(ctx context.Context, planID string) error
 	DeletePlanAccessByPlan(ctx context.Context, planID string) error
+	DeletePlanAccessByUser(ctx context.Context, userID string) error
 	DeleteProduct(ctx context.Context, arg DeleteProductParams) (int64, error)
 	DeleteSalaryRole(ctx context.Context, arg DeleteSalaryRoleParams) (int64, error)
 	DeleteSalesGrowthCurveByPlan(ctx context.Context, planID string) error
 	DeleteSession(ctx context.Context, id string) error
+	DeleteSessionsByUser(ctx context.Context, userID string) error
 	DeleteStartingBalancesByPlan(ctx context.Context, planID string) error
 	DeleteStartupCost(ctx context.Context, arg DeleteStartupCostParams) (int64, error)
+	DeleteUserCredentialsByEmail(ctx context.Context, email string) error
 	DeleteWizardSectionsByPlan(ctx context.Context, planID string) error
 	FindBenefitDraft(ctx context.Context, arg FindBenefitDraftParams) (FindBenefitDraftRow, error)
 	FindCapitalAssetDraft(ctx context.Context, arg FindCapitalAssetDraftParams) (FindCapitalAssetDraftRow, error)
@@ -118,7 +121,9 @@ type Querier interface {
 	SoftDeleteProductsByPlan(ctx context.Context, arg SoftDeleteProductsByPlanParams) error
 	SoftDeleteSalaryRolesByPlan(ctx context.Context, arg SoftDeleteSalaryRolesByPlanParams) error
 	SoftDeleteStartupCostsByPlan(ctx context.Context, arg SoftDeleteStartupCostsByPlanParams) error
+	SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) (int64, error)
 	UpdateInviteStatus(ctx context.Context, arg UpdateInviteStatusParams) (int64, error)
+	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) error
 	UpsertUserCredentials(ctx context.Context, arg UpsertUserCredentialsParams) error
 	UpsertWizardSection(ctx context.Context, arg UpsertWizardSectionParams) error
 }

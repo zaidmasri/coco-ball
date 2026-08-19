@@ -86,6 +86,25 @@ func (vu VerifiedUser) ID() uuid.UUID { return vu.user.ID() }
 // User returns the wrapped user.
 func (vu VerifiedUser) User() *User { return vu.user }
 
+// ChangeName updates the user's first and last name, validating both are
+// non-empty after trimming. Mirrors Plan.ChangeCoreDetails: validate, then
+// mutate only after validation passes, then record the domain event. This is
+// the validated entry point for a name change — SetFirstName/SetLastName
+// remain reconstruction-only (no validation), used by UserRepository.GetUser.
+func (u *User) ChangeName(firstName, lastName string) error {
+	cleanFirst := strings.TrimSpace(firstName)
+	cleanLast := strings.TrimSpace(lastName)
+	if cleanFirst == "" || cleanLast == "" {
+		return ErrInvalidUserName
+	}
+
+	u.firstName = cleanFirst
+	u.lastName = cleanLast
+
+	u.recordEvent(domevents.NewUserUpdated(u.id))
+	return nil
+}
+
 func (u *User) ID() uuid.UUID          { return u.id }
 func (u *User) Email() string          { return u.email }
 func (u *User) FirstName() string      { return u.firstName }
