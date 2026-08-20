@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // --- Helper Functions ---
@@ -90,10 +90,28 @@ func TestNewPlan(t *testing.T) {
 				if plan.Name() != tc.planName {
 					t.Errorf("expected name %s, got %s", tc.planName, plan.Name())
 				}
-				if plan.ID() == uuid.Nil {
+				if plan.ID() == uuid.Nil() {
 					t.Errorf("expected a non-nil plan ID")
 				}
 			}
 		})
+	}
+}
+
+func TestPlan_Delete_EmitsPlanDeletedEvent(t *testing.T) {
+	plan := newValidPlan(t)
+	plan.PullEvents() // drain the PlanCreated event from NewPlan first
+
+	plan.Delete()
+
+	events := plan.PullEvents()
+	if len(events) != 1 {
+		t.Fatalf("expected exactly 1 event after Delete, got %d", len(events))
+	}
+	if events[0].EventName() != "plan.deleted" {
+		t.Errorf("expected plan.deleted event, got %q", events[0].EventName())
+	}
+	if events[0].AggregateID() != plan.ID() {
+		t.Errorf("expected event aggregate id %v, got %v", plan.ID(), events[0].AggregateID())
 	}
 }

@@ -1,16 +1,17 @@
 package interfaces
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
 // PayrollSummaryResult aggregates what the hub summary page needs.
 type PayrollSummaryResult struct {
-	SectionStatus  map[string]bool
+	SectionStatus   map[string]bool
 	SalaryRoleCount int
-	BenefitCount   int
+	BenefitCount    int
 }
 
 type PayrollService interface {

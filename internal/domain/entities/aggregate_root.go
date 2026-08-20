@@ -25,7 +25,7 @@
 // aggregate-root repository is [repositories.PlanRepository].
 package entities
 
-import "github.com/google/uuid"
+import "uuid"
 
 // AggregateRoot is a marker interface that every aggregate root must satisfy.
 // Implementing this interface signals to readers that the type owns a

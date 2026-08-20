@@ -9,8 +9,6 @@ import (
 )
 
 type Querier interface {
-	CountPlanExists(ctx context.Context, id string) (int64, error)
-	CountUserExists(ctx context.Context, id string) (int64, error)
 	CreateBenefitDraft(ctx context.Context, arg CreateBenefitDraftParams) error
 	CreateCapitalAssetDraft(ctx context.Context, arg CreateCapitalAssetDraftParams) error
 	CreateDistributionDraft(ctx context.Context, arg CreateDistributionDraftParams) error
@@ -63,7 +61,6 @@ type Querier interface {
 	GetPendingInvitesForEmail(ctx context.Context, arg GetPendingInvitesForEmailParams) ([]GetPendingInvitesForEmailRow, error)
 	GetPlan(ctx context.Context, id string) ([]byte, error)
 	GetPlanAccess(ctx context.Context, planID string) ([]GetPlanAccessRow, error)
-	GetPlansForUser(ctx context.Context, userID string) ([][]byte, error)
 	GetProduct(ctx context.Context, id string) (GetProductRow, error)
 	GetSalaryRole(ctx context.Context, id string) (GetSalaryRoleRow, error)
 	GetSalesGrowthCurveRow(ctx context.Context, planID string) (GetSalesGrowthCurveRowRow, error)

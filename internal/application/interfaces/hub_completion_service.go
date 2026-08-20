@@ -1,6 +1,6 @@
 package interfaces
 
-import "github.com/google/uuid"
+import "uuid"
 
 // HubCompletion carries all five hubs' completion state for pages that
 // sit outside a single hub (Setup, reports) but whose sidebar needs all

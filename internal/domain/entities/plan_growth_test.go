@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 func TestNewCost(t *testing.T) {
@@ -54,7 +54,7 @@ func TestNewCost(t *testing.T) {
 			if tt.expectedErr != nil {
 				return
 			}
-			if cost.ID() == uuid.Nil {
+			if cost.ID() == uuid.Nil() {
 				t.Error("expected NewCost to generate a non-nil id")
 			}
 		})
@@ -68,10 +68,7 @@ func TestCost_SetID(t *testing.T) {
 	}
 	originalID := cost.ID()
 
-	newID, err := uuid.NewV7()
-	if err != nil {
-		t.Fatalf("failed to generate id: %v", err)
-	}
+	newID := uuid.NewV7()
 	cost.SetID(newID)
 
 	if cost.ID() == originalID {
@@ -79,6 +76,30 @@ func TestCost_SetID(t *testing.T) {
 	}
 	if cost.ID() != newID {
 		t.Errorf("expected id %s, got %s", newID, cost.ID())
+	}
+}
+
+func TestCost_Setters(t *testing.T) {
+	var cost Cost
+	cost.SetName("  Rent  ")
+	cost.SetBaseAmountPerMonth(mustUSD(1500))
+	cost.SetGrowth(GrowthStrategy{Type: AnnualStepPercent, AnnualRate: 0.05})
+
+	if got := cost.Name(); got != "Rent" {
+		t.Errorf("expected SetName to trim whitespace and store %q, got %q", "Rent", got)
+	}
+	if got := cost.BaseAmountPerMonth(); !got.Equal(mustUSD(1500)) {
+		t.Errorf("expected BaseAmountPerMonth %s, got %s", mustUSD(1500), got)
+	}
+	if got := cost.Growth(); got.Type != AnnualStepPercent || got.AnnualRate != 0.05 {
+		t.Errorf("expected Growth {AnnualStepPercent 0.05}, got %+v", got)
+	}
+
+	// Setters are deliberately unvalidated - reconstructing an incomplete
+	// draft (e.g. a fresh wizard row with no name yet) must not error.
+	cost.SetName("")
+	if got := cost.Name(); got != "" {
+		t.Errorf("expected SetName(\"\") to be allowed and store empty, got %q", got)
 	}
 }
 
@@ -93,7 +114,7 @@ func TestPlan_AddOpEx_AssignsID(t *testing.T) {
 	if len(opEx) != 1 {
 		t.Fatalf("expected 1 opex item, got %d", len(opEx))
 	}
-	if opEx[0].ID() == uuid.Nil {
+	if opEx[0].ID() == uuid.Nil() {
 		t.Error("expected AddOpEx to assign a non-nil id via NewCost")
 	}
 }
@@ -141,12 +162,9 @@ func TestPlan_MonthlyLedgerMath(t *testing.T) {
 }
 
 func TestCost_ProjectedAmount_Flat(t *testing.T) {
-	cost := Cost{
-		Name:               "Rent",
-		BaseAmountPerMonth: mustUSD(5000),
-		Growth: GrowthStrategy{
-			Type: FlatGrowth,
-		},
+	cost, err := NewCost("Rent", mustUSD(5000), GrowthStrategy{Type: FlatGrowth})
+	if err != nil {
+		t.Fatalf("unexpected error creating cost: %v", err)
 	}
 
 	if got := cost.ProjectedAmount(0); got.MinorUnits() != 5000 {
@@ -158,13 +176,12 @@ func TestCost_ProjectedAmount_Flat(t *testing.T) {
 }
 
 func TestCost_ProjectedAmount_AnnualStepPercent(t *testing.T) {
-	cost := Cost{
-		Name:               "Software Licenses",
-		BaseAmountPerMonth: mustUSD(1000),
-		Growth: GrowthStrategy{
-			Type:       AnnualStepPercent,
-			AnnualRate: 0.10, // 10% increase every year
-		},
+	cost, err := NewCost("Software Licenses", mustUSD(1000), GrowthStrategy{
+		Type:       AnnualStepPercent,
+		AnnualRate: 0.10, // 10% increase every year
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating cost: %v", err)
 	}
 
 	// Year 1 (Months 0-11) should be base amount

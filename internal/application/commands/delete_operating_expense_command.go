@@ -1,6 +1,6 @@
 package commands
 
-import "github.com/google/uuid"
+import "uuid"
 
 // DeleteOperatingExpense is the command to delete an Operating Expenses
 // wizard item.

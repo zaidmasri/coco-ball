@@ -1,7 +1,8 @@
 package interfaces
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -9,7 +10,7 @@ import (
 
 // OperatingExpensesSummaryResult aggregates what the hub summary page needs.
 type OperatingExpensesSummaryResult struct {
-	SectionStatus        map[string]bool
+	SectionStatus         map[string]bool
 	OperatingExpenseCount int
 }
 

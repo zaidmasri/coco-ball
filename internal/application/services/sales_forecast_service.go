@@ -1,7 +1,8 @@
 package services
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -58,6 +59,11 @@ func (s *salesForecastService) GetProduct(itemID uuid.UUID) (*repositories.Produ
 	return s.products.GetProduct(itemID)
 }
 func (s *salesForecastService) SaveProductStep(itemID uuid.UUID, product domain.Product, currentStep int, status repositories.ItemStatus) error {
+	if status == repositories.StatusComplete {
+		if err := domain.ValidateProduct(product); err != nil {
+			return err
+		}
+	}
 	return s.products.SaveProductStep(itemID, product, currentStep, status)
 }
 func (s *salesForecastService) ListCompleteProducts(planID uuid.UUID) ([]repositories.ProductItem, error) {

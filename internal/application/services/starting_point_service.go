@@ -1,7 +1,8 @@
 package services
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -76,6 +77,11 @@ func (s *startingPointService) GetCapitalAsset(itemID uuid.UUID) (*repositories.
 	return s.capitalAssets.GetCapitalAsset(itemID)
 }
 func (s *startingPointService) SaveCapitalAssetStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int, status repositories.ItemStatus) error {
+	if status == repositories.StatusComplete {
+		if err := domain.ValidateCapitalAsset(asset); err != nil {
+			return err
+		}
+	}
 	return s.capitalAssets.SaveCapitalAssetStep(itemID, asset, currentStep, status)
 }
 func (s *startingPointService) ListCompleteCapitalAssets(planID uuid.UUID) ([]repositories.CapitalAssetItem, error) {
@@ -97,6 +103,11 @@ func (s *startingPointService) GetStartupCost(itemID uuid.UUID) (*repositories.S
 	return s.startupCosts.GetStartupCost(itemID)
 }
 func (s *startingPointService) SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int, status repositories.ItemStatus) error {
+	if status == repositories.StatusComplete {
+		if err := domain.ValidateStartupCost(cost); err != nil {
+			return err
+		}
+	}
 	return s.startupCosts.SaveStartupCostStep(itemID, cost, currentStep, status)
 }
 func (s *startingPointService) ListCompleteStartupCosts(planID uuid.UUID) ([]repositories.StartupCostItem, error) {
@@ -118,6 +129,11 @@ func (s *startingPointService) GetFundingSource(itemID uuid.UUID) (*repositories
 	return s.fundingSources.GetFundingSource(itemID)
 }
 func (s *startingPointService) SaveFundingSourceStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int, status repositories.ItemStatus) error {
+	if status == repositories.StatusComplete {
+		if err := domain.ValidateFundingSource(funding); err != nil {
+			return err
+		}
+	}
 	return s.fundingSources.SaveFundingSourceStep(itemID, funding, currentStep, status)
 }
 func (s *startingPointService) ListCompleteFundingSources(planID uuid.UUID) ([]repositories.FundingSourceItem, error) {

@@ -2,10 +2,10 @@ package entities
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domevents "github.com/zaidmasri/business-planning-tool/internal/domain/events"
 )
 
@@ -44,10 +44,7 @@ func NewUser(email string) (*User, error) {
 		return nil, ErrInvalidEmail
 	}
 
-	id, err := uuid.NewV7()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate user id: %w", err)
-	}
+	id := uuid.NewV7()
 
 	return &User{
 		id:    id,
@@ -155,20 +152,6 @@ type PlanAccess struct {
 	UserID      uuid.UUID
 	AccessLevel AccessLevel
 	InvitedAt   int64 // Unix timestamp
-}
-
-// NewPlanAccess creates a new plan access record
-func NewPlanAccess(planID uuid.UUID, userID uuid.UUID, level AccessLevel) (*PlanAccess, error) {
-	if !level.IsValid() {
-		return nil, errors.New("invalid access level")
-	}
-
-	return &PlanAccess{
-		PlanID:      planID,
-		UserID:      userID,
-		AccessLevel: level,
-		InvitedAt:   0, // Will be set by store
-	}, nil
 }
 
 // CanEdit returns true if the user has edit permissions

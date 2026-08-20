@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	db "github.com/zaidmasri/business-planning-tool/internal/infrastructure/db/sqlc"
@@ -23,30 +24,6 @@ func NewInviteRepository(conn *sql.DB) repositories.InviteRepository {
 }
 
 var _ repositories.InviteRepository = (*InviteRepository)(nil)
-
-func (r *InviteRepository) CreateInvite(invite *domain.PlanInvite) error {
-	ctx := context.Background()
-	now := time.Now().Unix()
-
-	if err := r.queries.CreateInvite(ctx, db.CreateInviteParams{
-		ID:          invite.ID.String(),
-		PlanID:      invite.PlanID.String(),
-		Email:       invite.Email,
-		AccessLevel: string(invite.AccessLevel),
-		Status:      string(invite.Status),
-		InvitedBy:   invite.InvitedBy.String(),
-		CreatedAt:   now,
-	}); err != nil {
-		return fmt.Errorf("failed to create invite: %w", err)
-	}
-
-	// The domain event for this invite (UserInvitedToPlan) is emitted and
-	// persisted elsewhere, via the outbox write on the Plan aggregate's Save
-	// — not here (PlanInvite is an entity within Plan's boundary, not an
-	// aggregate root, so it carries no event buffer of its own).
-	invite.CreatedAt = now
-	return nil
-}
 
 func (r *InviteRepository) GetInvite(id uuid.UUID) (*domain.PlanInvite, error) {
 	row, err := r.queries.GetInvite(context.Background(), id.String())
@@ -68,7 +45,7 @@ func (r *InviteRepository) GetInvitesForPlan(planID uuid.UUID) ([]*domain.PlanIn
 
 	invites := make([]*domain.PlanInvite, 0, len(rows))
 	for _, row := range rows {
-		invite, err := inviteFromRow(uuid.Nil, planID.String(), row.Email, row.AccessLevel, row.Status, row.InvitedBy, row.CreatedAt, row.RespondedAt)
+		invite, err := inviteFromRow(uuid.Nil(), planID.String(), row.Email, row.AccessLevel, row.Status, row.InvitedBy, row.CreatedAt, row.RespondedAt)
 		if err != nil {
 			return nil, err
 		}

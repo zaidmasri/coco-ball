@@ -1,6 +1,6 @@
 package common
 
-import "github.com/google/uuid"
+import "uuid"
 
 // UserResult is the write-side acknowledgement shape for
 // CreateUser/UpdateUser. It deliberately does not carry the password hash

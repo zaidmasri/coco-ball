@@ -54,8 +54,8 @@ func serve(dbPath, port string) {
 	// Application services
 	planSvc := appservices.NewPlanService(planRepo, userRepo)
 	authSvc := appservices.NewAuthService(userRepo, sessionRepo)
-	accessSvc := appservices.NewAccessService(accessRepo)
-	inviteSvc := appservices.NewInviteService(inviteRepo)
+	accessSvc := appservices.NewAccessService(accessRepo, planRepo, userRepo)
+	inviteSvc := appservices.NewInviteService(inviteRepo, planRepo)
 	startingPointSvc := appservices.NewStartingPointService(capitalAssetRepo, startupCostRepo, fundingSourceRepo, startingBalancesRepo, wizardProgressRepo)
 	payrollSvc := appservices.NewPayrollService(salaryRoleRepo, benefitRepo, payrollTaxRatesRepo, wizardProgressRepo)
 	salesForecastSvc := appservices.NewSalesForecastService(productRepo, salesGrowthCurveRepo, wizardProgressRepo)

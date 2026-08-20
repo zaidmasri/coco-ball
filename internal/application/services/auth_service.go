@@ -1,7 +1,10 @@
 package services
 
 import (
-	"github.com/google/uuid"
+	"time"
+
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	"github.com/zaidmasri/business-planning-tool/internal/application/mapper"
@@ -18,18 +21,17 @@ func NewAuthService(users repositories.UserRepository, sessions repositories.Ses
 	return &authService{users: users, sessions: sessions}
 }
 
-func (s *authService) SaveUser(u *domain.User) error                 { return s.users.SaveUser(u) }
-func (s *authService) GetUser(id uuid.UUID) (*domain.User, error)   { return s.users.GetUser(id) }
+func (s *authService) GetUser(id uuid.UUID) (*domain.User, error) { return s.users.GetUser(id) }
 func (s *authService) GetUserByEmail(email string) (*domain.User, error) {
 	return s.users.GetUserByEmail(email)
 }
-func (s *authService) SaveUserWithPassword(u *domain.UserWithPassword) error {
-	return s.users.SaveUserWithPassword(u)
-}
+
 func (s *authService) GetUserWithPassword(email string) (*domain.UserWithPassword, error) {
 	return s.users.GetUserWithPassword(email)
 }
+
 func (s *authService) SaveSession(sess *domain.Session) error { return s.sessions.SaveSession(sess) }
+
 func (s *authService) GetSession(sessionID string) (*domain.Session, error) {
 	sess, err := s.sessions.GetSession(sessionID)
 	if err != nil {
@@ -40,7 +42,21 @@ func (s *authService) GetSession(sessionID string) (*domain.Session, error) {
 	}
 	return sess, nil
 }
-func (s *authService) DeleteSession(sessionID string) error { return s.sessions.DeleteSession(sessionID) }
+
+func (s *authService) DeleteSession(sessionID string) error {
+	return s.sessions.DeleteSession(sessionID)
+}
+
+func (s *authService) CreateSession(userID uuid.UUID, duration time.Duration) (*domain.Session, error) {
+	sess, err := domain.NewSession(userID, duration)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.sessions.SaveSession(sess); err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
 
 func (s *authService) CreateUser(cmd *commands.CreateUser) (*commands.CreateUserResult, error) {
 	userCreds, err := domain.NewUserWithPassword(cmd.Email, cmd.FirstName, cmd.LastName, cmd.Password)

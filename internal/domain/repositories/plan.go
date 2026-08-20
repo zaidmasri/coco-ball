@@ -22,7 +22,8 @@
 package repositories
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
@@ -35,6 +36,16 @@ type PlanRepository interface {
 	// plan's domain events (via Plan.PullEvents) and write them to the
 	// outbox table in the same transaction.
 	Save(p domain.ValidatedPlan) error
+	// SaveNew persists a brand-new validated plan and grants ownerID Owner
+	// access in the same transaction, so the plan can never end up
+	// persisted without an owner - see PlanService.CreatePlan, the only
+	// caller.
+	SaveNew(p domain.ValidatedPlan, ownerID uuid.UUID) error
+	// SaveWithInvite persists a PlanInvite row and the plan's outbox events
+	// (its UserInvitedToPlan) in one transaction - PlanInvite lives within
+	// Plan's aggregate boundary, so its creation is not exposed on
+	// InviteRepository. See InviteService.CreateInvite, the only caller.
+	SaveWithInvite(p domain.ValidatedPlan, invite *domain.PlanInvite) error
 	Get(id uuid.UUID) (*domain.Plan, error)
 	GetAll() ([]*domain.Plan, error)
 	Delete(id uuid.UUID) error

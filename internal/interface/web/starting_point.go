@@ -12,7 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -372,19 +373,13 @@ func (c *StartingPointController) PostFixedAssetStep(w http.ResponseWriter, r *h
 	// after this step, skipping "useful-life" entirely.
 	finishNow := step == "useful-life" || (step == "depreciation-method" && asset.DepreciationMethod == domain.None)
 
-	// Full cross-field validation only makes sense once every field has
+	// Full cross-field validation (domain.ValidateCapitalAsset, run by the
+	// service on StatusComplete) only makes sense once every field has
 	// actually been answered - running it after every intermediate step
 	// spuriously rejects a fresh draft (e.g. DepreciationMethod is still
 	// "" on the "name"/"cost" steps, tripping the "must have a useful
 	// life unless None" rule before the user has even reached that
-	// question).
-	if finishNow {
-		if err := domain.ValidateCapitalAsset(asset); err != nil {
-			renderStepError(err.Error())
-			return
-		}
-	}
-
+	// question). finishNow gates when we ask for StatusComplete at all.
 	newStatus := repositories.StatusDraft
 	newCurrentStep := idx + 1
 	if finishNow {
@@ -393,8 +388,12 @@ func (c *StartingPointController) PostFixedAssetStep(w http.ResponseWriter, r *h
 	}
 
 	if err := c.startingPointSvc.SaveCapitalAssetStep(itemID, asset, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save fixed asset step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+		if finishNow {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save fixed asset step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 
@@ -614,15 +613,9 @@ func (c *StartingPointController) PostStartupCostStep(w http.ResponseWriter, r *
 
 	finishNow := idx == len(startupCostSteps)-1
 
-	// Full validation only once every field has actually been
+	// Full validation (domain.ValidateStartupCost, run by the service on
+	// StatusComplete) only makes sense once every field has actually been
 	// answered - see the matching comment in PostFixedAssetStep.
-	if finishNow {
-		if err := domain.ValidateStartupCost(cost); err != nil {
-			renderStepError(err.Error())
-			return
-		}
-	}
-
 	newStatus := repositories.StatusDraft
 	newCurrentStep := idx + 1
 	if finishNow {
@@ -630,8 +623,12 @@ func (c *StartingPointController) PostStartupCostStep(w http.ResponseWriter, r *
 	}
 
 	if err := c.startingPointSvc.SaveStartupCostStep(itemID, cost, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save startup cost step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+		if finishNow {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save startup cost step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 
@@ -864,15 +861,9 @@ func (c *StartingPointController) PostFundingSourceStep(w http.ResponseWriter, r
 
 	finishNow := idx == len(fundingSourceSteps)-1
 
-	// Full validation only once every field has actually been
+	// Full validation (domain.ValidateFundingSource, run by the service on
+	// StatusComplete) only makes sense once every field has actually been
 	// answered - see the matching comment in PostFixedAssetStep.
-	if finishNow {
-		if err := domain.ValidateFundingSource(funding); err != nil {
-			renderStepError(err.Error())
-			return
-		}
-	}
-
 	newStatus := repositories.StatusDraft
 	newCurrentStep := idx + 1
 	if finishNow {
@@ -880,8 +871,12 @@ func (c *StartingPointController) PostFundingSourceStep(w http.ResponseWriter, r
 	}
 
 	if err := c.startingPointSvc.SaveFundingSourceStep(itemID, funding, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save funding source step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+		if finishNow {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save funding source step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 

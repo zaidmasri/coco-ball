@@ -1,7 +1,8 @@
 package commands
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/common"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )

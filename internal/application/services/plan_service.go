@@ -1,7 +1,8 @@
 package services
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	"github.com/zaidmasri/business-planning-tool/internal/application/mapper"
@@ -41,7 +42,11 @@ func (s *planService) CreatePlan(cmd *commands.CreatePlan) (*commands.CreatePlan
 		return nil, err
 	}
 
-	if err := s.Save(plan); err != nil {
+	validated, err := plan.Validate()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.plans.SaveNew(validated, cmd.OwnerID); err != nil {
 		return nil, err
 	}
 
@@ -80,8 +85,8 @@ func (s *planService) Save(p *domain.Plan) error {
 	return s.plans.Save(validated)
 }
 func (s *planService) Get(id uuid.UUID) (*domain.Plan, error) { return s.plans.Get(id) }
-func (s *planService) GetAll() ([]*domain.Plan, error)    { return s.plans.GetAll() }
-func (s *planService) Delete(id uuid.UUID) error          { return s.plans.Delete(id) }
+func (s *planService) GetAll() ([]*domain.Plan, error)        { return s.plans.GetAll() }
+func (s *planService) Delete(id uuid.UUID) error              { return s.plans.Delete(id) }
 func (s *planService) GetUserPlans(userID uuid.UUID) ([]*domain.Plan, error) {
 	return s.plans.GetUserPlans(userID)
 }

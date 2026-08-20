@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -317,13 +318,6 @@ func (c *SalesForecastController) PostProductStep(w http.ResponseWriter, r *http
 
 	finishNow := step == "cost"
 
-	if finishNow {
-		if err := domain.ValidateProduct(product); err != nil {
-			renderStepError(err.Error())
-			return
-		}
-	}
-
 	newStatus := repositories.StatusDraft
 	newCurrentStep := idx + 1
 	if finishNow {
@@ -332,8 +326,12 @@ func (c *SalesForecastController) PostProductStep(w http.ResponseWriter, r *http
 	}
 
 	if err := c.salesForecastSvc.SaveProductStep(itemID, product, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save product step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+		if finishNow {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save product step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 

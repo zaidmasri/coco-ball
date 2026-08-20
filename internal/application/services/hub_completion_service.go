@@ -1,7 +1,8 @@
 package services
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
@@ -38,16 +39,19 @@ func (s *hubCompletionService) Get(planID uuid.UUID) interfaces.HubCompletion {
 	oe, _ := s.operatingExpenses.GetHubStatus(planID)
 
 	return interfaces.HubCompletion{
-		StartingPoint:     allSectionsComplete(sp, domain.SectionFixedAssets, domain.SectionStartupCosts, domain.SectionFundingSources, domain.SectionCashOnHand),
-		Payroll:           allSectionsComplete(pr, domain.SectionSalaryRoles, domain.SectionBenefits, domain.SectionPayrollTaxRates),
-		SalesForecast:     allSectionsComplete(sf, domain.SectionProducts, domain.SectionSalesGrowthCurve),
-		CashFlow:          allSectionsComplete(cf, domain.SectionInventoryPurchases, domain.SectionDistributions),
+		StartingPoint:     allSectionsComplete(domain.HubStartingPoint, sp),
+		Payroll:           allSectionsComplete(domain.HubPayroll, pr),
+		SalesForecast:     allSectionsComplete(domain.HubSalesForecast, sf),
+		CashFlow:          allSectionsComplete(domain.HubCashFlow, cf),
 		OperatingExpenses: oe[domain.SectionOperatingExpenses],
 	}
 }
 
-func allSectionsComplete(status map[string]bool, sections ...string) bool {
-	for _, s := range sections {
+// allSectionsComplete reports whether every section domain.HubSections lists
+// for hub is marked complete in status - the single source of truth for hub
+// membership, not a call-site-local list.
+func allSectionsComplete(hub string, status map[string]bool) bool {
+	for _, s := range domain.HubSections[hub] {
 		if !status[s] {
 			return false
 		}

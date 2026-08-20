@@ -6,7 +6,7 @@ package events
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // DomainEvent is implemented by every domain event type. Repositories must

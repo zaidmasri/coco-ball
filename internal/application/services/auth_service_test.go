@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/services"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
@@ -24,7 +25,7 @@ func newAuthTestStore(t *testing.T) (users repositories.UserRepository, sessions
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	dbPath := filepath.Join(tmpDir, uuid.NewString()+".db")
+	dbPath := filepath.Join(tmpDir, uuid.New().String()+".db")
 
 	conn, err := sqlite.NewConnection(dbPath)
 	if err != nil {

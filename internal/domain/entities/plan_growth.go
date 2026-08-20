@@ -1,11 +1,10 @@
 package entities
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // AnnualGrowth captures a Year 2 / Year 3 (etc.) growth rate schedule that
@@ -35,15 +34,22 @@ func (g GrowthStrategy) AnnualRatePercent() float64 {
 
 // Cost is a repeatable line item used for both Operating Expenses and COGS.
 // It carries its own identity (id) so a wizard row and the domain value it
-// stores can be referenced by the same UUID — see NewCost.
+// stores can be referenced by the same UUID — see NewCost. Fields are
+// unexported: Name/BaseAmountPerMonth/Growth may only be read via getters and
+// mutated via the SetX methods below, so no caller outside this package can
+// freely overwrite a Cost's state - see SetName/SetBaseAmountPerMonth/
+// SetGrowth.
 type Cost struct {
 	id                 uuid.UUID
-	Name               string
-	BaseAmountPerMonth Money
-	Growth             GrowthStrategy
+	name               string
+	baseAmountPerMonth Money
+	growth             GrowthStrategy
 }
 
-func (c Cost) ID() uuid.UUID { return c.id }
+func (c Cost) ID() uuid.UUID             { return c.id }
+func (c Cost) Name() string              { return c.name }
+func (c Cost) BaseAmountPerMonth() Money { return c.baseAmountPerMonth }
+func (c Cost) Growth() GrowthStrategy    { return c.growth }
 
 // SetID overrides a Cost's identity. Used only by repository implementations
 // reconstructing a Cost already persisted under a known ID (the wizard
@@ -52,15 +58,27 @@ func (c Cost) ID() uuid.UUID { return c.id }
 // validation.
 func (c *Cost) SetID(id uuid.UUID) { c.id = id }
 
+// SetName/SetBaseAmountPerMonth/SetGrowth are unvalidated field setters -
+// used both to build a multi-step wizard draft field-by-field (the "name"/
+// "amount"/"growth" steps of the Operating Expenses wizard) and to
+// reconstruct a persisted, possibly-incomplete row (same bypass rationale as
+// SetID: "Reconstructed rows may be incomplete drafts"). Full-entity
+// validation happens once, in NewCost, at the point a complete Cost is
+// actually required - these setters exist so Name/BaseAmountPerMonth/Growth
+// are never exported, mutable fields any caller could freely overwrite.
+func (c *Cost) SetName(name string)             { c.name = strings.TrimSpace(name) }
+func (c *Cost) SetBaseAmountPerMonth(amt Money) { c.baseAmountPerMonth = amt }
+func (c *Cost) SetGrowth(growth GrowthStrategy) { c.growth = growth }
+
 // validate checks a cost's business invariants (mirrors Plan.validate()).
 func (c Cost) validate() error {
-	if strings.TrimSpace(c.Name) == "" {
+	if strings.TrimSpace(c.name) == "" {
 		return ErrInvalidName
 	}
-	if c.BaseAmountPerMonth.IsNegative() {
+	if c.baseAmountPerMonth.IsNegative() {
 		return ErrNegativeAmount
 	}
-	if c.Growth.Type != FlatGrowth && c.Growth.Type != AnnualStepPercent {
+	if c.growth.Type != FlatGrowth && c.growth.Type != AnnualStepPercent {
 		return ErrInvalidGrowthType
 	}
 	return nil
@@ -73,16 +91,13 @@ func (c Cost) validate() error {
 // this constructor. Use SetID (via a repository implementation) instead when
 // reconstructing an already-persisted, possibly-incomplete draft.
 func NewCost(name string, baseAmount Money, growth GrowthStrategy) (Cost, error) {
-	id, err := uuid.NewV7()
-	if err != nil {
-		return Cost{}, fmt.Errorf("failed to generate cost id: %w", err)
-	}
+	id := uuid.NewV7()
 
 	c := Cost{
 		id:                 id,
-		Name:               strings.TrimSpace(name),
-		BaseAmountPerMonth: baseAmount,
-		Growth:             growth,
+		name:               strings.TrimSpace(name),
+		baseAmountPerMonth: baseAmount,
+		growth:             growth,
 	}
 	if err := c.validate(); err != nil {
 		return Cost{}, err
@@ -91,14 +106,14 @@ func NewCost(name string, baseAmount Money, growth GrowthStrategy) (Cost, error)
 }
 
 func (c Cost) ProjectedAmount(month MonthIndex) Money {
-	if c.Growth.Type == AnnualStepPercent && c.Growth.AnnualRate > 0 {
+	if c.growth.Type == AnnualStepPercent && c.growth.AnnualRate > 0 {
 		yearsPassed := int(month) / 12
 		if yearsPassed > 0 {
-			multiplier := math.Pow(1.0+c.Growth.AnnualRate, float64(yearsPassed))
-			return c.BaseAmountPerMonth.Mul(multiplier)
+			multiplier := math.Pow(1.0+c.growth.AnnualRate, float64(yearsPassed))
+			return c.baseAmountPerMonth.Mul(multiplier)
 		}
 	}
-	return c.BaseAmountPerMonth
+	return c.baseAmountPerMonth
 }
 
 type RevenueStream struct {

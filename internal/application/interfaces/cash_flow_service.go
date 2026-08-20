@@ -1,16 +1,17 @@
 package interfaces
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
 // CashFlowSummaryResult aggregates what the hub summary page needs.
 type CashFlowSummaryResult struct {
-	SectionStatus         map[string]bool
+	SectionStatus          map[string]bool
 	InventoryPurchaseCount int
-	DistributionCount     int
+	DistributionCount      int
 }
 
 type CashFlowService interface {

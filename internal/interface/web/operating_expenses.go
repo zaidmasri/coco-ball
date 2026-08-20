@@ -12,7 +12,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
@@ -215,18 +216,19 @@ func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWr
 
 	switch step {
 	case "name":
-		cost.Name = strings.TrimSpace(r.PostForm.Get("name"))
-		if cost.Name == "" {
+		name := strings.TrimSpace(r.PostForm.Get("name"))
+		if name == "" {
 			renderStepError("Please enter a name for this expense.")
 			return
 		}
+		cost.SetName(name)
 	case "amount":
 		amt, ok := parseStepMoney(r.PostForm.Get("amount"))
 		if !ok {
 			renderStepError("Please enter a valid monthly amount.")
 			return
 		}
-		cost.BaseAmountPerMonth = amt
+		cost.SetBaseAmountPerMonth(amt)
 	case "growth":
 		rate, ok := parseStepPercent(r.PostForm.Get("growth"))
 		if !ok {
@@ -238,9 +240,9 @@ func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWr
 		// single-page form's behavior of deriving the strategy from
 		// the rate itself rather than asking a separate question.
 		if rate > 0 {
-			cost.Growth = domain.GrowthStrategy{Type: domain.AnnualStepPercent, AnnualRate: rate}
+			cost.SetGrowth(domain.GrowthStrategy{Type: domain.AnnualStepPercent, AnnualRate: rate})
 		} else {
-			cost.Growth = domain.GrowthStrategy{Type: domain.FlatGrowth}
+			cost.SetGrowth(domain.GrowthStrategy{Type: domain.FlatGrowth})
 		}
 	}
 
@@ -267,9 +269,9 @@ func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWr
 	if wasComplete {
 		if _, err := c.opExSvc.UpdateOperatingExpense(&commands.UpdateOperatingExpense{
 			ItemID:             itemID,
-			Name:               cost.Name,
-			BaseAmountPerMonth: cost.BaseAmountPerMonth,
-			Growth:             cost.Growth,
+			Name:               cost.Name(),
+			BaseAmountPerMonth: cost.BaseAmountPerMonth(),
+			Growth:             cost.Growth(),
 			CurrentStep:        len(operatingExpenseSteps),
 		}); err != nil {
 			renderStepError(err.Error())
@@ -281,9 +283,9 @@ func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWr
 
 	if _, err := c.opExSvc.CreateOperatingExpense(&commands.CreateOperatingExpense{
 		ItemID:             itemID,
-		Name:               cost.Name,
-		BaseAmountPerMonth: cost.BaseAmountPerMonth,
-		Growth:             cost.Growth,
+		Name:               cost.Name(),
+		BaseAmountPerMonth: cost.BaseAmountPerMonth(),
+		Growth:             cost.Growth(),
 		CurrentStep:        len(operatingExpenseSteps),
 	}); err != nil {
 		renderStepError(err.Error())

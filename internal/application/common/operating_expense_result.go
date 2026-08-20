@@ -1,7 +1,8 @@
 package common
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 

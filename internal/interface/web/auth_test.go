@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
+	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	appservices "github.com/zaidmasri/business-planning-tool/internal/application/services"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -22,6 +24,7 @@ type testRepos struct {
 	plans  repositories.PlanRepository
 	users  repositories.UserRepository
 	access repositories.AccessRepository
+	auth   interfaces.AuthService
 }
 
 func setupTestApp(t *testing.T) (*http.ServeMux, testRepos, func()) {
@@ -58,8 +61,8 @@ func setupTestApp(t *testing.T) (*http.ServeMux, testRepos, func()) {
 
 	planSvc := appservices.NewPlanService(planRepo, userRepo)
 	authSvc := appservices.NewAuthService(userRepo, sessionRepo)
-	accessSvc := appservices.NewAccessService(accessRepo)
-	inviteSvc := appservices.NewInviteService(inviteRepo)
+	accessSvc := appservices.NewAccessService(accessRepo, planRepo, userRepo)
+	inviteSvc := appservices.NewInviteService(inviteRepo, planRepo)
 	startingPointSvc := appservices.NewStartingPointService(capitalAssetRepo, startupCostRepo, fundingSourceRepo, startingBalancesRepo, wizardProgressRepo)
 	payrollSvc := appservices.NewPayrollService(salaryRoleRepo, benefitRepo, payrollTaxRatesRepo, wizardProgressRepo)
 	salesForecastSvc := appservices.NewSalesForecastService(productRepo, salesGrowthCurveRepo, wizardProgressRepo)
@@ -81,7 +84,29 @@ func setupTestApp(t *testing.T) (*http.ServeMux, testRepos, func()) {
 		os.Remove(dbPath)
 	}
 
-	return mux, testRepos{plans: planRepo, users: userRepo, access: accessRepo}, cleanup
+	return mux, testRepos{plans: planRepo, users: userRepo, access: accessRepo, auth: authSvc}, cleanup
+}
+
+// createTestUser registers a user through AuthService.CreateUser — the only
+// validated entry point for constructing a User — and re-fetches the
+// persisted entity via UserRepository.GetUser, for tests that need a real
+// *domain.User (e.g. for WithUserContext or domain.NewVerifiedUser).
+func createTestUser(t *testing.T, s testRepos, email string) *domain.User {
+	t.Helper()
+	result, err := s.auth.CreateUser(&commands.CreateUser{
+		Email:     email,
+		FirstName: "Test",
+		LastName:  "User",
+		Password:  "supersecret1",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user %s: %v", email, err)
+	}
+	user, err := s.users.GetUser(result.Result.ID)
+	if err != nil {
+		t.Fatalf("Failed to fetch created user %s: %v", email, err)
+	}
+	return user
 }
 
 func TestUserAuthorizationFlow(t *testing.T) {
@@ -89,23 +114,8 @@ func TestUserAuthorizationFlow(t *testing.T) {
 	defer cleanup()
 
 	// Create two users
-	user1, err := domain.NewUser("user1@example.com")
-	if err != nil {
-		t.Fatalf("Failed to create user1: %v", err)
-	}
-
-	user2, err := domain.NewUser("user2@example.com")
-	if err != nil {
-		t.Fatalf("Failed to create user2: %v", err)
-	}
-
-	if err := s.users.SaveUser(user1); err != nil {
-		t.Fatalf("Failed to save user1: %v", err)
-	}
-
-	if err := s.users.SaveUser(user2); err != nil {
-		t.Fatalf("Failed to save user2: %v", err)
-	}
+	user1 := createTestUser(t, s, "user1@example.com")
+	user2 := createTestUser(t, s, "user2@example.com")
 
 	fmt.Println("✓ Users created successfully")
 
@@ -206,14 +216,7 @@ func TestUserAuthorizationFlow(t *testing.T) {
 
 	// Test 5: User with Viewer access cannot edit
 	t.Run("User with Viewer access cannot edit", func(t *testing.T) {
-		userViewer, err := domain.NewUser("viewer@example.com")
-		if err != nil {
-			t.Fatalf("Failed to create viewer user: %v", err)
-		}
-
-		if err := s.users.SaveUser(userViewer); err != nil {
-			t.Fatalf("Failed to save viewer user: %v", err)
-		}
+		userViewer := createTestUser(t, s, "viewer@example.com")
 
 		// Grant viewer-only access
 		if err := s.access.GrantAccess(plan.ID(), userViewer.ID(), domain.Viewer); err != nil {

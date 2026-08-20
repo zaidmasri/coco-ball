@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	db "github.com/zaidmasri/business-planning-tool/internal/infrastructure/db/sqlc"
@@ -38,10 +39,7 @@ func (r *OperatingExpenseRepository) CreateOperatingExpenseDraft(planID uuid.UUI
 		return uuid.UUID{}, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id, err := uuid.NewV7()
-	if err != nil {
-		return uuid.UUID{}, fmt.Errorf("failed to generate id: %w", err)
-	}
+	id := uuid.NewV7()
 
 	now := time.Now().Unix()
 	if err := r.queries.CreateOperatingExpenseDraft(ctx, db.CreateOperatingExpenseDraftParams{
@@ -107,10 +105,10 @@ func (r *OperatingExpenseRepository) GetOperatingExpense(itemID uuid.UUID) (*rep
 
 func (r *OperatingExpenseRepository) SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status repositories.ItemStatus) error {
 	affected, err := r.queries.SaveOperatingExpenseStep(context.Background(), db.SaveOperatingExpenseStepParams{
-		Name:          cost.Name,
-		MonthlyAmount: cost.BaseAmountPerMonth.MinorUnits(),
-		GrowthType:    string(cost.Growth.Type),
-		AnnualRate:    cost.Growth.AnnualRate,
+		Name:          cost.Name(),
+		MonthlyAmount: cost.BaseAmountPerMonth().MinorUnits(),
+		GrowthType:    string(cost.Growth().Type),
+		AnnualRate:    cost.Growth().AnnualRate,
 		Status:        string(status),
 		CurrentStep:   int64(currentStep),
 		UpdatedAt:     time.Now().Unix(),
@@ -169,14 +167,13 @@ func (r *OperatingExpenseRepository) DeleteOperatingExpense(itemID uuid.UUID) er
 // (empty name, zero growth type), so this deliberately does not go through
 // the validating NewCost constructor.
 func operatingExpenseFromRow(id uuid.UUID, name string, monthlyAmount int64, growthType string, annualRate float64) domain.Cost {
-	cost := domain.Cost{
-		Name:               name,
-		BaseAmountPerMonth: mustUSD(monthlyAmount),
-		Growth: domain.GrowthStrategy{
-			Type:       domain.GrowthType(growthType),
-			AnnualRate: annualRate,
-		},
-	}
+	var cost domain.Cost
 	cost.SetID(id)
+	cost.SetName(name)
+	cost.SetBaseAmountPerMonth(mustUSD(monthlyAmount))
+	cost.SetGrowth(domain.GrowthStrategy{
+		Type:       domain.GrowthType(growthType),
+		AnnualRate: annualRate,
+	})
 	return cost
 }

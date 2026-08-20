@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -338,13 +339,6 @@ func (c *PayrollController) PostSalaryRoleStep(w http.ResponseWriter, r *http.Re
 
 	finishNow := step == "growth-yr3"
 
-	if finishNow {
-		if err := domain.ValidateSalaryRole(role); err != nil {
-			renderStepError(err.Error())
-			return
-		}
-	}
-
 	newStatus := repositories.StatusDraft
 	newCurrentStep := idx + 1
 	if finishNow {
@@ -353,8 +347,12 @@ func (c *PayrollController) PostSalaryRoleStep(w http.ResponseWriter, r *http.Re
 	}
 
 	if err := c.payrollSvc.SaveSalaryRoleStep(itemID, role, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save salary role step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+		if finishNow {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save salary role step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 
@@ -587,13 +585,6 @@ func (c *PayrollController) PostBenefitStep(w http.ResponseWriter, r *http.Reque
 
 	finishNow := step == "growth-yr3"
 
-	if finishNow {
-		if err := domain.ValidateBenefit(benefit); err != nil {
-			renderStepError(err.Error())
-			return
-		}
-	}
-
 	newStatus := repositories.StatusDraft
 	newCurrentStep := idx + 1
 	if finishNow {
@@ -602,8 +593,12 @@ func (c *PayrollController) PostBenefitStep(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := c.payrollSvc.SaveBenefitStep(itemID, benefit, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save benefit step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+		if finishNow {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save benefit step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 

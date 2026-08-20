@@ -10,7 +10,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -323,13 +324,6 @@ func (c *CashFlowController) PostInventoryPurchaseStep(w http.ResponseWriter, r 
 
 	finishNow := step == "growth-yr3"
 
-	if finishNow {
-		if err := domain.ValidateInventoryPurchase(purchase); err != nil {
-			renderStepError(err.Error())
-			return
-		}
-	}
-
 	newStatus := repositories.StatusDraft
 	newCurrentStep := idx + 1
 	if finishNow {
@@ -338,8 +332,12 @@ func (c *CashFlowController) PostInventoryPurchaseStep(w http.ResponseWriter, r 
 	}
 
 	if err := c.cashFlowSvc.SaveInventoryPurchaseStep(itemID, purchase, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save inventory purchase step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+		if finishNow {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save inventory purchase step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 
@@ -572,13 +570,6 @@ func (c *CashFlowController) PostDistributionStep(w http.ResponseWriter, r *http
 
 	finishNow := step == "growth-yr3"
 
-	if finishNow {
-		if err := domain.ValidateDistribution(dist); err != nil {
-			renderStepError(err.Error())
-			return
-		}
-	}
-
 	newStatus := repositories.StatusDraft
 	newCurrentStep := idx + 1
 	if finishNow {
@@ -587,8 +578,12 @@ func (c *CashFlowController) PostDistributionStep(w http.ResponseWriter, r *http
 	}
 
 	if err := c.cashFlowSvc.SaveDistributionStep(itemID, dist, newCurrentStep, newStatus); err != nil {
-		log.Printf("Failed to save distribution step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+		if finishNow {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save distribution step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 

@@ -2,10 +2,9 @@ package entities
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 var (
@@ -51,10 +50,7 @@ func NewPlanInvite(planID uuid.UUID, email string, level AccessLevel, invitedBy 
 		return nil, errors.New("invalid access level")
 	}
 
-	id, err := uuid.NewV7()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate invite id: %w", err)
-	}
+	id := uuid.NewV7()
 
 	return &PlanInvite{
 		ID:          id,

@@ -6,40 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	db "github.com/zaidmasri/business-planning-tool/internal/infrastructure/db/sqlc"
 )
-
-// wizardHubSections mirrors the retired hand-rolled store's map of known
-// sections per hub (formerly internal/store/sqlite_starting_point.go), used
-// to seed a hub's status map with every known section defaulted to false
-// before applying rows found in wizard_sections.
-var wizardHubSections = map[string][]string{
-	domain.HubStartingPoint: {
-		domain.SectionFixedAssets,
-		domain.SectionStartupCosts,
-		domain.SectionFundingSources,
-		domain.SectionCashOnHand,
-	},
-	domain.HubPayroll: {
-		domain.SectionSalaryRoles,
-		domain.SectionBenefits,
-		domain.SectionPayrollTaxRates,
-	},
-	domain.HubSalesForecast: {
-		domain.SectionProducts,
-		domain.SectionSalesGrowthCurve,
-	},
-	domain.HubOperatingExpenses: {
-		domain.SectionOperatingExpenses,
-	},
-	domain.HubCashFlow: {
-		domain.SectionInventoryPurchases,
-		domain.SectionDistributions,
-	},
-}
 
 // WizardProgressRepository implements repositories.WizardProgressRepository.
 type WizardProgressRepository struct {
@@ -66,7 +38,7 @@ func (r *WizardProgressRepository) MarkWizardSectionComplete(planID uuid.UUID, h
 
 func (r *WizardProgressRepository) GetWizardSectionStatus(planID uuid.UUID, hub string) (map[string]bool, error) {
 	status := make(map[string]bool)
-	for _, section := range wizardHubSections[hub] {
+	for _, section := range domain.HubSections[hub] {
 		status[section] = false
 	}
 

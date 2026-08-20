@@ -1,6 +1,6 @@
 package commands
 
-import "github.com/google/uuid"
+import "uuid"
 
 // DeletePlan is the command to delete a plan and all its data.
 type DeletePlan struct {

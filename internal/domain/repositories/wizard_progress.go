@@ -1,6 +1,6 @@
 package repositories
 
-import "github.com/google/uuid"
+import "uuid"
 
 type WizardProgressRepository interface {
 	MarkWizardSectionComplete(planID uuid.UUID, hub, section string) error

@@ -246,11 +246,6 @@ func RenderProfilePage(w http.ResponseWriter, tc map[string]*template.Template, 
 	renderTemplate(w, tc, "profile.html", "profile.html", page)
 }
 
-// RenderErrorPage renders the error page
-func RenderErrorPage(w http.ResponseWriter, tc map[string]*template.Template, page ErrorPage) {
-	renderTemplate(w, tc, "error.html", "error.html", page)
-}
-
 // RenderErrorPageWithStatus renders the error page with a specific status code
 func RenderErrorPageWithStatus(w http.ResponseWriter, tc map[string]*template.Template, page ErrorPage, statusCode int) {
 	renderTemplateWithStatus(w, tc, "error.html", "error.html", page, statusCode)

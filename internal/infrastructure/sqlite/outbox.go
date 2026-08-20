@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domevents "github.com/zaidmasri/business-planning-tool/internal/domain/events"
 	db "github.com/zaidmasri/business-planning-tool/internal/infrastructure/db/sqlc"
 )
@@ -23,10 +24,7 @@ func insertOutboxEvents(ctx context.Context, q *db.Queries, events []domevents.D
 			return fmt.Errorf("failed to marshal event payload: %w", err)
 		}
 
-		id, err := uuid.NewV7()
-		if err != nil {
-			return fmt.Errorf("failed to generate outbox event id: %w", err)
-		}
+		id := uuid.NewV7()
 
 		if err := q.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
 			ID:          id.String(),

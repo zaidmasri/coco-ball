@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	db "github.com/zaidmasri/business-planning-tool/internal/infrastructure/db/sqlc"
@@ -38,10 +39,7 @@ func (r *BenefitRepository) CreateBenefitDraft(planID uuid.UUID) (uuid.UUID, err
 		return uuid.UUID{}, fmt.Errorf("failed to compute sort order: %w", err)
 	}
 
-	id, err := uuid.NewV7()
-	if err != nil {
-		return uuid.UUID{}, fmt.Errorf("failed to generate id: %w", err)
-	}
+	id := uuid.NewV7()
 
 	now := time.Now().Unix()
 	if err := r.queries.CreateBenefitDraft(ctx, db.CreateBenefitDraftParams{

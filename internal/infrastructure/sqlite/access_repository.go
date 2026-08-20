@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	db "github.com/zaidmasri/business-planning-tool/internal/infrastructure/db/sqlc"
@@ -23,24 +24,11 @@ func NewAccessRepository(conn *sql.DB) repositories.AccessRepository {
 
 var _ repositories.AccessRepository = (*AccessRepository)(nil)
 
+// GrantAccess inserts/replaces a plan_access row. Existence checks for
+// planID/userID are the caller's (AccessService's) responsibility - this
+// method is pure translation, no business branching.
 func (r *AccessRepository) GrantAccess(planID, userID uuid.UUID, level domain.AccessLevel) error {
 	ctx := context.Background()
-
-	planCount, err := r.queries.CountPlanExists(ctx, planID.String())
-	if err != nil {
-		return fmt.Errorf("failed to check plan exists: %w", err)
-	}
-	if planCount == 0 {
-		return errors.New("plan not found")
-	}
-
-	userCount, err := r.queries.CountUserExists(ctx, userID.String())
-	if err != nil {
-		return fmt.Errorf("failed to check user exists: %w", err)
-	}
-	if userCount == 0 {
-		return domain.ErrUserNotFound
-	}
 
 	if err := r.queries.GrantAccess(ctx, db.GrantAccessParams{
 		PlanID:      planID.String(),
@@ -93,19 +81,4 @@ func (r *AccessRepository) GetPlanAccess(planID uuid.UUID) ([]*domain.PlanAccess
 		}
 	}
 	return access, nil
-}
-
-// GetUserPlans returns every non-deleted plan the given user has access to.
-// Runs the same join as PlanRepository.GetUserPlans (see
-// sql/queries/access.sql's GetPlansForUser) since AccessRepository and
-// PlanRepository are separate structs post-split.
-func (r *AccessRepository) GetUserPlans(userID uuid.UUID) ([]*domain.Plan, error) {
-	ctx := context.Background()
-
-	rows, err := r.queries.GetPlansForUser(ctx, userID.String())
-	if err != nil {
-		return nil, fmt.Errorf("failed to query user plans: %w", err)
-	}
-
-	return hydrateAllPlans(ctx, r.queries, rows)
 }

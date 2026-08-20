@@ -2,10 +2,10 @@ package entities
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domevents "github.com/zaidmasri/business-planning-tool/internal/domain/events"
 )
 
@@ -65,10 +65,20 @@ const (
 	SectionOperatingExpenses = "operating-expenses"
 )
 
+// HubSections maps each wizard hub to the sections that make it up. Single
+// source of truth for hub-completion semantics - infrastructure and
+// application code must consult this rather than hardcoding their own copy.
+var HubSections = map[string][]string{
+	HubStartingPoint:     {SectionFixedAssets, SectionStartupCosts, SectionFundingSources, SectionCashOnHand},
+	HubPayroll:           {SectionSalaryRoles, SectionBenefits, SectionPayrollTaxRates},
+	HubSalesForecast:     {SectionProducts, SectionSalesGrowthCurve},
+	HubOperatingExpenses: {SectionOperatingExpenses},
+	HubCashFlow:          {SectionInventoryPurchases, SectionDistributions},
+}
+
 var (
 	ErrInvalidName                      = errors.New("name cannot be empty")
 	ErrNegativeAmount                   = errors.New("expense amount cannot be negative")
-	ErrInvalidMonthIndex                = errors.New("month index is out of bounds")
 	ErrInvalidStartingMonth             = errors.New("plan starting month must be between 1-12")
 	ErrInvalidDepreciationMethod        = errors.New("invalid deprecation method")
 	ErrInvalidUsefulLife                = errors.New("invalid useful life")
@@ -197,10 +207,7 @@ func NewPlan(name string, startingMonth, startingYear int, owner VerifiedUser) (
 		return nil, err
 	}
 
-	id, err := uuid.NewV7()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate plan id: %w", err)
-	}
+	id := uuid.NewV7()
 
 	p := &Plan{
 		id:            id,
@@ -239,6 +246,16 @@ func (p *Plan) ChangeCoreDetails(name string, startingMonth, startingYear int) e
 
 	p.recordEvent(domevents.NewPlanUpdated(p.id))
 	return nil
+}
+
+// Delete records a PlanDeleted event on the plan aggregate. It performs no
+// field mutation - deletion itself is a repository-level soft-delete of the
+// persisted row - this exists solely so the deletion has an aggregate-level
+// event to drain via PullEvents, the same way NewPlan/ChangeCoreDetails do
+// for create/update. Call this before PullEvents in the same transaction
+// that soft-deletes the plan's row.
+func (p *Plan) Delete() {
+	p.recordEvent(domevents.NewPlanDeleted(p.id))
 }
 
 func (p *Plan) ID() uuid.UUID      { return p.id }

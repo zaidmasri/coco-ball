@@ -1,17 +1,18 @@
 package services
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
 
 type payrollService struct {
-	salaryRoles      repositories.SalaryRoleRepository
-	benefits         repositories.BenefitRepository
-	payrollTaxRates  repositories.PayrollTaxRatesRepository
-	wizardProgress   repositories.WizardProgressRepository
+	salaryRoles     repositories.SalaryRoleRepository
+	benefits        repositories.BenefitRepository
+	payrollTaxRates repositories.PayrollTaxRatesRepository
+	wizardProgress  repositories.WizardProgressRepository
 }
 
 func NewPayrollService(
@@ -66,6 +67,11 @@ func (s *payrollService) GetSalaryRole(itemID uuid.UUID) (*repositories.SalaryRo
 	return s.salaryRoles.GetSalaryRole(itemID)
 }
 func (s *payrollService) SaveSalaryRoleStep(itemID uuid.UUID, role domain.SalaryRole, currentStep int, status repositories.ItemStatus) error {
+	if status == repositories.StatusComplete {
+		if err := domain.ValidateSalaryRole(role); err != nil {
+			return err
+		}
+	}
 	return s.salaryRoles.SaveSalaryRoleStep(itemID, role, currentStep, status)
 }
 func (s *payrollService) ListCompleteSalaryRoles(planID uuid.UUID) ([]repositories.SalaryRoleItem, error) {
@@ -85,6 +91,11 @@ func (s *payrollService) GetBenefit(itemID uuid.UUID) (*repositories.BenefitItem
 	return s.benefits.GetBenefit(itemID)
 }
 func (s *payrollService) SaveBenefitStep(itemID uuid.UUID, benefit domain.Benefit, currentStep int, status repositories.ItemStatus) error {
+	if status == repositories.StatusComplete {
+		if err := domain.ValidateBenefit(benefit); err != nil {
+			return err
+		}
+	}
 	return s.benefits.SaveBenefitStep(itemID, benefit, currentStep, status)
 }
 func (s *payrollService) ListCompleteBenefits(planID uuid.UUID) ([]repositories.BenefitItem, error) {

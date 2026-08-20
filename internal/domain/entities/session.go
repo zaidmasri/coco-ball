@@ -7,17 +7,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domevents "github.com/zaidmasri/business-planning-tool/internal/domain/events"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	ErrInvalidPassword   = errors.New("invalid password")
-	ErrSessionNotFound   = errors.New("session not found")
-	ErrSessionExpired    = errors.New("session expired")
-	ErrUserAlreadyExists = errors.New("user with this email already exists")
-	ErrWeakPassword      = errors.New("password must be at least 8 characters")
+	ErrInvalidPassword = errors.New("invalid password")
+	ErrSessionNotFound = errors.New("session not found")
+	ErrSessionExpired  = errors.New("session expired")
+	ErrWeakPassword    = errors.New("password must be at least 8 characters")
 )
 
 // Session represents an authenticated user session

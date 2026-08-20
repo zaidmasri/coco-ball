@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	db "github.com/zaidmasri/business-planning-tool/internal/infrastructure/db/sqlc"
@@ -24,19 +25,6 @@ func NewUserRepository(conn *sql.DB) repositories.UserRepository {
 }
 
 var _ repositories.UserRepository = (*UserRepository)(nil)
-
-func (r *UserRepository) SaveUser(u *domain.User) error {
-	if err := r.queries.CreateUser(context.Background(), db.CreateUserParams{
-		ID:        u.ID().String(),
-		Email:     u.Email(),
-		FirstName: u.FirstName(),
-		LastName:  u.LastName(),
-		CreatedAt: time.Now().Unix(),
-	}); err != nil {
-		return fmt.Errorf("failed to save user: %w", err)
-	}
-	return nil
-}
 
 func (r *UserRepository) GetUser(id uuid.UUID) (*domain.User, error) {
 	row, err := r.queries.GetUserByID(context.Background(), id.String())

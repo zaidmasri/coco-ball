@@ -1,6 +1,6 @@
 package events
 
-import "github.com/google/uuid"
+import "uuid"
 
 const (
 	PlanCreatedEventName = "plan.created"

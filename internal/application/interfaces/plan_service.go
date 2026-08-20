@@ -1,7 +1,8 @@
 package interfaces
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )

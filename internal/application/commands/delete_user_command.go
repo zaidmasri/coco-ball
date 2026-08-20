@@ -1,6 +1,6 @@
 package commands
 
-import "github.com/google/uuid"
+import "uuid"
 
 // DeleteUser is the command to delete a user's own account.
 type DeleteUser struct {

@@ -164,16 +164,10 @@ func (c *AuthController) PostLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create session
-	session, err := domain.NewSession(userCreds.ID(), sessionDuration)
+	session, err := c.authSvc.CreateSession(userCreds.ID(), sessionDuration)
 	if err != nil {
 		log.Printf("Failed to create session: %v", err)
 		http.Error(w, "Session creation failed", http.StatusInternalServerError)
-		return
-	}
-
-	if err := c.authSvc.SaveSession(session); err != nil {
-		log.Printf("Failed to save session: %v", err)
-		http.Error(w, "Session save failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -238,16 +232,10 @@ func (c *AuthController) PostSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create and save session
-	session, err := domain.NewSession(result.Result.ID, sessionDuration)
+	session, err := c.authSvc.CreateSession(result.Result.ID, sessionDuration)
 	if err != nil {
 		log.Printf("Failed to create session: %v", err)
 		http.Error(w, "Session creation failed", http.StatusInternalServerError)
-		return
-	}
-
-	if err := c.authSvc.SaveSession(session); err != nil {
-		log.Printf("Failed to save session: %v", err)
-		http.Error(w, "Session save failed", http.StatusInternalServerError)
 		return
 	}
 

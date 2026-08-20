@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	db "github.com/zaidmasri/business-planning-tool/internal/infrastructure/db/sqlc"
@@ -37,13 +38,64 @@ var _ repositories.PlanRepository = (*PlanRepository)(nil)
 // Save persists a validated plan and atomically writes any accumulated
 // domain events to the outbox table, in one transaction.
 func (r *PlanRepository) Save(vp domain.ValidatedPlan) error {
-	p := vp.Plan()
 	ctx := context.Background()
 
-	data, err := json.Marshal(p)
+	tx, err := r.conn.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to marshal plan: %w", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	defer tx.Rollback()
+
+	qtx := r.queries.WithTx(tx)
+	if err := savePlanRow(ctx, qtx, vp.Plan(), time.Now().Unix()); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// SaveNew persists a brand-new validated plan and grants its owner Owner
+// access in the same transaction, so a GrantAccess failure can never leave
+// an ownerless plan behind (the CreatePlan+GrantAccess split this used to
+// require was two independent, non-transactional application-service
+// calls). ownerID is trusted to already name a real, existing User -
+// PlanService.CreatePlan's verifyOwner step covers that before this is
+// called, and the plan row itself is inserted in this same transaction, so
+// no existence check is needed here.
+func (r *PlanRepository) SaveNew(vp domain.ValidatedPlan, ownerID uuid.UUID) error {
+	ctx := context.Background()
+
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := r.queries.WithTx(tx)
+	p := vp.Plan()
+	if err := savePlanRow(ctx, qtx, p, time.Now().Unix()); err != nil {
+		return err
+	}
+
+	if err := qtx.GrantAccess(ctx, db.GrantAccessParams{
+		PlanID:      p.ID().String(),
+		UserID:      ownerID.String(),
+		AccessLevel: string(domain.Owner),
+		InvitedAt:   0,
+	}); err != nil {
+		return fmt.Errorf("failed to grant owner access: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// SaveWithInvite persists a PlanInvite row and the plan's data blob/outbox
+// events in one transaction, so a failure between the two writes can never
+// silently drop the invite's UserInvitedToPlan event (the bug this method
+// replaces: InviteRepository.CreateInvite and Plan.Save used to be two
+// independent, non-atomic writes).
+func (r *PlanRepository) SaveWithInvite(vp domain.ValidatedPlan, invite *domain.PlanInvite) error {
+	ctx := context.Background()
 
 	tx, err := r.conn.Begin()
 	if err != nil {
@@ -54,6 +106,26 @@ func (r *PlanRepository) Save(vp domain.ValidatedPlan) error {
 	qtx := r.queries.WithTx(tx)
 	now := time.Now().Unix()
 
+	if err := insertInviteRow(ctx, qtx, invite, now); err != nil {
+		return err
+	}
+
+	if err := savePlanRow(ctx, qtx, vp.Plan(), now); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// savePlanRow writes a plan's data blob and drains/persists its accumulated
+// domain events to the outbox table, using queries already bound to an
+// open transaction (qtx) - callers own the transaction's begin/commit.
+func savePlanRow(ctx context.Context, qtx *db.Queries, p *domain.Plan, now int64) error {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return fmt.Errorf("failed to marshal plan: %w", err)
+	}
+
 	if err := qtx.SavePlan(ctx, db.SavePlanParams{
 		ID:        p.ID().String(),
 		Data:      data,
@@ -63,11 +135,7 @@ func (r *PlanRepository) Save(vp domain.ValidatedPlan) error {
 		return fmt.Errorf("failed to save plan: %w", err)
 	}
 
-	if err := insertOutboxEvents(ctx, qtx, p.PullEvents(), now); err != nil {
-		return err
-	}
-
-	return tx.Commit()
+	return insertOutboxEvents(ctx, qtx, p.PullEvents(), now)
 }
 
 // Get retrieves a plan by ID, hydrating its wizard sub-entities from the
@@ -142,7 +210,19 @@ func hydrateAllPlans(ctx context.Context, queries *db.Queries, blobs [][]byte) (
 func (r *PlanRepository) Delete(id uuid.UUID) error {
 	ctx := context.Background()
 	planID := id.String()
-	now := sql.NullInt64{Int64: time.Now().Unix(), Valid: true}
+	nowUnix := time.Now().Unix()
+	now := sql.NullInt64{Int64: nowUnix, Valid: true}
+
+	// Load the plan first (mirrors UserRepository.DeleteUser's precedent of
+	// fetching before opening the transaction) so Delete() has an aggregate
+	// to record the PlanDeleted event on - without this, the event would
+	// have to be constructed directly by the repository, bypassing the
+	// aggregate the same way the pre-fix code bypassed it entirely.
+	plan, err := r.Get(id)
+	if err != nil {
+		return err
+	}
+	plan.Delete()
 
 	tx, err := r.conn.Begin()
 	if err != nil {
@@ -206,6 +286,10 @@ func (r *PlanRepository) Delete(id uuid.UUID) error {
 	}
 	if affected == 0 {
 		return errors.New("plan not found")
+	}
+
+	if err := insertOutboxEvents(ctx, qtx, plan.PullEvents(), nowUnix); err != nil {
+		return err
 	}
 
 	return tx.Commit()
@@ -386,15 +470,14 @@ func hydratePlan(ctx context.Context, queries *db.Queries, plan *domain.Plan) er
 		if err != nil {
 			return fmt.Errorf("failed to parse operating expense id: %w", err)
 		}
-		cost := domain.Cost{
-			Name:               e.Name,
-			BaseAmountPerMonth: mustUSD(e.MonthlyAmount),
-			Growth: domain.GrowthStrategy{
-				Type:       domain.GrowthType(e.GrowthType),
-				AnnualRate: e.AnnualRate,
-			},
-		}
+		var cost domain.Cost
 		cost.SetID(id)
+		cost.SetName(e.Name)
+		cost.SetBaseAmountPerMonth(mustUSD(e.MonthlyAmount))
+		cost.SetGrowth(domain.GrowthStrategy{
+			Type:       domain.GrowthType(e.GrowthType),
+			AnnualRate: e.AnnualRate,
+		})
 		opEx[i] = cost
 	}
 

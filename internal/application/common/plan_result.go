@@ -4,7 +4,7 @@
 // invoke domain behavior (mutation methods, PullEvents) on what they hold.
 package common
 
-import "github.com/google/uuid"
+import "uuid"
 
 // PlanResult is the write-side acknowledgement shape for plan commands. It
 // deliberately does not carry the full aggregate (wizard sections, domain

@@ -9,28 +9,6 @@ import (
 	"context"
 )
 
-const countPlanExists = `-- name: CountPlanExists :one
-SELECT COUNT(*) FROM plans WHERE id = ? AND deleted_at IS NULL
-`
-
-func (q *Queries) CountPlanExists(ctx context.Context, id string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPlanExists, id)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countUserExists = `-- name: CountUserExists :one
-SELECT COUNT(*) FROM users WHERE id = ?
-`
-
-func (q *Queries) CountUserExists(ctx context.Context, id string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countUserExists, id)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const getAccess = `-- name: GetAccess :one
 SELECT access_level, invited_at FROM plan_access WHERE plan_id = ? AND user_id = ?
 `
@@ -75,37 +53,6 @@ func (q *Queries) GetPlanAccess(ctx context.Context, planID string) ([]GetPlanAc
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getPlansForUser = `-- name: GetPlansForUser :many
-SELECT p.data
-FROM plans p
-JOIN plan_access pa ON p.id = pa.plan_id
-WHERE pa.user_id = ? AND p.deleted_at IS NULL
-ORDER BY p.created_at DESC
-`
-
-func (q *Queries) GetPlansForUser(ctx context.Context, userID string) ([][]byte, error) {
-	rows, err := q.db.QueryContext(ctx, getPlansForUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := [][]byte{}
-	for rows.Next() {
-		var data []byte
-		if err := rows.Scan(&data); err != nil {
-			return nil, err
-		}
-		items = append(items, data)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

@@ -1,7 +1,8 @@
 package services
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	"github.com/zaidmasri/business-planning-tool/internal/application/mapper"

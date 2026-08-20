@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.26.5-alpine3.24 AS builder
+FROM golang:1.27.0-alpine3.24 AS builder
 
 # go-sqlite3 uses cgo, so we need a C toolchain
 RUN apk add --no-cache gcc=15.2.0-r5 musl-dev=1.2.6-r2

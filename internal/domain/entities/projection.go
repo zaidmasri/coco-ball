@@ -619,7 +619,7 @@ func (p *Plan) OpExAnnualBreakdown(years int) []OpExLine {
 
 	lines := make([]OpExLine, len(p.opEx))
 	for i, cost := range p.opEx {
-		lines[i] = OpExLine{Name: cost.Name, AmountByYear: make([]Money, years)}
+		lines[i] = OpExLine{Name: cost.Name(), AmountByYear: make([]Money, years)}
 		for y := 0; y < years; y++ {
 			for m := y * 12; m < (y+1)*12 && m < horizon; m++ {
 				lines[i].AmountByYear[y] = lines[i].AmountByYear[y].Add(cost.ProjectedAmount(MonthIndex(m)))

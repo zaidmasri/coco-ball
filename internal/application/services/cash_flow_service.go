@@ -1,7 +1,8 @@
 package services
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -63,6 +64,11 @@ func (s *cashFlowService) GetInventoryPurchase(itemID uuid.UUID) (*repositories.
 	return s.inventoryPurchases.GetInventoryPurchase(itemID)
 }
 func (s *cashFlowService) SaveInventoryPurchaseStep(itemID uuid.UUID, inv domain.InventoryPurchase, currentStep int, status repositories.ItemStatus) error {
+	if status == repositories.StatusComplete {
+		if err := domain.ValidateInventoryPurchase(inv); err != nil {
+			return err
+		}
+	}
 	return s.inventoryPurchases.SaveInventoryPurchaseStep(itemID, inv, currentStep, status)
 }
 func (s *cashFlowService) ListCompleteInventoryPurchases(planID uuid.UUID) ([]repositories.InventoryPurchaseItem, error) {
@@ -82,6 +88,11 @@ func (s *cashFlowService) GetDistribution(itemID uuid.UUID) (*repositories.Distr
 	return s.distributions.GetDistribution(itemID)
 }
 func (s *cashFlowService) SaveDistributionStep(itemID uuid.UUID, dist domain.Distribution, currentStep int, status repositories.ItemStatus) error {
+	if status == repositories.StatusComplete {
+		if err := domain.ValidateDistribution(dist); err != nil {
+			return err
+		}
+	}
 	return s.distributions.SaveDistributionStep(itemID, dist, currentStep, status)
 }
 func (s *cashFlowService) ListCompleteDistributions(planID uuid.UUID) ([]repositories.DistributionItem, error) {

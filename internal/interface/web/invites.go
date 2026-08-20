@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
+	"uuid"
+
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/views"
@@ -87,22 +89,19 @@ func (c *InviteController) PostCreateInvite(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	invite, err := domain.NewPlanInvite(planID, email, level, user.ID())
-	if err != nil {
+	// InviteService.CreateInvite constructs the PlanInvite (via
+	// domain.NewPlanInvite) and persists it atomically with the Plan
+	// aggregate's UserInvitedToPlan outbox event - no separate
+	// construct-then-save-the-plan steps here, so a failure partway through
+	// can never silently drop the event or leave an orphaned invite row.
+	if _, err := c.inviteSvc.CreateInvite(&commands.CreateInvite{
+		PlanID:      planID,
+		Email:       email,
+		AccessLevel: level,
+		InvitedBy:   user.ID(),
+	}); err != nil {
 		renderError(err.Error(), http.StatusBadRequest)
 		return
-	}
-
-	if err := c.inviteSvc.CreateInvite(invite); err != nil {
-		log.Printf("Failed to create invite: %v", err)
-		renderError("An internal database error occurred. Please try again.", http.StatusInternalServerError)
-		return
-	}
-
-	// Plan is the aggregate root for invites; it emits UserInvitedToPlan.
-	plan.RecordUserInvited(invite.ID, invite.Email, invite.AccessLevel, user.ID())
-	if err := c.planSvc.Save(plan); err != nil {
-		log.Printf("Failed to record UserInvitedToPlan event for plan %s: %v", planID, err)
 	}
 
 	http.Redirect(w, r, "/plan/"+planID.String()+"/setup", http.StatusSeeOther)

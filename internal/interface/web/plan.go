@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
@@ -168,6 +169,9 @@ func (c *PlanController) PostSetup(w http.ResponseWriter, r *http.Request) {
 	startMonth, _ := strconv.Atoi(r.PostForm.Get("startMonth"))
 	startYear, _ := strconv.Atoi(r.PostForm.Get("startYear"))
 
+	// CreatePlan grants the creator Owner access atomically, in the same
+	// transaction as the plan row itself - no separate GrantAccess call
+	// needed, so a grant failure can never leave an ownerless plan behind.
 	result, err := c.planSvc.CreatePlan(&commands.CreatePlan{
 		Name:          companyName,
 		StartingMonth: startMonth,
@@ -179,12 +183,6 @@ func (c *PlanController) PostSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	planID := result.Result.ID
-
-	if err := c.accessSvc.GrantAccess(planID, user.ID(), domain.Owner); err != nil {
-		log.Printf("Failed to grant owner access: %v", err)
-		http.Error(w, "Failed to setup plan access", http.StatusInternalServerError)
-		return
-	}
 
 	http.Redirect(w, r, "/plan/"+planID.String()+"/starting-point", http.StatusSeeOther)
 }

@@ -10,8 +10,8 @@ import (
 func NewOperatingExpenseResultFromEntity(c domain.Cost) *common.OperatingExpenseResult {
 	return &common.OperatingExpenseResult{
 		ID:                 c.ID(),
-		Name:               c.Name,
-		BaseAmountPerMonth: c.BaseAmountPerMonth,
-		Growth:             c.Growth,
+		Name:               c.Name(),
+		BaseAmountPerMonth: c.BaseAmountPerMonth(),
+		Growth:             c.Growth(),
 	}
 }

@@ -13,7 +13,8 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 )
 
@@ -32,9 +33,9 @@ var opExpenseFieldDefs = []struct {
 	Label string
 	Value func(domain.Cost) string
 }{
-	{"name", "Name", func(c domain.Cost) string { return c.Name }},
-	{"amount", "Monthly Amount", func(c domain.Cost) string { return formatMoney(c.BaseAmountPerMonth) }},
-	{"growth", "Annual Growth", func(c domain.Cost) string { return formatPercent(c.Growth.AnnualRatePercent()) }},
+	{"name", "Name", func(c domain.Cost) string { return c.Name() }},
+	{"amount", "Monthly Amount", func(c domain.Cost) string { return formatMoney(c.BaseAmountPerMonth()) }},
+	{"growth", "Annual Growth", func(c domain.Cost) string { return formatPercent(c.Growth().AnnualRatePercent()) }},
 }
 
 func opExpenseAnsweredFields(cost domain.Cost, uptoStep string) []AnsweredField {
@@ -94,13 +95,13 @@ type OpExpenseStepPage struct {
 // opExpenseListItem formats an Operating Expense for the shared
 // section-list page.
 func opExpenseListItem(planID uuid.UUID, item OpExpenseItem) SectionListItem {
-	detail := formatMoney(item.Cost.BaseAmountPerMonth) + "/mo"
-	if item.Cost.Growth.Type == domain.AnnualStepPercent && item.Cost.Growth.AnnualRate != 0 {
-		detail += fmt.Sprintf(" · %s/yr growth", formatPercent(item.Cost.Growth.AnnualRatePercent()))
+	detail := formatMoney(item.Cost.BaseAmountPerMonth()) + "/mo"
+	if item.Cost.Growth().Type == domain.AnnualStepPercent && item.Cost.Growth().AnnualRate != 0 {
+		detail += fmt.Sprintf(" · %s/yr growth", formatPercent(item.Cost.Growth().AnnualRatePercent()))
 	}
 	return SectionListItem{
 		ID:           item.ID,
-		Title:        item.Cost.Name,
+		Title:        item.Cost.Name(),
 		Detail:       detail,
 		EditURL:      OperatingExpensesStepURL(planID, item.ID, "name"),
 		DeleteAction: fmt.Sprintf("/plan/%s/operating-expenses/%s", planID, item.ID),
@@ -177,7 +178,7 @@ func BuildOperatingExpenseAddAnotherPage(r *http.Request, user *domain.User, pla
 	return AddAnotherPage{
 		BasePage:         base,
 		Plan:             plan,
-		ItemName:         cost.Name,
+		ItemName:         cost.Name(),
 		Answers:          opExpenseAnsweredFields(cost, ""),
 		ItemNounSingular: "operating expense",
 		DoneAction:       fmt.Sprintf("/plan/%s/operating-expenses/finish", plan.ID()),
