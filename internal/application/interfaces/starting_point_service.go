@@ -48,5 +48,5 @@ type StartingPointService interface {
 
 	// Starting Balances (singleton)
 	GetStartingBalancesRow(planID uuid.UUID) (*repositories.StartingBalancesRow, error)
-	SaveStartingBalancesStep(planID uuid.UUID, balances domain.StartingBalances, currentStep int) error
+	SaveStartingBalancesStep(planID uuid.UUID, balances domain.StartingBalances, currentStep int, isComplete bool) error
 }

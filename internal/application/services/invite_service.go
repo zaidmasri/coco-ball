@@ -1,6 +1,8 @@
 package services
 
 import (
+	"strings"
+
 	"uuid"
 
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
@@ -26,6 +28,20 @@ func NewInviteService(invites repositories.InviteRepository, plans repositories.
 // and the non-atomic-write gaps documented in AGENTS.md's DDD violations
 // audit.
 func (s *inviteService) CreateInvite(cmd *commands.CreateInvite) (*commands.CreateInviteResult, error) {
+	if strings.EqualFold(strings.TrimSpace(cmd.Email), strings.TrimSpace(cmd.InviterEmail)) {
+		return nil, domain.ErrSelfInvite
+	}
+
+	existing, err := s.invites.GetInvitesForPlan(cmd.PlanID)
+	if err != nil {
+		return nil, err
+	}
+	for _, inv := range existing {
+		if inv.Status == domain.InvitePending && strings.EqualFold(inv.Email, strings.TrimSpace(cmd.Email)) {
+			return nil, domain.ErrDuplicateInvite
+		}
+	}
+
 	plan, err := s.plans.Get(cmd.PlanID)
 	if err != nil {
 		return nil, err

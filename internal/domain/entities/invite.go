@@ -11,6 +11,8 @@ var (
 	ErrInviteNotFound   = errors.New("invite not found")
 	ErrInviteNotPending = errors.New("invite has already been responded to")
 	ErrInviteForbidden  = errors.New("invite does not belong to this user")
+	ErrSelfInvite       = errors.New("you cannot invite yourself to your own plan")
+	ErrDuplicateInvite  = errors.New("this email already has a pending invite for this plan")
 )
 
 // InviteStatus tracks whether an invite is awaiting a response.
@@ -45,6 +47,9 @@ func NewPlanInvite(planID uuid.UUID, email string, level AccessLevel, invitedBy 
 	cleanEmail := strings.TrimSpace(strings.ToLower(email))
 	if cleanEmail == "" {
 		return nil, ErrInvalidEmail
+	}
+	if err := validateEmailFormat(cleanEmail); err != nil {
+		return nil, err
 	}
 	if !level.IsValid() {
 		return nil, errors.New("invalid access level")

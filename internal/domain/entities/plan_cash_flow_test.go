@@ -12,6 +12,9 @@ func TestValidateInventoryPurchase(t *testing.T) {
 	if err := ValidateInventoryPurchase(InventoryPurchase{Category: "Raw Materials", MonthlyAmount: mustUSD(-1)}); !errors.Is(err, ErrNegativeAmount) {
 		t.Errorf("expected ErrNegativeAmount, got %v", err)
 	}
+	if err := ValidateInventoryPurchase(InventoryPurchase{Category: "Raw Materials", MonthlyAmount: mustUSD(100), GrowthAfterYr1: AnnualGrowth{RatesAfterYear1: []float64{0, -5.0}}}); !errors.Is(err, ErrInvalidGrowthRate) {
+		t.Errorf("expected ErrInvalidGrowthRate for -500%% growth, got %v", err)
+	}
 	if err := ValidateInventoryPurchase(InventoryPurchase{Category: "Raw Materials", MonthlyAmount: mustUSD(100)}); err != nil {
 		t.Errorf("expected valid inventory purchase, got %v", err)
 	}

@@ -1,7 +1,5 @@
 package entities
 
-import "strings"
-
 // InventoryPurchase is a discretionary additional-inventory cash outflow.
 type InventoryPurchase struct {
 	Category       string
@@ -45,11 +43,16 @@ func (p *Plan) ClearCashFlow() {
 
 // ValidateInventoryPurchase checks an InventoryPurchase before it's persisted.
 func ValidateInventoryPurchase(inv InventoryPurchase) error {
-	if strings.TrimSpace(inv.Category) == "" {
-		return ErrInvalidName
+	if _, err := validateRequiredName(inv.Category); err != nil {
+		return err
 	}
-	if inv.MonthlyAmount.IsNegative() {
-		return ErrNegativeAmount
+	if err := validateMoneyAmount(inv.MonthlyAmount); err != nil {
+		return err
+	}
+	for _, rate := range inv.GrowthAfterYr1.RatesAfterYear1 {
+		if err := validateGrowthRate(rate); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -65,11 +68,16 @@ func (p *Plan) AddInventoryPurchase(inv InventoryPurchase) error {
 
 // ValidateDistribution checks a Distribution before it's persisted.
 func ValidateDistribution(dist Distribution) error {
-	if strings.TrimSpace(dist.Name) == "" {
-		return ErrInvalidName
+	if _, err := validateRequiredName(dist.Name); err != nil {
+		return err
 	}
-	if dist.MonthlyAmount.IsNegative() {
-		return ErrNegativeAmount
+	if err := validateMoneyAmount(dist.MonthlyAmount); err != nil {
+		return err
+	}
+	for _, rate := range dist.GrowthAfterYr1.RatesAfterYear1 {
+		if err := validateGrowthRate(rate); err != nil {
+			return err
+		}
 	}
 	return nil
 }

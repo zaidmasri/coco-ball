@@ -166,8 +166,12 @@ func (c *PlanController) PostSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	companyName := r.PostForm.Get("companyName")
-	startMonth, _ := strconv.Atoi(r.PostForm.Get("startMonth"))
-	startYear, _ := strconv.Atoi(r.PostForm.Get("startYear"))
+	startMonth, errMonth := strconv.Atoi(r.PostForm.Get("startMonth"))
+	startYear, errYear := strconv.Atoi(r.PostForm.Get("startYear"))
+	if errMonth != nil || errYear != nil {
+		http.Error(w, "Invalid month or year provided", http.StatusBadRequest)
+		return
+	}
 
 	// CreatePlan grants the creator Owner access atomically, in the same
 	// transaction as the plan row itself - no separate GrantAccess call

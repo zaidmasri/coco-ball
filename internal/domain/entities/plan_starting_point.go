@@ -1,7 +1,5 @@
 package entities
 
-import "strings"
-
 type FinancingTerm struct {
 	PrincipalMoney Money
 	InterestRate   float64 // e.g., 0.07 for 7%
@@ -102,11 +100,11 @@ func (p *Plan) LoadStartingPointData(assets []CapitalAsset, costs []StartupCost,
 
 // ValidateStartupCost checks a StartupCost before it's persisted.
 func ValidateStartupCost(cost StartupCost) error {
-	if strings.TrimSpace(cost.Name) == "" {
-		return ErrInvalidName
+	if _, err := validateRequiredName(cost.Name); err != nil {
+		return err
 	}
-	if cost.Amount.IsNegative() {
-		return ErrNegativeAmount
+	if err := validateMoneyAmount(cost.Amount); err != nil {
+		return err
 	}
 	return nil
 }
@@ -123,11 +121,17 @@ func (p *Plan) AddStartupCost(name string, amount Money) error {
 
 // ValidateFundingSource checks a FundingSource before it's persisted.
 func ValidateFundingSource(funding FundingSource) error {
-	if strings.TrimSpace(funding.Name) == "" {
-		return ErrInvalidName
+	if _, err := validateRequiredName(funding.Name); err != nil {
+		return err
 	}
-	if funding.Amount.IsNegative() {
-		return ErrNegativeAmount
+	if err := validateMoneyAmount(funding.Amount); err != nil {
+		return err
+	}
+	if err := validatePercentRate(funding.InterestRate); err != nil {
+		return err
+	}
+	if funding.TermMonths < 0 || funding.TermMonths > 600 {
+		return ErrInvalidTerm
 	}
 	return nil
 }
@@ -154,10 +158,16 @@ func (p *Plan) SetStartingBalances(cash, ar, pe, ap, ae Money) {
 
 // ValidateCapitalAsset checks a CapitalAsset before it's persisted.
 func ValidateCapitalAsset(asset CapitalAsset) error {
-	if asset.PurchaseCost.IsNegative() || asset.SalvageValue.IsNegative() {
-		return ErrNegativeAmount
+	if _, err := validateRequiredName(asset.Name); err != nil {
+		return err
 	}
-	if asset.DepreciationMethod != None && asset.UsefulLifeMonths < 1 {
+	if err := validateMoneyAmount(asset.PurchaseCost); err != nil {
+		return err
+	}
+	if err := validateMoneyAmount(asset.SalvageValue); err != nil {
+		return err
+	}
+	if asset.DepreciationMethod != None && (asset.UsefulLifeMonths < 1 || asset.UsefulLifeMonths > 600) {
 		return ErrInvalidUsefulLife
 	}
 	if asset.PurchaseCost.Less(asset.SalvageValue) {
@@ -165,6 +175,17 @@ func ValidateCapitalAsset(asset CapitalAsset) error {
 	}
 	if asset.DepreciationMethod != StraightLine && asset.DepreciationMethod != DoubleDeclining && asset.DepreciationMethod != None {
 		return ErrInvalidDepreciationMethod
+	}
+	return nil
+}
+
+// ValidateStartingBalances checks the Cash on Hand balances before the
+// singleton section is marked complete.
+func ValidateStartingBalances(balances StartingBalances) error {
+	for _, amt := range []Money{balances.Cash, balances.AccountsReceivable, balances.PrepaidExpenses, balances.AccountsPayable, balances.AccruedExpenses} {
+		if err := validateMoneyAmount(amt); err != nil {
+			return err
+		}
 	}
 	return nil
 }

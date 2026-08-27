@@ -49,6 +49,7 @@
                 id="companyName"
                 name="companyName"
                 placeholder="e.g., Acme Corp LLC"
+                maxlength="200"
                 required
                 value="{{ if .Plan }}{{ .Plan.Name }}{{ end }}"
               />

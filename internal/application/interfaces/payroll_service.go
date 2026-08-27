@@ -38,5 +38,5 @@ type PayrollService interface {
 
 	// Payroll Tax Rates (singleton)
 	GetPayrollTaxRatesRow(planID uuid.UUID) (*repositories.PayrollTaxRatesRow, error)
-	SavePayrollTaxRatesStep(planID uuid.UUID, rates domain.PayrollTaxRates, currentStep int) error
+	SavePayrollTaxRatesStep(planID uuid.UUID, rates domain.PayrollTaxRates, currentStep int, isComplete bool) error
 }

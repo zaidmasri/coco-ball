@@ -111,7 +111,50 @@ func TestValidateFundingSource(t *testing.T) {
 	if err := ValidateFundingSource(FundingSource{Name: "SBA Loan", Amount: mustUSD(-1)}); !errors.Is(err, ErrNegativeAmount) {
 		t.Errorf("expected ErrNegativeAmount, got %v", err)
 	}
-	if err := ValidateFundingSource(FundingSource{Name: "SBA Loan", Amount: mustUSD(50000)}); err != nil {
+	if err := ValidateFundingSource(FundingSource{Name: "SBA Loan", Amount: mustUSD(50000), InterestRate: 1.5}); !errors.Is(err, ErrInvalidRate) {
+		t.Errorf("expected ErrInvalidRate for 150%% interest, got %v", err)
+	}
+	if err := ValidateFundingSource(FundingSource{Name: "SBA Loan", Amount: mustUSD(50000), TermMonths: 601}); !errors.Is(err, ErrInvalidTerm) {
+		t.Errorf("expected ErrInvalidTerm for a 601-month term, got %v", err)
+	}
+	if err := ValidateFundingSource(FundingSource{Name: "SBA Loan", Amount: mustUSD(50000), InterestRate: 0.07, TermMonths: 60}); err != nil {
 		t.Errorf("expected valid funding source, got %v", err)
+	}
+}
+
+func TestValidateCapitalAsset_RequiresName(t *testing.T) {
+	asset := CapitalAsset{
+		Name:               "",
+		PurchaseCost:       mustUSD(1000),
+		UsefulLifeMonths:   12,
+		DepreciationMethod: StraightLine,
+	}
+	if err := ValidateCapitalAsset(asset); !errors.Is(err, ErrInvalidName) {
+		t.Errorf("expected ErrInvalidName for a blank asset name, got %v", err)
+	}
+}
+
+func TestValidateCapitalAsset_UsefulLifeUpperBound(t *testing.T) {
+	asset := CapitalAsset{
+		Name:               "Building",
+		PurchaseCost:       mustUSD(1000),
+		UsefulLifeMonths:   601,
+		DepreciationMethod: StraightLine,
+	}
+	if err := ValidateCapitalAsset(asset); !errors.Is(err, ErrInvalidUsefulLife) {
+		t.Errorf("expected ErrInvalidUsefulLife for a 601-month useful life, got %v", err)
+	}
+}
+
+func TestValidateStartingBalances(t *testing.T) {
+	if err := ValidateStartingBalances(StartingBalances{Cash: mustUSD(-1)}); !errors.Is(err, ErrNegativeAmount) {
+		t.Errorf("expected ErrNegativeAmount, got %v", err)
+	}
+	if err := ValidateStartingBalances(StartingBalances{AccountsReceivable: mustUSD(maxMoneyAmount + 1)}); !errors.Is(err, ErrAmountTooLarge) {
+		t.Errorf("expected ErrAmountTooLarge, got %v", err)
+	}
+	valid := StartingBalances{Cash: mustUSD(10000), AccountsReceivable: mustUSD(500), PrepaidExpenses: mustUSD(200), AccountsPayable: mustUSD(300), AccruedExpenses: mustUSD(100)}
+	if err := ValidateStartingBalances(valid); err != nil {
+		t.Errorf("expected valid starting balances, got %v", err)
 	}
 }

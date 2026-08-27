@@ -519,9 +519,14 @@ func (c *SalesForecastController) PostSalesGrowthCurveStep(w http.ResponseWriter
 	}
 
 	newCurrentStep := idx + 1
-	if err := c.salesForecastSvc.SaveSalesGrowthCurveStep(planID, curve, newCurrentStep); err != nil {
-		log.Printf("Failed to save sales growth curve step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+	isLastStep := idx == len(salesGrowthCurveSteps)-1
+	if err := c.salesForecastSvc.SaveSalesGrowthCurveStep(planID, curve, newCurrentStep, isLastStep); err != nil {
+		if isLastStep {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save sales growth curve step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 

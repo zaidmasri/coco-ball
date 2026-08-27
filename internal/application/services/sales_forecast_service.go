@@ -76,6 +76,11 @@ func (s *salesForecastService) DeleteProduct(itemID uuid.UUID) error {
 func (s *salesForecastService) GetSalesGrowthCurveRow(planID uuid.UUID) (*repositories.SalesGrowthCurveRow, error) {
 	return s.salesGrowthCurve.GetSalesGrowthCurveRow(planID)
 }
-func (s *salesForecastService) SaveSalesGrowthCurveStep(planID uuid.UUID, curve domain.SalesGrowthCurve, currentStep int) error {
+func (s *salesForecastService) SaveSalesGrowthCurveStep(planID uuid.UUID, curve domain.SalesGrowthCurve, currentStep int, isComplete bool) error {
+	if isComplete {
+		if err := domain.ValidateSalesGrowthCurve(curve); err != nil {
+			return err
+		}
+	}
 	return s.salesGrowthCurve.SaveSalesGrowthCurveStep(planID, curve, currentStep)
 }

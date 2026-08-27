@@ -72,14 +72,19 @@ func (c *Cost) SetGrowth(growth GrowthStrategy) { c.growth = growth }
 
 // validate checks a cost's business invariants (mirrors Plan.validate()).
 func (c Cost) validate() error {
-	if strings.TrimSpace(c.name) == "" {
-		return ErrInvalidName
+	if _, err := validateRequiredName(c.name); err != nil {
+		return err
 	}
-	if c.baseAmountPerMonth.IsNegative() {
-		return ErrNegativeAmount
+	if err := validateMoneyAmount(c.baseAmountPerMonth); err != nil {
+		return err
 	}
 	if c.growth.Type != FlatGrowth && c.growth.Type != AnnualStepPercent {
 		return ErrInvalidGrowthType
+	}
+	if c.growth.Type == AnnualStepPercent {
+		if err := validateGrowthRate(c.growth.AnnualRate); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -10,10 +10,11 @@ import (
 )
 
 var (
-	ErrInvalidEmail    = errors.New("email cannot be empty")
-	ErrInvalidUserName = errors.New("first and last name are required")
-	ErrUserNotFound    = errors.New("user not found")
-	ErrAccessDenied    = errors.New("access denied")
+	ErrInvalidEmail       = errors.New("email cannot be empty")
+	ErrInvalidEmailFormat = errors.New("email address is not valid")
+	ErrInvalidUserName    = errors.New("first and last name are required")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrAccessDenied       = errors.New("access denied")
 )
 
 type User struct {
@@ -93,6 +94,9 @@ func (u *User) ChangeName(firstName, lastName string) error {
 	cleanLast := strings.TrimSpace(lastName)
 	if cleanFirst == "" || cleanLast == "" {
 		return ErrInvalidUserName
+	}
+	if len(cleanFirst) > maxNameLength || len(cleanLast) > maxNameLength {
+		return ErrNameTooLong
 	}
 
 	u.firstName = cleanFirst

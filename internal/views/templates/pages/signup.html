@@ -33,6 +33,7 @@
                       name="firstName"
                       placeholder="Jane"
                       value="{{.FirstName}}"
+                      maxlength="200"
                       required
                     />
                   </div>
@@ -45,6 +46,7 @@
                       name="lastName"
                       placeholder="Doe"
                       value="{{.LastName}}"
+                      maxlength="200"
                       required
                     />
                   </div>
@@ -72,6 +74,8 @@
                     id="password"
                     name="password"
                     placeholder="Minimum 8 characters"
+                    minlength="8"
+                    maxlength="72"
                     required
                   />
                   <small class="form-text text-muted">Must be at least 8 characters long.</small>
@@ -85,6 +89,8 @@
                     id="confirmPassword"
                     name="confirmPassword"
                     placeholder="Re-enter your password"
+                    minlength="8"
+                    maxlength="72"
                     required
                   />
                 </div>

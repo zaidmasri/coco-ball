@@ -363,8 +363,9 @@ func (c *StartingPointController) PostFixedAssetStep(w http.ResponseWriter, r *h
 		}
 	case "useful-life":
 		years, err := strconv.Atoi(strings.TrimSpace(r.PostForm.Get("useful_life_years")))
-		if err != nil || years <= 0 {
-			years = 5 // smart default, matches the previous single-page form's behavior
+		if err != nil || years <= 0 || years > 50 {
+			renderStepError("Please enter a valid useful life in years (1-50).")
+			return
 		}
 		asset.UsefulLifeMonths = years * 12
 	}
@@ -1056,9 +1057,14 @@ func (c *StartingPointController) PostCashOnHandStep(w http.ResponseWriter, r *h
 	balances = cashOnHandFieldSet(balances, step, amount)
 
 	newCurrentStep := idx + 1
-	if err := c.startingPointSvc.SaveStartingBalancesStep(planID, balances, newCurrentStep); err != nil {
-		log.Printf("Failed to save starting balances step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+	isLastStep := idx == len(cashOnHandSteps)-1
+	if err := c.startingPointSvc.SaveStartingBalancesStep(planID, balances, newCurrentStep, isLastStep); err != nil {
+		if isLastStep {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save starting balances step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 

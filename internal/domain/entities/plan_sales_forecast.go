@@ -1,7 +1,5 @@
 package entities
 
-import "strings"
-
 // Product is a single sales-forecast product/service line.
 type Product struct {
 	Name         string
@@ -34,11 +32,30 @@ func (p *Plan) ClearSalesForecast() {
 
 // ValidateProduct checks a Product before it's persisted.
 func ValidateProduct(product Product) error {
-	if strings.TrimSpace(product.Name) == "" {
-		return ErrInvalidName
+	if _, err := validateRequiredName(product.Name); err != nil {
+		return err
 	}
-	if product.PricePerUnit.IsNegative() || product.CostPerUnit.IsNegative() {
-		return ErrNegativeAmount
+	if err := validateMoneyAmount(product.PricePerUnit); err != nil {
+		return err
+	}
+	if err := validateMoneyAmount(product.CostPerUnit); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateSalesGrowthCurve checks the global unit-sales growth schedule
+// before the singleton Sales Growth Curve section is marked complete.
+func ValidateSalesGrowthCurve(curve SalesGrowthCurve) error {
+	for _, rate := range curve.Year1QuarterlyRates {
+		if err := validateGrowthRate(rate); err != nil {
+			return err
+		}
+	}
+	for _, rate := range curve.FutureYearRates {
+		if err := validateGrowthRate(rate); err != nil {
+			return err
+		}
 	}
 	return nil
 }

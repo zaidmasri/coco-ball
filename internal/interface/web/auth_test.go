@@ -2,11 +2,12 @@ package web
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
@@ -15,22 +16,40 @@ import (
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/sqlite"
+	"github.com/zaidmasri/business-planning-tool/internal/views"
 )
 
-// testRepos bundles the repositories test cases need to seed data directly
-// (bypassing the HTTP layer), since each domain interface is now backed by
-// its own small sqlc-based repository struct rather than one shared store.
+// testRepos bundles the repositories and services test cases need to seed
+// data directly (bypassing the HTTP layer) or verify persisted results,
+// since each domain interface is now backed by its own small sqlc-based
+// repository struct rather than one shared store.
 type testRepos struct {
-	plans  repositories.PlanRepository
-	users  repositories.UserRepository
-	access repositories.AccessRepository
-	auth   interfaces.AuthService
+	plans             repositories.PlanRepository
+	users             repositories.UserRepository
+	access            repositories.AccessRepository
+	invites           repositories.InviteRepository
+	auth              interfaces.AuthService
+	salaryRoles       repositories.SalaryRoleRepository
+	benefits          repositories.BenefitRepository
+	products          repositories.ProductRepository
+	inventoryPurchase repositories.InventoryPurchaseRepository
+	distributions     repositories.DistributionRepository
+	operatingExpenses repositories.OperatingExpenseRepository
 }
 
+// setupTestApp wires every controller the same way cmd/cli/serve.go does,
+// against a fresh temp-file SQLite database and the real embedded page
+// templates, so handler tests exercise the full request path (routing,
+// access middleware, and template rendering) rather than a stub.
 func setupTestApp(t *testing.T) (*http.ServeMux, testRepos, func()) {
-	tmpDir := filepath.Join(os.TempDir(), "northbasis_auth_test")
+	tmpDir := filepath.Join(os.TempDir(), "northbasis_web_test")
 	os.MkdirAll(tmpDir, 0755)
-	dbPath := filepath.Join(tmpDir, "test.db")
+	dbFile, err := os.CreateTemp(tmpDir, "test-*.db")
+	if err != nil {
+		t.Fatalf("Failed to create temp db file: %v", err)
+	}
+	dbPath := dbFile.Name()
+	dbFile.Close()
 
 	conn, err := sqlite.NewConnection(dbPath)
 	if err != nil {
@@ -70,21 +89,64 @@ func setupTestApp(t *testing.T) (*http.ServeMux, testRepos, func()) {
 	opExSvc := appservices.NewOperatingExpensesService(operatingExpenseRepo, wizardProgressRepo)
 	hubSvc := appservices.NewHubCompletionService(startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc)
 
-	// Create a minimal template cache with an error template
-	templateCache := make(map[string]*template.Template)
-	errorTmpl, _ := template.New("error.html").Parse("<html><body>Error: {{.Message}}</body></html>")
-	templateCache["error.html"] = errorTmpl
+	templateCache := views.LoadTemplates()
 
 	mux := http.NewServeMux()
 	accessMW := NewPlanAccessMiddleware(accessSvc, templateCache)
+	NewAuthController(mux, authSvc, templateCache)
 	NewPlanController(mux, planSvc, accessSvc, inviteSvc, authSvc, hubSvc, templateCache, accessMW)
+	NewInviteController(mux, inviteSvc, planSvc, accessSvc, hubSvc, templateCache, accessMW)
+	NewStartingPointController(mux, planSvc, startingPointSvc, templateCache, accessMW)
+	NewPayrollController(mux, planSvc, payrollSvc, templateCache, accessMW)
+	NewSalesForecastController(mux, planSvc, salesForecastSvc, templateCache, accessMW)
+	NewCashFlowController(mux, planSvc, cashFlowSvc, templateCache, accessMW)
+	NewOperatingExpensesController(mux, planSvc, opExSvc, templateCache, accessMW)
 
 	cleanup := func() {
 		conn.Close()
 		os.Remove(dbPath)
 	}
 
-	return mux, testRepos{plans: planRepo, users: userRepo, access: accessRepo, auth: authSvc}, cleanup
+	return mux, testRepos{
+		plans:             planRepo,
+		users:             userRepo,
+		access:            accessRepo,
+		invites:           inviteRepo,
+		auth:              authSvc,
+		salaryRoles:       salaryRoleRepo,
+		benefits:          benefitRepo,
+		products:          productRepo,
+		inventoryPurchase: inventoryPurchaseRepo,
+		distributions:     distributionRepo,
+		operatingExpenses: operatingExpenseRepo,
+	}, cleanup
+}
+
+// createTestPlan creates and persists a plan owned by owner, grants role
+// access to owner, and returns the validated plan. Tests that need a plan
+// seeded with wizard data should save it through the appropriate service
+// after calling this.
+func createTestPlan(t *testing.T, s testRepos, owner *domain.User, role domain.AccessLevel) *domain.Plan {
+	t.Helper()
+	verifiedOwner, err := domain.NewVerifiedUser(owner)
+	if err != nil {
+		t.Fatalf("Failed to verify owner: %v", err)
+	}
+	plan, err := domain.NewPlan("Test Plan", 1, 2024, verifiedOwner)
+	if err != nil {
+		t.Fatalf("Failed to create plan: %v", err)
+	}
+	validatedPlan, err := plan.Validate()
+	if err != nil {
+		t.Fatalf("Failed to validate plan: %v", err)
+	}
+	if err := s.plans.Save(validatedPlan); err != nil {
+		t.Fatalf("Failed to save plan: %v", err)
+	}
+	if err := s.access.GrantAccess(plan.ID(), owner.ID(), role); err != nil {
+		t.Fatalf("Failed to grant %s access: %v", role, err)
+	}
+	return plan
 }
 
 // createTestUser registers a user through AuthService.CreateUser — the only
@@ -107,6 +169,51 @@ func createTestUser(t *testing.T, s testRepos, email string) *domain.User {
 		t.Fatalf("Failed to fetch created user %s: %v", email, err)
 	}
 	return user
+}
+
+// TestPostSignup_Validation exercises the new domain-level email-format and
+// password-length checks through the full HTTP signup path. PostSignup
+// re-renders the signup form with an inline error on every rejection
+// (matching its existing "email already registered" behavior) rather than
+// returning a 4xx status, so these assert on the rendered error message.
+func TestPostSignup_Validation(t *testing.T) {
+	mux, _, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	tests := []struct {
+		name     string
+		form     url.Values
+		wantText string
+	}{
+		{
+			name: "malformed email",
+			form: url.Values{
+				"email": {"not-an-email"}, "firstName": {"Jane"}, "lastName": {"Doe"},
+				"password": {"supersecret1"}, "confirmPassword": {"supersecret1"},
+			},
+			wantText: "is not valid",
+		},
+		{
+			name: "weak password",
+			form: url.Values{
+				"email": {"jane@example.com"}, "firstName": {"Jane"}, "lastName": {"Doe"},
+				"password": {"short"}, "confirmPassword": {"short"},
+			},
+			wantText: "8 characters",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := postForm(mux, "/signup", nil, tt.form)
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200 (form re-rendered with error), got %d: %s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tt.wantText) {
+				t.Errorf("expected response body to contain %q, got: %s", tt.wantText, w.Body.String())
+			}
+		})
+	}
 }
 
 func TestUserAuthorizationFlow(t *testing.T) {

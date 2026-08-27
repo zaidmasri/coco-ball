@@ -43,6 +43,13 @@ func TestNewCost(t *testing.T) {
 			growth:      GrowthStrategy{Type: "FakeGrowth"},
 			expectedErr: ErrInvalidGrowthType,
 		},
+		{
+			testName:    "Fails on out-of-range annual growth rate",
+			costName:    "Rent",
+			baseAmount:  mustUSD(1500),
+			growth:      GrowthStrategy{Type: AnnualStepPercent, AnnualRate: 11.0},
+			expectedErr: ErrInvalidGrowthRate,
+		},
 	}
 
 	for _, tt := range tests {

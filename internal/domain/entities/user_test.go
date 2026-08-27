@@ -1,6 +1,9 @@
 package entities
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestUser_ChangeName(t *testing.T) {
 	tests := []struct {
@@ -12,6 +15,7 @@ func TestUser_ChangeName(t *testing.T) {
 		{testName: "Valid name change", firstName: "Jane", lastName: "Doe", expectedErr: nil},
 		{testName: "Fails on empty first name", firstName: "  ", lastName: "Doe", expectedErr: ErrInvalidUserName},
 		{testName: "Fails on empty last name", firstName: "Jane", lastName: "  ", expectedErr: ErrInvalidUserName},
+		{testName: "Fails on over-length first name", firstName: strings.Repeat("a", maxNameLength+1), lastName: "Doe", expectedErr: ErrNameTooLong},
 	}
 
 	for _, tt := range tests {

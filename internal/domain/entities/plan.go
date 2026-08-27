@@ -85,6 +85,11 @@ var (
 	ErrPurchaseCostLessThanSalvageValue = errors.New("purchase cost cannot be less than salvage value")
 	ErrInvalidGrowthType                = errors.New("invalid growth type")
 	ErrInvalidStartingYear              = errors.New("plan starting year must be between 1900 and 2100")
+	ErrNameTooLong                      = errors.New("name cannot exceed 200 characters")
+	ErrAmountTooLarge                   = errors.New("amount is too large")
+	ErrInvalidGrowthRate                = errors.New("growth rate must be between -100% and 1000%")
+	ErrInvalidRate                      = errors.New("rate must be between 0% and 100%")
+	ErrInvalidTerm                      = errors.New("term must be between 0 and 600 months")
 )
 
 // Plan is the aggregate root. Its fields are populated from two sources:
@@ -177,9 +182,9 @@ func (p *Plan) Validate() (ValidatedPlan, error) {
 func (vp ValidatedPlan) Plan() *Plan { return vp.plan }
 
 func validateCoreProperties(name string, month, year int) (string, error) {
-	cleanName := strings.TrimSpace(name)
-	if cleanName == "" {
-		return "", ErrInvalidName
+	cleanName, err := validateRequiredName(name)
+	if err != nil {
+		return "", err
 	}
 
 	if month < 1 || month > 12 {

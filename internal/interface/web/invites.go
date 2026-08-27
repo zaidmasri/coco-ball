@@ -95,10 +95,11 @@ func (c *InviteController) PostCreateInvite(w http.ResponseWriter, r *http.Reque
 	// construct-then-save-the-plan steps here, so a failure partway through
 	// can never silently drop the event or leave an orphaned invite row.
 	if _, err := c.inviteSvc.CreateInvite(&commands.CreateInvite{
-		PlanID:      planID,
-		Email:       email,
-		AccessLevel: level,
-		InvitedBy:   user.ID(),
+		PlanID:       planID,
+		Email:        email,
+		InviterEmail: user.Email(),
+		AccessLevel:  level,
+		InvitedBy:    user.ID(),
 	}); err != nil {
 		renderError(err.Error(), http.StatusBadRequest)
 		return

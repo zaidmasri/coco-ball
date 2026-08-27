@@ -148,6 +148,11 @@ func (s *startingPointService) DeleteFundingSource(itemID uuid.UUID) error {
 func (s *startingPointService) GetStartingBalancesRow(planID uuid.UUID) (*repositories.StartingBalancesRow, error) {
 	return s.startingBalances.GetStartingBalancesRow(planID)
 }
-func (s *startingPointService) SaveStartingBalancesStep(planID uuid.UUID, balances domain.StartingBalances, currentStep int) error {
+func (s *startingPointService) SaveStartingBalancesStep(planID uuid.UUID, balances domain.StartingBalances, currentStep int, isComplete bool) error {
+	if isComplete {
+		if err := domain.ValidateStartingBalances(balances); err != nil {
+			return err
+		}
+	}
 	return s.startingBalances.SaveStartingBalancesStep(planID, balances, currentStep)
 }

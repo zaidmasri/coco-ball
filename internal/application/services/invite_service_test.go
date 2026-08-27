@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 
 	"uuid"
@@ -105,6 +106,89 @@ func TestInviteService_CreateInvite_RejectsInvalidEmail(t *testing.T) {
 		InvitedBy:   ownerID,
 	}); err == nil {
 		t.Error("expected error for empty email, got nil")
+	}
+}
+
+func TestInviteService_CreateInvite_RejectsSelfInvite(t *testing.T) {
+	plans, users, sessions, dbPath, cleanup := newTestStore(t)
+	defer cleanup()
+	conn, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	defer conn.Close()
+	inviteRepo := sqlite.NewInviteRepository(conn)
+
+	planSvc := services.NewPlanService(plans, users)
+	inviteSvc := services.NewInviteService(inviteRepo, plans)
+
+	ownerID := newPersistedOwner(t, users, sessions)
+	planResult, err := planSvc.CreatePlan(&commands.CreatePlan{
+		Name:          "Invite Co",
+		StartingMonth: 1,
+		StartingYear:  2026,
+		OwnerID:       ownerID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePlan: %v", err)
+	}
+
+	_, err = inviteSvc.CreateInvite(&commands.CreateInvite{
+		PlanID:       planResult.Result.ID,
+		Email:        "owner@example.com",
+		InviterEmail: "owner@example.com",
+		AccessLevel:  domain.Editor,
+		InvitedBy:    ownerID,
+	})
+	if !errors.Is(err, domain.ErrSelfInvite) {
+		t.Errorf("expected ErrSelfInvite, got %v", err)
+	}
+}
+
+func TestInviteService_CreateInvite_RejectsDuplicatePendingInvite(t *testing.T) {
+	plans, users, sessions, dbPath, cleanup := newTestStore(t)
+	defer cleanup()
+	conn, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	defer conn.Close()
+	inviteRepo := sqlite.NewInviteRepository(conn)
+
+	planSvc := services.NewPlanService(plans, users)
+	inviteSvc := services.NewInviteService(inviteRepo, plans)
+
+	ownerID := newPersistedOwner(t, users, sessions)
+	planResult, err := planSvc.CreatePlan(&commands.CreatePlan{
+		Name:          "Invite Co",
+		StartingMonth: 1,
+		StartingYear:  2026,
+		OwnerID:       ownerID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePlan: %v", err)
+	}
+	planID := planResult.Result.ID
+
+	if _, err := inviteSvc.CreateInvite(&commands.CreateInvite{
+		PlanID:       planID,
+		Email:        "collaborator@example.com",
+		InviterEmail: "owner@example.com",
+		AccessLevel:  domain.Editor,
+		InvitedBy:    ownerID,
+	}); err != nil {
+		t.Fatalf("first CreateInvite: %v", err)
+	}
+
+	_, err = inviteSvc.CreateInvite(&commands.CreateInvite{
+		PlanID:       planID,
+		Email:        "collaborator@example.com",
+		InviterEmail: "owner@example.com",
+		AccessLevel:  domain.Viewer,
+		InvitedBy:    ownerID,
+	})
+	if !errors.Is(err, domain.ErrDuplicateInvite) {
+		t.Errorf("expected ErrDuplicateInvite, got %v", err)
 	}
 }
 

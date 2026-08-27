@@ -29,5 +29,5 @@ type SalesForecastService interface {
 
 	// Sales Growth Curve (singleton)
 	GetSalesGrowthCurveRow(planID uuid.UUID) (*repositories.SalesGrowthCurveRow, error)
-	SaveSalesGrowthCurveStep(planID uuid.UUID, curve domain.SalesGrowthCurve, currentStep int) error
+	SaveSalesGrowthCurveStep(planID uuid.UUID, curve domain.SalesGrowthCurve, currentStep int, isComplete bool) error
 }

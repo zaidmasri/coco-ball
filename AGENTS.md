@@ -1,4 +1,4 @@
-# Business Planning Tool (NorthBasis)
+# northbasis.com
 
 ## Project Overview
 
@@ -26,6 +26,7 @@ This project is converting the **SCORE Financial Projections Template** (an Exce
 - **Templating**: Go `html/template` (server-side rendering)
 - **Static Assets**: Embedded filesystem (Go 1.16+)
 - **CSS/JS**: Static files served via embedded FS
+- **CSS Library**: Bootstrap
 
 ### Core Dependencies
 - `uuid` (Go 1.27 standard library) - For plan ID generation. We exclusively use the native `uuid` package — no third-party UUID library.
@@ -236,12 +237,12 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 `POST /plan/{id}/sales-forecast`.
 
 ### Input Validation & Error Handling
-- [ ] Form validation on server-side (currently minimal)
+- [x] Form validation on server-side (domain-layer bounds on name length, money magnitude, growth/tax rates, email format — see "Form Validation (2026-08-20)" below)
+- [x] Validation for negative amounts, invalid dates, etc. (already existed for negative amounts; growth-rate/percent-rate bounds and Plan starting month/year bounds were already in place, now extended to every wizard domain)
 - [ ] CSRF protection
-- [ ] Input sanitization
+- [ ] Input sanitization (largely mitigated already by `html/template`'s automatic contextual escaping, but no dedicated sanitization layer)
 - [ ] Rate limiting
-- [ ] Comprehensive error messages to users
-- [ ] Validation for negative amounts, invalid dates, etc.
+- [ ] Comprehensive error messages to users (validation messages exist per-field; a broader pass over generic 500-style messages is still open)
 
 ### API & Integration
 - [ ] JSON API endpoints (optional, for future mobile/frontend frameworks)
@@ -252,7 +253,7 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 
 ### Frontend Polish
 - [ ] Responsive design improvements
-- [ ] Form validation feedback (client + server)
+- [x] Form validation feedback (client + server) — HTML5 `min`/`max`/`maxlength`/`minlength` attributes now match the server-side bounds on every wizard field; server-side re-render with an inline error message on rejection was already in place
 - [ ] Loading states and progress indicators
 - [ ] Success/error notifications
 - [ ] Data entry help text and tooltips
@@ -260,11 +261,11 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 - [ ] Dark mode support
 
 ### Testing
-- [ ] Unit tests for domain model (currently some exist)
-- [ ] Integration tests for handlers
-- [ ] Database tests
-- [ ] End-to-end tests
-- [ ] Test fixtures and factories
+- [x] Unit tests for domain model
+- [x] Handler-level tests for `internal/interface/web` (report pages, invite flow, and all four wizard domains' form POST handlers — see the 2026-08-20 session summary below)
+- [x] Database tests (handler tests run against a real temp-file SQLite database via `setupTestApp`, not mocks)
+- [ ] End-to-end tests (browser-driven, spanning multiple pages in one flow)
+- [ ] Test fixtures and factories (each test still constructs its own users/plans inline)
 
 ### DevOps & Deployment
 - [x] Docker containerization - Multi-stage production `Dockerfile` (Alpine, cgo-enabled build for `go-sqlite3`) plus a separate `Dockerfile.dev` running `air` for hot reload; `docker-compose.yml` (production, with HTTP healthcheck and a named volume for the SQLite file) and `docker-compose.dev.yml` (source bind-mounted, Go module/build caches as volumes)
@@ -301,8 +302,8 @@ Note: the Makefile comments indicate the production image (`docker-compose.yml`)
 3. ~~**Financial calculations**~~ ✅ **COMPLETED** - Income Statement, Balance Sheet, and Analytics (breakeven/ratios/amortization) now show real computed 3-year projections
 4. ~~**Data persistence**~~ ✅ **COMPLETED** - All plan sub-entities persist to SQLite via the clear-then-rebuild pattern
 5. ~~**Docker containerization**~~ ✅ **COMPLETED** - Production + dev Dockerfiles, docker-compose files, Makefile targets
-6. **Testing** - `internal/handlers/` has exactly one test file (`auth_test.go`); no handler-level tests exist yet for the report pages (GetIncomeStatement/GetBalanceSheet/GetAnalytics), the form POST handlers (Payroll/SalesForecast/OpExpenses/CashFlow), or the new invite flow (PostCreateInvite/PostAcceptInvite/PostRejectInvite). Domain-level projection engine already has coverage in `projection_test.go`
-7. **Form Validation** - Client and server-side validation for all inputs
+6. ~~**Testing**~~ ✅ **COMPLETED** - `internal/interface/web/` now has handler-level tests for the report pages, all four wizard domains' form POST handlers, and the invite flow, alongside the existing domain/application-layer coverage (see the 2026-08-20 session summary below)
+7. ~~**Form Validation**~~ ✅ **COMPLETED** - Domain-layer bounds (name length, money magnitude, growth/tax rates, email format) now cover every wizard domain, the two singleton sections that previously had no validator at all (Payroll Tax Rates, Sales Growth Curve, plus Cash on Hand), invite self/duplicate checks, and matching client-side HTML5 attributes (see the 2026-08-20 session summary below). CSRF/rate limiting/sanitization remain separate, still-open backlog items
 8. **Error handling** - Comprehensive error messages and recovery flows
 9. **Income tax modeling** - No tax-rate input exists anywhere in the app; Net Income is currently pre-tax
 
@@ -906,6 +907,9 @@ step, not bolted onto this pass.
 - **Read-After-Write Deferred (2026-08-07)**: Rule 4 (re-read from DB after insert/update before returning to caller) was not implemented. All write methods still return only `error`. The application uses POST-redirect-GET everywhere — the next `Get*` handler re-reads from the DB — so the intent is satisfied at the HTTP level. Cascading the change through 19 repository interfaces, 10 service implementations, and all callers is out of scope for this session. This is a known gap; document it rather than silently violate it.
 - **`users.email` uniqueness moved from a column constraint to a partial index (2026-08-14)**: Adding soft-delete to `users` (migration `0002_user_soft_delete.sql`) exposed a real bug — the pre-existing blanket `email UNIQUE` meant a soft-deleted account permanently squatted on its email, silently breaking re-signup. Fixed by rebuilding the table without the column-level `UNIQUE` and adding `CREATE UNIQUE INDEX idx_users_email_active ON users(email) WHERE deleted_at IS NULL` instead. See "Application Layer: go-ddd Comparison" → the User entry for the full story and how it was caught.
 - **Migrated off `github.com/google/uuid` onto the standard library `uuid` package (2026-08-20)**: Upgraded to Go 1.27, which ships a native top-level `uuid` package (RFC 9562, `UUID` is still `[16]byte`, so no type changes at call sites). We now exclusively use this native package — `github.com/google/uuid` is fully removed from `go.mod`/`go.sum` and no longer needed as a domain-layer exception (see the 2026-08-07 entry above, now superseded). Two API differences required call-site changes: `uuid.New()`/`uuid.NewV4()`/`uuid.NewV7()` no longer return an `error` (all `id, err := uuid.NewV7()` sites became `id := uuid.NewV7()`), and `uuid.Nil` is now a function `uuid.Nil()` rather than a package-level value. There's no `uuid.NewString()`; use `uuid.New().String()` instead.
+- **Form Validation centralized in `internal/domain/entities/validation.go` (2026-08-20)**: Rather than repeating bound-checking logic in every `ValidateX` function, a handful of shared unexported helpers (`validateRequiredName`, `validateMoneyAmount`, `validateGrowthRate`, `validatePercentRate`, `validateEmailFormat`) live in one file and are called from every entity's existing validator. Chosen bounds: name ≤ 200 chars; money amount ≤ $100,000,000/line item (a write-side-only check — `NewMoney` itself stays unbounded since it's also used to reconstruct historical rows on read, and "Domain Entity Rules" above forbids validating on read); compounding growth/decline rates (SalaryRole/Benefit/InventoryPurchase/Distribution/Cost/SalesGrowthCurve) in [-100%, +1000%] — -100% is the mathematical floor where a rate would flip a projected amount's sign, +1000% is a sanity cap, not a modeled business limit; plain percent rates (payroll tax, funding-source interest) in [0%, 100%]; funding-source term ≤ 600 months (50 years); email format via the standard library's `net/mail.ParseAddress` rather than a hand-rolled regex, keeping the domain layer's zero-third-party rule intact.
+- **Payroll Tax Rates / Sales Growth Curve / Cash on Hand gained an `isComplete bool` parameter (2026-08-20)**: These three singleton wizard sections (no `ItemStatus`, unlike the repeatable sections) previously had no domain validator wired in at all — `SavePayrollTaxRatesStep`/`SaveSalesGrowthCurveStep`/`SaveStartingBalancesStep` just persisted every step's row directly. Added the missing `domain.ValidatePayrollTaxRates`/`ValidateSalesGrowthCurve`/`ValidateStartingBalances`, and changed each service method to accept an `isComplete bool` (computed by the handler as `idx == len(steps)-1`, mirroring the `finishNow` pattern every repeatable section's `PostXStep` already uses) so the domain validator only runs once every field has actually been answered — running it on every intermediate step would spuriously reject a fresh draft.
+- **Invite self/duplicate checks live in `InviteService`, not the domain (2026-08-20)**: `ErrSelfInvite`/`ErrDuplicateInvite` are domain-layer sentinels, but the checks that raise them run in `InviteService.CreateInvite` (comparing against `commands.CreateInvite.InviterEmail`, and querying `GetInvitesForPlan` for an existing pending row) because `domain.NewPlanInvite` has no database access and no notion of "the currently logged-in user's own email" — the same "existence checks live in the service layer" carve-out `AccessService` already established, not a new pattern.
 
 ### Known Limitations
 
@@ -917,7 +921,8 @@ step, not bolted onto this pass.
 - **No email delivery** - Plan invites are stored in the database and only visible in-app to a logged-in user with the matching email; nothing is sent externally, so an invitee who doesn't already have an account (or doesn't think to log in) will never learn they were invited
 - **Collaboration is per-plan, not org-wide** - there is no workspace/team entity above individual plans; each plan has its own independent set of invites/access grants
 - **SQLite only** - single-file database; fine for the current single-instance Docker deployment but no connection pooling or horizontal-scaling story if that becomes necessary
-- **No handler-level test coverage for report/form pages or invites** - `internal/handlers/auth_test.go` is the only handler test file; the report pages, all form POST handlers, and the invite accept/reject flow are exercised only by manual browser testing during development, not by automated tests
+- **Handler test coverage is representative, not exhaustive** - the wizard domains (Payroll, Sales Forecast, Cash Flow, Operating Expenses) each have one repeatable sub-section covered end-to-end (happy path + authorization + validation + delete); the other sub-sections within each domain (Benefits, Payroll Tax Rates, Sales Growth Curve, Distributions) follow the identical pattern but aren't independently tested yet
+- **Form validation scope decisions (2026-08-20)** - `SalaryRole.Headcount` has no upper bound (only `>= 1`, unchanged from before); no cross-field check that a `Product`'s `PricePerUnit >= CostPerUnit` (a legitimate loss-leader is a real business scenario, not necessarily a data-entry error); no duplicate-name checking within a wizard section (two salary roles can both be named "Owner"). All three were deliberately out of scope for the Form Validation item — they're product/business-rule decisions, not the input-format/range gaps the item targeted. CSRF protection, rate limiting, and dedicated input sanitization remain entirely unaddressed, tracked separately under "Input Validation & Error Handling" and "Security"
 - **Most wizard items still have no domain-level ID** - `CapitalAsset`, `SalaryRole`, `Product`, etc. carry no `uuid.UUID` in the domain struct; the ID lives only in the `repositories.*Item` wrapper. `Cost` (used for Operating Expenses and COGS) is now the one exception — it carries its own `id` + `NewCost` constructor + `SetID` reconstruction hook, see "Application Layer: go-ddd Comparison" above. The rest are entities within the Plan aggregate boundary and should eventually carry their own ID in the domain (so `Plan.futurePurchases []CapitalAsset` holds identifiable entities). Doing so requires updating all store serialization, repository interfaces, and handler code. Tracked in `repositories/wizard_item.go`'s package comment.
 
 ### Questions to Ask If Stuck
@@ -929,10 +934,10 @@ step, not bolted onto this pass.
 
 ---
 
-**Last Updated**: 2026-08-19
-**Session Focus**: Fixed all 10 items from the same-day full-application DDD violations audit (see "DDD Violations Remediation (2026-08-19)" in Completed Features above and the matching Session Summary below) — atomic invite creation and plan-setup owner grants, domain validation moved into all 8 wizard hub `Save*Step` methods, `Cost`'s fields unexported behind getters/setters, existence-check business logic moved out of `AccessRepository`, hub→section membership consolidated into `domain.HubSections`, dead `AccessRepository.GetUserPlans` deleted, `PlanInvite`/`Session` construction routed through their services, and `Plan.Delete()` reintroduced (with `PlanDeleted`) so deletion drains an outbox event like every other write. Verified with `go build`/`vet`/`test ./...` (all green, new tests added) plus a full live-browser walkthrough against a scratch DB: signup → create plan (atomic owner grant confirmed via `plan_access`) → invite a collaborator (atomic outbox event confirmed) → Fixed Assets wizard (no regression) → Operating Expenses wizard through all 3 steps (confirms the `Cost` refactor) → Income Statement (confirms `projection.go`'s `Cost` getter usage computes correctly) → delete the plan (confirms the new `plan.deleted` outbox event).
-**Total Remaining Items**: ~26 (across all categories — the 10 DDD-violation items are now closed)
-**Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → ~~Data Persistence~~ ✅ → ~~Docker Containerization~~ ✅ → ~~DDD/CQRS Architecture~~ ✅ → ~~DDD Violations Remediation~~ ✅ → Testing → Form Validation → Income Tax Modeling
+**Last Updated**: 2026-08-20
+**Session Focus**: Closed the "Form Validation" item from High-Priority Items — added domain-layer bounds (name length, money magnitude, growth/tax rate ranges, RFC 5322 email format) to every existing `ValidateX` function across all wizard domains, added validators for the three singleton sections that had none at all (Payroll Tax Rates, Sales Growth Curve, Cash on Hand), added invite self-invite/duplicate-invite checks at the service layer, fixed two pre-existing bugs surfaced by the audit (Fixed Assets' `useful-life` step silently defaulting to 5 years instead of rejecting bad input; `PostSetup` swallowing month/year parse errors that `PostUpdateSetup` already caught), and aligned client-side HTML5 `min`/`max`/`maxlength`/`minlength` attributes with every new server-side bound (see "Session Summary (2026-08-20): Form Validation" below). Verified with `go build`/`vet`/`test ./...` (all green, extensive new domain and handler tests) plus a live-browser walkthrough confirming both layers: an out-of-range growth rate is blocked client-side (no POST sent) and a malformed signup email is rejected server-side via the handler test suite.
+**Total Remaining Items**: ~24 (across all categories — Testing and Form Validation are now closed)
+**Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → ~~Data Persistence~~ ✅ → ~~Docker Containerization~~ ✅ → ~~DDD/CQRS Architecture~~ ✅ → ~~DDD Violations Remediation~~ ✅ → ~~Testing~~ ✅ → ~~Form Validation~~ ✅ → Error Handling → Income Tax Modeling
 
 ## Session Summary (2026-07-29)
 
@@ -1460,3 +1465,130 @@ confirmed: full DTO, for command-pattern consistency.
   closed for them. Extending the full `Cost`/`PlanInvite`-style command pattern to those domains
   remains future work, tracked in the existing Roadmap section.
 - Idempotency middleware remains schema-only, unchanged by this session.
+
+## Session Summary (2026-08-20): Handler-Level Test Coverage
+
+### What Prompted It
+Item #6 on "High-Priority Items (Do First)" — Testing — was the next item once auth, form
+handlers, financial calculations, persistence, and Docker were all closed out. AGENTS.md's own
+Known Limitations called out the gap directly: `internal/interface/web/` (the HTTP controller
+layer, one file per domain after the `refactor/web-controllers` PR) had exactly one test file,
+`auth_test.go`, covering only plan-access authorization. The report pages, the invite
+accept/reject/create flow, and all four wizard domains' form POST handlers were exercised only by
+manual browser testing.
+
+### What Shipped
+1. **`views.LoadTemplates()`** (`internal/views/templates_embed.go`) — moved out of
+   `cmd/cli/serve.go`'s unexported `loadTemplates()`, which only depended on already-exported
+   `views.TemplatesFS`/`views.TemplateFuncs`. `serve.go` now calls the exported version. This lets
+   tests render the real embedded page templates instead of a throwaway stub cache, so assertions
+   can check actual rendered output (e.g. a report page's heading) rather than just status codes.
+2. **`setupTestApp` generalized** (`internal/interface/web/auth_test.go`) — previously wired only
+   `PlanController`; now mirrors `cmd/cli/serve.go`'s full wiring (`AuthController`,
+   `PlanController`, `InviteController`, `StartingPointController`, `PayrollController`,
+   `SalesForecastController`, `CashFlowController`, `OperatingExpensesController`) against a fresh
+   temp-file SQLite database, plus a new `createTestPlan` helper. Every new test file below shares
+   this one fixture.
+3. **Report page tests** (`plan_test.go`) — `GetIncomeStatement`/`GetBalanceSheet`/`GetAnalytics`:
+   401 unauthenticated, 403 no access, 200 for Owner/Editor/Viewer, and a real-template render check
+   asserting each page's heading text appears in the response body.
+4. **Invite flow tests** (`invites_test.go`) — `PostCreateInvite` (owner-only, 403 for
+   non-owners, 400 on missing email), `PostAcceptInvite` (grants the invited access level, 403 for
+   the wrong recipient, 401 unauthenticated), `PostRejectInvite` (no access granted, invite status
+   updated to Rejected).
+5. **Wizard form-handler tests**, one file per domain (`payroll_test.go`,
+   `sales_forecast_test.go`, `cash_flow_test.go`, `operating_expenses_test.go`) — each covering its
+   one representative repeatable sub-section (Salary Roles, Products, Inventory Purchases,
+   Operating Expenses respectively) with: a happy path posting every wizard step and verifying the
+   persisted domain entity via the repository directly, a 403 authorization check for Viewer access
+   on an Editor-gated route, a 400 validation check for a blank required field, and a delete check
+   confirming the item drops out of `ListComplete*`.
+
+### Verified
+`go build ./...` / `go vet ./...` / `go test ./...` pass, including the six new test files above
+alongside the existing suite. Spot-checked in a live browser against a scratch DB: signed up,
+created a plan with no wizard data, and loaded its Income Statement page directly — confirmed the
+rendered heading is exactly "Income Statement (P&L)", the same string `plan_test.go` asserts on,
+so the test isn't asserting against a value that only matches the test's own mocked expectations.
+
+### Deliberately Deferred
+- Coverage is representative, not exhaustive: each wizard domain's other repeatable sub-sections
+  (Benefits, Payroll Tax Rates, Sales Growth Curve, Distributions) follow the identical
+  draft/step/finish/delete pattern already proven for their domain's first sub-section, but aren't
+  independently tested. Extending the same pattern to them is straightforward future work.
+- No end-to-end (multi-page, browser-driven) tests were added — every new test exercises one
+  handler's route in isolation via `httptest`, not a full user journey across pages.
+- No shared test fixtures/factories were introduced; each test still constructs its own users and
+  plans inline via `createTestUser`/`createTestPlan`, matching the existing `auth_test.go`
+  convention rather than introducing a new one.
+
+## Session Summary (2026-08-20): Form Validation
+
+### What Prompted It
+Item #7 on "High-Priority Items (Do First)" — Form Validation — was next once Testing closed.
+AGENTS.md's own "Architectural Guidelines" states business rules and validation belong in domain
+constructors/update methods, not handlers or the store — but a survey of the actual code found
+real gaps against that rule: every wizard domain's growth-rate fields (`parseStepPercent`) had no
+upper or lower bound at all (a user could enter -500% or 99999% and it would be silently accepted
+end to end); money amounts had no upper bound; `CapitalAsset`'s validator never checked its own
+`Name` field; two of the app's singleton wizard sections (Payroll Tax Rates, Sales Growth Curve)
+plus Cash on Hand had no domain validator wired in whatsoever; there was no email-format check
+anywhere (only non-empty); and Fixed Assets' `useful-life` step silently defaulted to 5 years on
+bad input instead of rejecting it, unlike every other step in the app.
+
+### What Shipped
+1. **`internal/domain/entities/validation.go`** (new) — five shared, unexported helpers
+   (`validateRequiredName`, `validateMoneyAmount`, `validateGrowthRate`, `validatePercentRate`,
+   `validateEmailFormat`) with the bounds documented in the matching Tech Decisions Log entry
+   above. Wired into every existing `ValidateX`/`validate()` function across `plan_payroll.go`,
+   `plan_sales_forecast.go`, `plan_starting_point.go`, `plan_cash_flow.go`, `plan_growth.go`
+   (`Cost.validate()`), and `plan.go`'s `validateCoreProperties` (Plan name/company name).
+2. **Three new validators for previously-unvalidated singleton sections** — `ValidatePayrollTaxRates`,
+   `ValidateSalesGrowthCurve`, `ValidateStartingBalances`. Each of `PayrollService`/
+   `SalesForecastService`/`StartingPointService`'s corresponding `Save*Step` method gained an
+   `isComplete bool` parameter (the handler computes `idx == len(steps)-1`, the same `finishNow`
+   shape every repeatable section's `PostXStep` already uses) so the domain validator only runs
+   once every field has actually been answered.
+3. **Invite validation** (`invite_service.go`) — `NewPlanInvite` now checks email format;
+   `InviteService.CreateInvite` rejects a self-invite (`ErrSelfInvite`, comparing against a new
+   `commands.CreateInvite.InviterEmail` field the handler populates from the session user) and a
+   duplicate pending invite to the same email (`ErrDuplicateInvite`, via `GetInvitesForPlan`).
+4. **Password hardening** (`session.go`) — `UserCredentials.Validate()`/`HashPassword` now reject
+   passwords over 72 characters (bcrypt's real input limit; longer passwords were previously
+   silently truncated by the algorithm itself, not by application logic).
+5. **Two pre-existing bugs fixed**, surfaced while auditing every wizard step for validation gaps:
+   `starting_point.go`'s `useful-life` step now rejects an invalid/out-of-range year count via
+   `renderStepError` instead of silently defaulting to 5, matching every other step's pattern; and
+   `plan.go`'s `PostSetup` now checks the `strconv.Atoi` error on `startMonth`/`startYear` instead
+   of discarding it with `_`, matching `PostUpdateSetup`'s existing (correct) behavior.
+6. **Client-side alignment** — HTML5 `min`/`max` added to every growth-rate and percent-rate
+   number input (`min="-100" max="1000"` for growth, `min="0" max="100"` for tax/interest rates)
+   and every money input (`max="100000000"`) across all nine wizard step templates plus Cash on
+   Hand; `maxlength="200"` added to every name/text input (signup, profile, plan setup, and all
+   nine wizard "name" fields); `minlength="8" maxlength="72"` added to signup's password fields.
+
+### Verified
+`go build ./...` / `go vet ./...` / `go test ./...` pass, including new domain-layer test files
+(`validation_test.go`, `session_test.go`) and new/extended cases across every touched
+`plan_*_test.go` file, `invite_service_test.go` (self-invite, duplicate-invite), and three new
+handler-level test cases (`TestPostSignup_Validation`, `TestPayrollSalaryRoleRejectsOutOfRangeGrowthRate`,
+plus two new `TestPostCreateInvite` subtests). Spot-checked live in a browser against a scratch DB
+on both layers of the same rule: submitting a malformed signup email is blocked client-side by the
+browser's own `type="email"` constraint (confirmed via network inspection — no POST request was
+ever sent) while `TestPostSignup_Validation` proves the server-side `net/mail`-backed check
+independently catches the same input if that client gate is bypassed; separately, typing "50000"
+into a Salary Role's Year-2-growth field was blocked client-side by the new `max="1000"` attribute
+(again confirmed via network inspection), then a valid value was submitted and the wizard completed
+end to end with no regression.
+
+### Deliberately Deferred
+- `SalaryRole.Headcount`'s upper bound, `Product.PricePerUnit >= CostPerUnit`, and duplicate-name
+  checking within a wizard section were all considered and explicitly left out — see the "Form
+  validation scope decisions" bullet under Known Limitations above for why each is a product
+  decision rather than an input-validation gap.
+- CSRF protection, rate limiting, and dedicated input sanitization remain untouched — always
+  separate, still-open items under "Input Validation & Error Handling" and "Security", not part of
+  the "Form Validation" item this session closed.
+- Handler-level test coverage for the new validation paths is representative (one new case per
+  category: growth-rate rejection, self-invite, duplicate-invite, malformed email, weak password),
+  not exhaustive across every one of the ~15 newly-bounded fields.

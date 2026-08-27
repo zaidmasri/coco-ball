@@ -18,6 +18,7 @@ var (
 	ErrSessionNotFound = errors.New("session not found")
 	ErrSessionExpired  = errors.New("session expired")
 	ErrWeakPassword    = errors.New("password must be at least 8 characters")
+	ErrPasswordTooLong = errors.New("password cannot exceed 72 characters")
 )
 
 // Session represents an authenticated user session
@@ -60,19 +61,31 @@ func (c *UserCredentials) Validate() error {
 	if c.Email == "" {
 		return ErrInvalidEmail
 	}
+	if err := validateEmailFormat(c.Email); err != nil {
+		return err
+	}
 	if c.Password == "" {
 		return ErrInvalidPassword
 	}
 	if len(c.Password) < 8 {
 		return ErrWeakPassword
 	}
+	if len(c.Password) > 72 {
+		return ErrPasswordTooLong
+	}
 	return nil
 }
 
-// HashPassword creates a bcrypt hash of the password
+// HashPassword creates a bcrypt hash of the password. The 72-character cap
+// matches bcrypt's real input limit — bytes beyond it are silently ignored
+// by the algorithm itself, so rejecting longer passwords up front avoids a
+// user believing their full password is part of the hash when it isn't.
 func HashPassword(password string) (string, error) {
 	if len(password) < 8 {
 		return "", ErrWeakPassword
+	}
+	if len(password) > 72 {
+		return "", ErrPasswordTooLong
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	return string(hash), err
@@ -97,16 +110,21 @@ func NewUserWithPassword(email, firstName, lastName, password string) (*UserWith
 		return nil, err
 	}
 
-	if strings.TrimSpace(firstName) == "" || strings.TrimSpace(lastName) == "" {
+	cleanFirst := strings.TrimSpace(firstName)
+	cleanLast := strings.TrimSpace(lastName)
+	if cleanFirst == "" || cleanLast == "" {
 		return nil, ErrInvalidUserName
+	}
+	if len(cleanFirst) > maxNameLength || len(cleanLast) > maxNameLength {
+		return nil, ErrNameTooLong
 	}
 
 	user, err := NewUser(email)
 	if err != nil {
 		return nil, err
 	}
-	user.SetFirstName(strings.TrimSpace(firstName))
-	user.SetLastName(strings.TrimSpace(lastName))
+	user.SetFirstName(cleanFirst)
+	user.SetLastName(cleanLast)
 
 	hash, err := HashPassword(password)
 	if err != nil {

@@ -108,6 +108,11 @@ func (s *payrollService) DeleteBenefit(itemID uuid.UUID) error {
 func (s *payrollService) GetPayrollTaxRatesRow(planID uuid.UUID) (*repositories.PayrollTaxRatesRow, error) {
 	return s.payrollTaxRates.GetPayrollTaxRatesRow(planID)
 }
-func (s *payrollService) SavePayrollTaxRatesStep(planID uuid.UUID, rates domain.PayrollTaxRates, currentStep int) error {
+func (s *payrollService) SavePayrollTaxRatesStep(planID uuid.UUID, rates domain.PayrollTaxRates, currentStep int, isComplete bool) error {
+	if isComplete {
+		if err := domain.ValidatePayrollTaxRates(rates); err != nil {
+			return err
+		}
+	}
 	return s.payrollTaxRates.SavePayrollTaxRatesStep(planID, rates, currentStep)
 }

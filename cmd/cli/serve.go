@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	appservices "github.com/zaidmasri/business-planning-tool/internal/application/services"
@@ -64,7 +62,7 @@ func serve(dbPath, port string) {
 	hubSvc := appservices.NewHubCompletionService(startingPointSvc, payrollSvc, salesForecastSvc, cashFlowSvc, opExSvc)
 
 	// Load templates
-	templateCache := loadTemplates()
+	templateCache := views.LoadTemplates()
 
 	mux := http.NewServeMux()
 
@@ -108,35 +106,4 @@ func serve(dbPath, port string) {
 
 	log.Printf("Server starting on %s", port)
 	log.Fatal(srv.ListenAndServe())
-}
-
-func loadTemplates() map[string]*template.Template {
-	templateCache := make(map[string]*template.Template)
-
-	pages, err := fs.Glob(views.TemplatesFS, "templates/pages/*.html")
-	if err != nil {
-		log.Fatal("error globbing templates:", err)
-	}
-
-	for _, page := range pages {
-		name := filepath.Base(page)
-
-		var ts *template.Template
-		var parseErr error
-
-		// Standalone pages that don't use base layout
-		if name == "index.html" || name == "login.html" || name == "signup.html" || name == "profile.html" {
-			ts, parseErr = template.New(name).Funcs(views.TemplateFuncs).ParseFS(views.TemplatesFS, page)
-		} else {
-			ts, parseErr = template.New("base.html").Funcs(views.TemplateFuncs).ParseFS(views.TemplatesFS, "templates/base.html", "templates/components/*.html", page)
-		}
-
-		if parseErr != nil {
-			log.Fatalf("error parsing template %s: %v", name, parseErr)
-		}
-
-		templateCache[name] = ts
-	}
-
-	return templateCache
 }

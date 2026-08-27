@@ -779,9 +779,14 @@ func (c *PayrollController) PostPayrollTaxRatesStep(w http.ResponseWriter, r *ht
 	}
 
 	newCurrentStep := idx + 1
-	if err := c.payrollSvc.SavePayrollTaxRatesStep(planID, rates, newCurrentStep); err != nil {
-		log.Printf("Failed to save payroll tax rates step: %v", err)
-		renderStepError("An internal database error occurred. Please try again.")
+	isLastStep := idx == len(payrollTaxRateSteps)-1
+	if err := c.payrollSvc.SavePayrollTaxRatesStep(planID, rates, newCurrentStep, isLastStep); err != nil {
+		if isLastStep {
+			renderStepError(err.Error())
+		} else {
+			log.Printf("Failed to save payroll tax rates step: %v", err)
+			renderStepError("An internal database error occurred. Please try again.")
+		}
 		return
 	}
 

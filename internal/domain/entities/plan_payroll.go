@@ -1,7 +1,5 @@
 package entities
 
-import "strings"
-
 // SalaryRole is a single payroll line item (a role/title with headcount).
 type SalaryRole struct {
 	Role           string
@@ -44,11 +42,16 @@ func (p *Plan) ClearPayroll() {
 
 // ValidateSalaryRole checks a SalaryRole before it's persisted.
 func ValidateSalaryRole(role SalaryRole) error {
-	if strings.TrimSpace(role.Role) == "" {
-		return ErrInvalidName
+	if _, err := validateRequiredName(role.Role); err != nil {
+		return err
 	}
-	if role.MonthlyPay.IsNegative() {
-		return ErrNegativeAmount
+	if err := validateMoneyAmount(role.MonthlyPay); err != nil {
+		return err
+	}
+	for _, rate := range role.GrowthAfterYr1.RatesAfterYear1 {
+		if err := validateGrowthRate(rate); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -64,11 +67,27 @@ func (p *Plan) AddSalaryRole(role SalaryRole) error {
 
 // ValidateBenefit checks a Benefit before it's persisted.
 func ValidateBenefit(benefit Benefit) error {
-	if strings.TrimSpace(benefit.Type) == "" {
-		return ErrInvalidName
+	if _, err := validateRequiredName(benefit.Type); err != nil {
+		return err
 	}
-	if benefit.MonthlyAmount.IsNegative() {
-		return ErrNegativeAmount
+	if err := validateMoneyAmount(benefit.MonthlyAmount); err != nil {
+		return err
+	}
+	for _, rate := range benefit.GrowthAfterYr1.RatesAfterYear1 {
+		if err := validateGrowthRate(rate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ValidatePayrollTaxRates checks employer payroll tax rates before the
+// singleton Payroll Tax Rates section is marked complete.
+func ValidatePayrollTaxRates(rates PayrollTaxRates) error {
+	for _, rate := range []float64{rates.SocialSecurityRate, rates.MedicareRate, rates.FUTARate, rates.SUTARate} {
+		if err := validatePercentRate(rate); err != nil {
+			return err
+		}
 	}
 	return nil
 }
