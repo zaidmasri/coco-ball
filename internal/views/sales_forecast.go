@@ -222,9 +222,10 @@ func BuildProductListPage(r *http.Request, user *domain.User, plan *domain.Plan,
 		listItems[i] = productListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = SalesForecastSectionStepURL(plan.ID(), *draftItemID, domain.SectionProducts, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/sales-forecast/products/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -241,6 +242,7 @@ func BuildProductListPage(r *http.Request, user *domain.User, plan *domain.Plan,
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/sales-forecast/products/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/sales-forecast/products/finish", plan.ID()),
 		OverviewURL:        SalesForecastSummaryURL(plan.ID()),

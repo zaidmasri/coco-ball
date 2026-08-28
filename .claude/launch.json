@@ -9,7 +9,7 @@
         "./cmd/cli",
         "serve",
         "--db",
-        "/private/tmp/claude-501/-Users-zaidmasri-Developer-github-com-zaidmasri-northbasis-com/08187550-e598-4c2c-a1bd-8761b83ec8e3/scratchpad/northbasis-scratch.db",
+        "/private/tmp/claude-501/-Users-zaidmasri-Developer-github-com-zaidmasri-northbasis-com/bbcd1897-b808-4f8e-9731-5afbd3b6e94c/scratchpad/northbasis-scratch.db",
         "--port",
         ":8090"
       ],

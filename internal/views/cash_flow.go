@@ -230,9 +230,10 @@ func BuildInventoryPurchaseListPage(r *http.Request, user *domain.User, plan *do
 		listItems[i] = inventoryPurchaseListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = CashFlowSectionStepURL(plan.ID(), *draftItemID, domain.SectionInventoryPurchases, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/cash-flow/inventory-purchases/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -249,6 +250,7 @@ func BuildInventoryPurchaseListPage(r *http.Request, user *domain.User, plan *do
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/cash-flow/inventory-purchases/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/cash-flow/inventory-purchases/finish", plan.ID()),
 		OverviewURL:        CashFlowSummaryURL(plan.ID()),
@@ -320,9 +322,10 @@ func BuildDistributionListPage(r *http.Request, user *domain.User, plan *domain.
 		listItems[i] = distributionListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = CashFlowSectionStepURL(plan.ID(), *draftItemID, domain.SectionDistributions, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/cash-flow/distributions/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -339,6 +342,7 @@ func BuildDistributionListPage(r *http.Request, user *domain.User, plan *domain.
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/cash-flow/distributions/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/cash-flow/distributions/finish", plan.ID()),
 		OverviewURL:        CashFlowSummaryURL(plan.ID()),

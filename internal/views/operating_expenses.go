@@ -119,9 +119,10 @@ func BuildOperatingExpenseListPage(r *http.Request, user *domain.User, plan *dom
 		listItems[i] = opExpenseListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = OperatingExpensesStepURL(plan.ID(), *draftItemID, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/operating-expenses/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -138,6 +139,7 @@ func BuildOperatingExpenseListPage(r *http.Request, user *domain.User, plan *dom
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/operating-expenses/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/operating-expenses/finish", plan.ID()),
 		OverviewURL:        SalesForecastSummaryURL(plan.ID()),

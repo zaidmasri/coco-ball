@@ -417,9 +417,10 @@ func BuildFixedAssetsListPage(r *http.Request, user *domain.User, plan *domain.P
 		listItems[i] = fixedAssetListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = SectionStepURL(plan.ID(), *draftItemID, domain.SectionFixedAssets, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/starting-point/fixed-assets/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -436,6 +437,7 @@ func BuildFixedAssetsListPage(r *http.Request, user *domain.User, plan *domain.P
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/starting-point/fixed-assets/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/starting-point/fixed-assets/finish", plan.ID()),
 		OverviewURL:        StartingPointSummaryURL(plan.ID()),
@@ -464,9 +466,10 @@ func BuildStartupCostsListPage(r *http.Request, user *domain.User, plan *domain.
 		listItems[i] = startupCostListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = SectionStepURL(plan.ID(), *draftItemID, domain.SectionStartupCosts, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/starting-point/startup-costs/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -483,6 +486,7 @@ func BuildStartupCostsListPage(r *http.Request, user *domain.User, plan *domain.
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/starting-point/startup-costs/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/starting-point/startup-costs/finish", plan.ID()),
 		OverviewURL:        StartingPointSummaryURL(plan.ID()),
@@ -518,9 +522,10 @@ func BuildFundingSourcesListPage(r *http.Request, user *domain.User, plan *domai
 		listItems[i] = fundingSourceListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = SectionStepURL(plan.ID(), *draftItemID, domain.SectionFundingSources, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/starting-point/funding-sources/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -537,6 +542,7 @@ func BuildFundingSourcesListPage(r *http.Request, user *domain.User, plan *domai
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/starting-point/funding-sources/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/starting-point/funding-sources/finish", plan.ID()),
 		OverviewURL:        StartingPointSummaryURL(plan.ID()),

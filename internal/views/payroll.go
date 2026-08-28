@@ -286,9 +286,10 @@ func BuildSalaryRoleListPage(r *http.Request, user *domain.User, plan *domain.Pl
 		listItems[i] = salaryRoleListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = PayrollSectionStepURL(plan.ID(), *draftItemID, domain.SectionSalaryRoles, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/payroll/salary-roles/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -305,6 +306,7 @@ func BuildSalaryRoleListPage(r *http.Request, user *domain.User, plan *domain.Pl
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/payroll/salary-roles/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/payroll/salary-roles/finish", plan.ID()),
 		OverviewURL:        PayrollSummaryURL(plan.ID()),
@@ -375,9 +377,10 @@ func BuildBenefitListPage(r *http.Request, user *domain.User, plan *domain.Plan,
 		listItems[i] = benefitListItem(plan.ID(), item)
 	}
 
-	var draftStepURL string
+	var draftStepURL, draftDeleteAction string
 	if draftItemID != nil {
 		draftStepURL = PayrollSectionStepURL(plan.ID(), *draftItemID, domain.SectionBenefits, draftStep)
+		draftDeleteAction = fmt.Sprintf("/plan/%s/payroll/benefits/%s", plan.ID(), *draftItemID)
 	}
 
 	return SectionListPage{
@@ -394,6 +397,7 @@ func BuildBenefitListPage(r *http.Request, user *domain.User, plan *domain.Plan,
 		Items:              listItems,
 		DraftItemID:        draftItemID,
 		DraftStepURL:       draftStepURL,
+		DraftDeleteAction:  draftDeleteAction,
 		AddAction:          fmt.Sprintf("/plan/%s/payroll/benefits/new", plan.ID()),
 		FinishAction:       fmt.Sprintf("/plan/%s/payroll/benefits/finish", plan.ID()),
 		OverviewURL:        PayrollSummaryURL(plan.ID()),

@@ -19,7 +19,12 @@
       {{ if .DraftItemID }}
       <div class="alert alert-warning d-flex justify-content-between align-items-center mb-4">
         <div><i class="bi bi-pencil-square me-2"></i>You have an unfinished {{ .ItemNounSingular }}.</div>
-        <a href="{{ .DraftStepURL }}" class="btn btn-sm btn-warning">Resume</a>
+        <div class="d-flex gap-2">
+          <a href="{{ .DraftStepURL }}" class="btn btn-sm btn-warning">Resume</a>
+          <form method="POST" action="{{ .DraftDeleteAction }}" onsubmit="return confirm('Discard this unfinished {{ .ItemNounSingular }}?');">
+            <button type="submit" class="btn btn-sm btn-outline-danger" title="Discard"><i class="bi bi-trash"></i></button>
+          </form>
+        </div>
       </div>
       {{ end }}
 

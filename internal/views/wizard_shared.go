@@ -118,6 +118,7 @@ type SectionListPage struct {
 	Items              []SectionListItem
 	DraftItemID        *uuid.UUID
 	DraftStepURL       string
+	DraftDeleteAction  string
 	AddAction          string
 	FinishAction       string
 	OverviewURL        string
