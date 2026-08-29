@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp-worker"
+
+[build]
+cmd = "go build -o ./tmp-worker/northbasis-cli ./cmd/cli"
+bin = "./tmp-worker/northbasis-cli"
+full_bin = "./tmp-worker/northbasis-cli worker --db ./northbasis.db"
+include_ext = ["go"]
+exclude_dir = ["tmp", "tmp-worker", "vendor", ".git", ".claude"]
+delay = 200
+stop_on_error = true
+
+[log]
+time = false
+
+[misc]
+clean_on_exit = true

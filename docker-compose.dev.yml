@@ -10,6 +10,23 @@ services:
       - go-mod-cache:/root/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["air", "-c", ".air.worker.toml"]
+    volumes:
+      - .:/app
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      - APP_BASE_URL=${APP_BASE_URL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+
 volumes:
   go-mod-cache:
   go-build-cache:

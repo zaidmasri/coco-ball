@@ -77,9 +77,22 @@ Dependencies point **inward only**, toward the domain layer.
 - **Domain Events + Transactional Outbox** — aggregates buffer events via `recordEvent()`
   (`internal/domain/events/`, one file per concern); a repository's write method drains them with
   `PullEvents()` and inserts them into `outbox_events` inside the **same transaction** as the
-  aggregate row (`internal/infrastructure/sqlite/outbox.go`'s `insertOutboxEvents`). A background
-  relay (`outbox_relay.go`) polls for unprocessed rows and publishes them (currently a log-only
-  stub — swap in a real broker call when one exists).
+  aggregate row (`internal/infrastructure/sqlite/outbox.go`'s `insertOutboxEvents`). Consumption is
+  split across all three layers, mirroring how the rest of the app is structured: `OutboxRepository`
+  (`internal/domain/repositories/outbox.go`, implemented in `internal/infrastructure/sqlite/`) reads
+  and marks rows; `NotificationService` (`internal/application/interfaces` +
+  `internal/application/services/notification_service.go`) is the typed use case (`SendWelcomeEmail(userID)`,
+  `SendInviteEmail(inviteID)`) that looks up context via the existing repositories and sends via the
+  `ports.Mailer` port (`internal/domain/ports/mailer.go`, implemented by
+  `internal/infrastructure/email/` — SMTP, or a console logger when `SMTP_HOST` is unset);
+  `OutboxWorker` (`internal/interface/worker/outbox_worker.go`) is the driving adapter — a poll loop
+  that unmarshals each event's payload and calls `NotificationService`, treated as a peer of
+  `internal/interface/web`'s HTTP controllers rather than infrastructure, since it triggers the
+  system instead of being called by it. Runs as its own process via the `worker` CLI command (see
+  `cmd/cli/worker.go`) — not embedded in `serve()`, so there's never more than one consumer racing
+  the same outbox rows. An event is only marked published after its handler succeeds, giving
+  at-least-once delivery; a per-event failure is logged and skipped (not retried inline) so one bad
+  event doesn't block every event behind it in the same poll batch.
 - **Soft deletion** — every business-entity table has `deleted_at`; `Delete*` sets it, every
   `SELECT` filters `deleted_at IS NULL`. Hard delete is reserved for join tables (`plan_access`)
   and singleton rows.
@@ -193,8 +206,9 @@ don't apply (e.g. a read-only report page skips the command/repository-write ste
 ```
 .
 ├── cmd/cli/
-│   ├── main.go                  # CLI entry point, flag parsing, command dispatch (serve/migrate/reset)
+│   ├── main.go                  # CLI entry point, flag parsing, command dispatch (serve/migrate/reset/worker)
 │   ├── serve.go                 # DB connection, template loading, controller wiring, middleware chain
+│   ├── worker.go                # `worker` command (runs the outbox consumer standalone)
 │   └── migrate.go               # `migrate` command (runs the migration list)
 ├── internal/
 │   ├── domain/
@@ -214,27 +228,35 @@ don't apply (e.g. a read-only report page skips the command/repository-write ste
 │   │   │   │                        comment for every modeling simplification)
 │   │   │   └── *_test.go
 │   │   ├── events/                # DomainEvent interface + concrete events, one file per concern
+│   │   ├── ports/                  # Non-repository outbound interfaces (e.g. Mailer) — same
+│   │   │   │                        dependency-inversion boundary as repositories, different shape
 │   │   └── repositories/          # Repository interfaces, one file per aggregate/sub-entity boundary
+│   │       └── outbox.go           # OutboxRepository — read/mark the transactional outbox
 │   ├── application/
-│   │   ├── interfaces/            # One service interface per domain hub
+│   │   ├── interfaces/            # One service interface per domain hub (includes NotificationService)
 │   │   ├── commands/               # Write-side command DTOs, one file per Create/Update/Delete
 │   │   ├── common/                 # Result DTOs shared between command/query sides
 │   │   ├── mapper/                 # Entity → Result DTO conversion
 │   │   └── services/                # Service implementations — the only callers of domain New*/mutators
-│   ├── interface/web/             # HTTP controllers, one struct per domain, registers its own routes
-│   │   ├── plan.go, auth.go, invites.go, payroll.go, cash_flow.go, sales_forecast.go,
-│   │   │   starting_point.go, operating_expenses.go
-│   │   ├── access_middleware.go   # PlanAccessMiddleware: route-guards by Owner/Editor/Viewer
-│   │   ├── recover_middleware.go  # Panic-recovery middleware (outermost layer)
-│   │   └── errors.go              # renderCommandError/renderInternalError/safeErrorMessage
+│   │       └── notification_service.go  # SendWelcomeEmail/SendInviteEmail — the outbox worker's use cases
+│   ├── interface/
+│   │   ├── web/                    # HTTP controllers, one struct per domain, registers its own routes
+│   │   │   ├── plan.go, auth.go, invites.go, payroll.go, cash_flow.go, sales_forecast.go,
+│   │   │   │   starting_point.go, operating_expenses.go
+│   │   │   ├── access_middleware.go   # PlanAccessMiddleware: route-guards by Owner/Editor/Viewer
+│   │   │   ├── recover_middleware.go  # Panic-recovery middleware (outermost layer)
+│   │   │   └── errors.go              # renderCommandError/renderInternalError/safeErrorMessage
+│   │   └── worker/                 # Background driving adapters (poll loops), peer of interface/web
+│   │       └── outbox_worker.go        # Polls the outbox, dispatches to NotificationService
 │   ├── middleware/                # Cross-cutting HTTP middleware (request logger, etc.)
 │   ├── infrastructure/
 │   │   ├── sqlite/                 # Repository implementations, one file per aggregate/sub-entity
 │   │   │   ├── connection.go, migrate.go
 │   │   │   ├── outbox.go           # insertOutboxEvents — drains events in the same tx as the save
-│   │   │   └── outbox_relay.go     # Polls outbox_events, publishes (log-only stub), marks processed
+│   │   │   └── outbox_repository.go  # Implements OutboxRepository (read unpublished / mark published)
+│   │   ├── email/                  # Implements ports.Mailer: SMTP sender + console (dev) fallback
 │   │   ├── db/sqlc/                 # sqlc-generated query code (compiled from sql/queries/*.sql)
-│   │   └── config/config.go         # CLI flag / env config
+│   │   └── config/config.go         # CLI flag / env config (incl. SMTP_*, APP_BASE_URL)
 │   └── views/
 │       ├── builders.go            # Page view builders (Build*Page functions)
 │       ├── types.go               # View data types (per-page structs)
@@ -244,7 +266,7 @@ don't apply (e.g. a read-only report page skips the command/repository-write ste
 ├── sql/
 │   ├── queries/                   # Hand-written SQL that sqlc compiles into internal/infrastructure/db/sqlc
 │   └── migrations/                # Ordered SQL migration files
-├── Dockerfile / Dockerfile.dev, docker-compose.yml / docker-compose.dev.yml, .air.toml
+├── Dockerfile / Dockerfile.dev, docker-compose.yml / docker-compose.dev.yml, .air.toml / .air.worker.toml
 ├── sqlc.yaml, Makefile, go.mod, go.sum
 ```
 
@@ -287,7 +309,11 @@ don't apply (e.g. a read-only report page skips the command/repository-write ste
   `sales_forecast`, `cash_flow`, `starting_point`) remain thin CRUD pass-throughs pending
   domain-level IDs for their sub-entities (see [Known Limitations](#known-limitations)).
 - **Teams & collaboration** — per-plan email invites at Owner/Editor/Viewer level; pending-invite
-  inbox on the home dashboard; accept/reject flow; no outbound email (in-app only).
+  inbox on the home dashboard; accept/reject flow.
+- **Outbound transactional email** (2026-08-28) — a standalone `worker` CLI command consumes the
+  outbox at-least-once and sends a welcome email on signup and an invitation email on
+  `plan.user_invited`, via SMTP or a console-logging fallback when `SMTP_HOST` is unset. See
+  [Domain Events + Transactional Outbox](#design-patterns-in-use).
 - **Routes & pages** — home, login/signup, profile (+edit/delete), plan setup, all 7 wizard hub
   pages, income statement, balance sheet, analytics — all with matching `Post*` handlers where
   applicable.
@@ -370,8 +396,10 @@ Income is currently pre-tax everywhere it's shown.
   liabilities, which is mathematically undefined, not distinguishable from an actual 0.0 today.
 - **Loan/fixed-asset categories aren't sub-typed** — one combined "Loans Payable" and "Fixed
   Assets" figure; the domain model doesn't track finer categories.
-- **No email delivery** — plan invites are only visible in-app to a logged-in user with a matching
-  email.
+- **No dead-lettering / max-attempts on the outbox worker** — a permanently-failing event (e.g. a
+  deleted user, a malformed payload) retries forever on every poll rather than being parked after N
+  attempts; it no longer blocks unrelated events (fixed 2026-08-28), but it will log an error every
+  poll indefinitely. The schema has no attempt counter today.
 - **Collaboration is per-plan, not org-wide** — no workspace/team entity above individual plans.
 - **SQLite only** — single file, fine for the current single-instance deployment; no pooling or
   horizontal-scaling story.
@@ -423,6 +451,32 @@ git log / commit messages, not here.)
   `CGO_CFLAGS=-D_LARGEFILE64_SOURCE` for musl+sqlite compatibility); `Dockerfile.dev` runs `air` for
   hot reload against a bind-mounted source tree. Comments in the Makefile indicate the production
   image is intended to deploy via Coolify; live-deployment status isn't tracked in this repo.
+- **Outbox worker runs standalone, not embedded in `serve()`** (2026-08-28) — the web server used
+  to start an in-process relay goroutine; that's gone. `serve()` and `worker` are separate CLI
+  commands (and separate `docker-compose` services) so there's never more than one consumer racing
+  the same `outbox_events` rows. A missed consequence: the web server no longer touches the outbox
+  at all, so if `worker` isn't running, events pile up unpublished but the app otherwise works
+  normally (signup, invites, etc. all still succeed — only the notification email is delayed).
+- **Console mailer fallback instead of a required SMTP config** — `worker` logs emails instead of
+  sending them whenever `SMTP_HOST` is unset, rather than failing to start. Chosen so local dev,
+  CI, and `docker compose up` all work with zero mail-related setup; mirrors the outbox relay's
+  original log-only stub. Set `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/`SMTP_PASSWORD`/`SMTP_FROM`
+  to send real email.
+- **Outbox read path split across three layers instead of living in one relay file** — reading
+  unpublished rows is a repository (`OutboxRepository`, domain-owned interface implemented in
+  `sqlite`, same as every other repo); deciding what an event *means* is an application use case
+  (`NotificationService`, typed `uuid.UUID` args, no JSON); the poll loop and payload unmarshaling
+  are a driving adapter (`internal/interface/worker`, a peer of `internal/interface/web` — it
+  triggers the system like an HTTP handler does, so it must not be reachable from infrastructure
+  through a domain-owned callback). An earlier draft put a `Dispatch([]byte)`-shaped interface in
+  the domain layer to let infrastructure call into application logic; that leaked a wire-format
+  detail into the domain and inverted the dependency direction backwards, so it was replaced with
+  this three-layer split before implementation.
+- **Worker retries a failed event forever, per-event, without blocking the batch** — the original
+  relay code aborted the whole poll batch on the first publish error (head-of-line blocking); the
+  worker now logs and skips a failing event, leaving it unpublished for the next poll, while still
+  processing every other event in the same batch. No dead-lettering / max-attempts — see
+  [Known Limitations](#known-limitations).
 
 ## Questions to Ask If Stuck
 
@@ -451,6 +505,9 @@ Keep this file current as you work:
    durable — not a play-by-play of the session. Session-by-session narrative belongs in commit
    messages and PR descriptions, not here.
 
-**Last updated**: 2026-08-28 — cleaned up and reorganized; added the "Steps to Ship a Full Vertical
-Feature" recipe; condensed ~900 lines of chronological session-log narrative (now recoverable from
-git history) into the Tech Decisions Log and Current Status sections above.
+**Last updated**: 2026-08-28 — added the standalone `worker` CLI command that consumes the
+transactional outbox at-least-once and sends welcome/invite emails (`internal/interface/worker`,
+`internal/application/services/notification_service.go`, `internal/infrastructure/email/`);
+previously: cleaned up and reorganized; added the "Steps to Ship a Full Vertical Feature" recipe;
+condensed ~900 lines of chronological session-log narrative (now recoverable from git history) into
+the Tech Decisions Log and Current Status sections above.

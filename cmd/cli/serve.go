@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"io/fs"
 	"log"
 	"net/http"
@@ -25,9 +24,8 @@ func serve(dbPath, port string) {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
 
-	// Drains the outbox table written by aggregate repositories on every save.
-	relay := sqlite.NewOutboxRelay(conn, 2*time.Second)
-	relay.Start(context.Background())
+	// Outbox events (e.g. welcome/invite emails) are consumed by the
+	// standalone `worker` CLI command, not embedded here — see cmd/cli/worker.go.
 
 	// Infrastructure: one sqlc-backed repository per domain interface.
 	planRepo := sqlite.NewPlanRepository(conn)

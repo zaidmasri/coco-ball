@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/config"
 )
@@ -24,6 +25,8 @@ func main() {
 		migrateCmd()
 	case "reset":
 		resetCmd()
+	case "worker":
+		workerCmd()
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -56,6 +59,18 @@ func migrateCmd() {
 	migrate(*dbPath)
 }
 
+func workerCmd() {
+	cfg := config.Load()
+	fs := flag.NewFlagSet("worker", flag.ExitOnError)
+	dbPath := fs.String("db", cfg.DBPath, "path to SQLite database file")
+	interval := fs.Duration("interval", 5*time.Second, "outbox poll interval")
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		log.Fatalf("failed to parse flags: %v", err)
+	}
+
+	worker(*dbPath, *interval, cfg)
+}
+
 func resetCmd() {
 	cfg := config.Load()
 	fs := flag.NewFlagSet("reset", flag.ExitOnError)
@@ -78,12 +93,14 @@ Commands:
   serve       Start the web application
   migrate     Run database migrations
   reset       Reset and delete the database
+  worker      Run the background worker that consumes outbox events (emails)
   help        Show this help message
 
 Examples:
   %s serve --db ./northbasis.db --port :8080
   %s migrate --db ./northbasis.db
   %s reset --db ./northbasis.db
+  %s worker --db ./northbasis.db --interval 5s
 
-`, os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 }
