@@ -244,7 +244,7 @@ func (c *SalesForecastController) GetProductStep(w http.ResponseWriter, r *http.
 func (c *SalesForecastController) PostProductStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -327,7 +327,7 @@ func (c *SalesForecastController) PostProductStep(w http.ResponseWriter, r *http
 
 	if err := c.salesForecastSvc.SaveProductStep(itemID, product, newCurrentStep, newStatus); err != nil {
 		if finishNow {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("SalesForecastSvc SaveProductStep", err))
 		} else {
 			log.Printf("Failed to save product step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
@@ -457,7 +457,7 @@ func salesGrowthCurveButtonLabel(idx int) string {
 func (c *SalesForecastController) PostSalesGrowthCurveStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -522,7 +522,7 @@ func (c *SalesForecastController) PostSalesGrowthCurveStep(w http.ResponseWriter
 	isLastStep := idx == len(salesGrowthCurveSteps)-1
 	if err := c.salesForecastSvc.SaveSalesGrowthCurveStep(planID, curve, newCurrentStep, isLastStep); err != nil {
 		if isLastStep {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("SalesForecastSvc SaveSalesGrowthCurveStep", err))
 		} else {
 			log.Printf("Failed to save sales growth curve step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")

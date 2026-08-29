@@ -94,6 +94,7 @@ func serve(dbPath, port string) {
 	var httpHandler http.Handler = mux
 	httpHandler = sessionMW.Authenticate(httpHandler)
 	httpHandler = middleware.Logger(httpHandler)
+	httpHandler = web.Recover(templateCache)(httpHandler)
 
 	// Configure a robust http server
 	srv := &http.Server{

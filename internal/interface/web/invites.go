@@ -55,7 +55,7 @@ func NewInviteController(
 // collaborator to the plan at a chosen access level)
 func (c *InviteController) PostCreateInvite(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 
@@ -101,7 +101,7 @@ func (c *InviteController) PostCreateInvite(w http.ResponseWriter, r *http.Reque
 		AccessLevel:  level,
 		InvitedBy:    user.ID(),
 	}); err != nil {
-		renderError(err.Error(), http.StatusBadRequest)
+		renderError(safeErrorMessage("InviteSvc CreateInvite", err), http.StatusBadRequest)
 		return
 	}
 

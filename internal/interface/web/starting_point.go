@@ -295,7 +295,7 @@ func (c *StartingPointController) GetFixedAssetStep(w http.ResponseWriter, r *ht
 func (c *StartingPointController) PostFixedAssetStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -390,7 +390,7 @@ func (c *StartingPointController) PostFixedAssetStep(w http.ResponseWriter, r *h
 
 	if err := c.startingPointSvc.SaveCapitalAssetStep(itemID, asset, newCurrentStep, newStatus); err != nil {
 		if finishNow {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("StartingPointSvc SaveCapitalAssetStep", err))
 		} else {
 			log.Printf("Failed to save fixed asset step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
@@ -554,7 +554,7 @@ func (c *StartingPointController) GetStartupCostStep(w http.ResponseWriter, r *h
 func (c *StartingPointController) PostStartupCostStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -625,7 +625,7 @@ func (c *StartingPointController) PostStartupCostStep(w http.ResponseWriter, r *
 
 	if err := c.startingPointSvc.SaveStartupCostStep(itemID, cost, newCurrentStep, newStatus); err != nil {
 		if finishNow {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("StartingPointSvc SaveStartupCostStep", err))
 		} else {
 			log.Printf("Failed to save startup cost step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
@@ -788,7 +788,7 @@ func (c *StartingPointController) GetFundingSourceStep(w http.ResponseWriter, r 
 func (c *StartingPointController) PostFundingSourceStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -873,7 +873,7 @@ func (c *StartingPointController) PostFundingSourceStep(w http.ResponseWriter, r
 
 	if err := c.startingPointSvc.SaveFundingSourceStep(itemID, funding, newCurrentStep, newStatus); err != nil {
 		if finishNow {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("StartingPointSvc SaveFundingSourceStep", err))
 		} else {
 			log.Printf("Failed to save funding source step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
@@ -1013,7 +1013,7 @@ func (c *StartingPointController) GetCashOnHandStep(w http.ResponseWriter, r *ht
 func (c *StartingPointController) PostCashOnHandStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -1060,7 +1060,7 @@ func (c *StartingPointController) PostCashOnHandStep(w http.ResponseWriter, r *h
 	isLastStep := idx == len(cashOnHandSteps)-1
 	if err := c.startingPointSvc.SaveStartingBalancesStep(planID, balances, newCurrentStep, isLastStep); err != nil {
 		if isLastStep {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("StartingPointSvc SaveStartingBalancesStep", err))
 		} else {
 			log.Printf("Failed to save starting balances step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")

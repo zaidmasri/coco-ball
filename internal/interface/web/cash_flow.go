@@ -250,7 +250,7 @@ func (c *CashFlowController) GetInventoryPurchaseStep(w http.ResponseWriter, r *
 func (c *CashFlowController) PostInventoryPurchaseStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -333,7 +333,7 @@ func (c *CashFlowController) PostInventoryPurchaseStep(w http.ResponseWriter, r 
 
 	if err := c.cashFlowSvc.SaveInventoryPurchaseStep(itemID, purchase, newCurrentStep, newStatus); err != nil {
 		if finishNow {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("CashFlowSvc SaveInventoryPurchaseStep", err))
 		} else {
 			log.Printf("Failed to save inventory purchase step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
@@ -496,7 +496,7 @@ func (c *CashFlowController) GetDistributionStep(w http.ResponseWriter, r *http.
 func (c *CashFlowController) PostDistributionStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -579,7 +579,7 @@ func (c *CashFlowController) PostDistributionStep(w http.ResponseWriter, r *http
 
 	if err := c.cashFlowSvc.SaveDistributionStep(itemID, dist, newCurrentStep, newStatus); err != nil {
 		if finishNow {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("CashFlowSvc SaveDistributionStep", err))
 		} else {
 			log.Printf("Failed to save distribution step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")

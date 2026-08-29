@@ -155,13 +155,13 @@ func (c *PlanController) pendingInvitesForUser(user *domain.User) []views.Invite
 func (c *PlanController) PostSetup(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		renderErrorPage(w, r, c.templateCache, http.StatusUnauthorized, "You must be logged in to create a plan.")
 		return
 	}
 
 	err := r.ParseForm()
 	if err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 
@@ -169,7 +169,7 @@ func (c *PlanController) PostSetup(w http.ResponseWriter, r *http.Request) {
 	startMonth, errMonth := strconv.Atoi(r.PostForm.Get("startMonth"))
 	startYear, errYear := strconv.Atoi(r.PostForm.Get("startYear"))
 	if errMonth != nil || errYear != nil {
-		http.Error(w, "Invalid month or year provided", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "Invalid month or year provided.")
 		return
 	}
 
@@ -183,7 +183,7 @@ func (c *PlanController) PostSetup(w http.ResponseWriter, r *http.Request) {
 		OwnerID:       user.ID(),
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		renderCommandError(w, r, c.templateCache, "PlanSvc CreatePlan", err)
 		return
 	}
 	planID := result.Result.ID
@@ -194,7 +194,7 @@ func (c *PlanController) PostSetup(w http.ResponseWriter, r *http.Request) {
 // PostUpdateSetup POST /plan/{id}/setup (Updates an existing plan)
 func (c *PlanController) PostUpdateSetup(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 
@@ -216,7 +216,7 @@ func (c *PlanController) PostUpdateSetup(w http.ResponseWriter, r *http.Request)
 	startYear, errYear := strconv.Atoi(r.PostForm.Get("startYear"))
 
 	if errMonth != nil || errYear != nil {
-		http.Error(w, "Invalid month or year provided", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "Invalid month or year provided.")
 		return
 	}
 
@@ -226,7 +226,7 @@ func (c *PlanController) PostUpdateSetup(w http.ResponseWriter, r *http.Request)
 		StartingMonth: startMonth,
 		StartingYear:  startYear,
 	}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		renderCommandError(w, r, c.templateCache, "PlanSvc UpdatePlan", err)
 		return
 	}
 
@@ -314,8 +314,7 @@ func (c *PlanController) PostDeletePlan(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if _, err := c.planSvc.DeletePlan(&commands.DeletePlan{PlanID: id}); err != nil {
-		log.Printf("PlanSvc Delete Error: %v", err)
-		renderErrorPage(w, r, c.templateCache, http.StatusInternalServerError, "Failed to delete plan")
+		renderInternalError(w, r, c.templateCache, "PlanSvc DeletePlan", err)
 		return
 	}
 

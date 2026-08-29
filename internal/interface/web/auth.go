@@ -4,7 +4,6 @@ package web
 import (
 	"context"
 	"html/template"
-	"log"
 	"net/http"
 	"time"
 
@@ -140,7 +139,7 @@ func (c *AuthController) GetLogin(w http.ResponseWriter, r *http.Request) {
 // PostLogin handles login form submission
 func (c *AuthController) PostLogin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 
@@ -166,8 +165,7 @@ func (c *AuthController) PostLogin(w http.ResponseWriter, r *http.Request) {
 	// Create session
 	session, err := c.authSvc.CreateSession(userCreds.ID(), sessionDuration)
 	if err != nil {
-		log.Printf("Failed to create session: %v", err)
-		http.Error(w, "Session creation failed", http.StatusInternalServerError)
+		renderInternalError(w, r, c.templateCache, "AuthSvc CreateSession", err)
 		return
 	}
 
@@ -192,7 +190,7 @@ func (c *AuthController) GetSignup(w http.ResponseWriter, r *http.Request) {
 // PostSignup handles signup form submission
 func (c *AuthController) PostSignup(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 
@@ -226,7 +224,8 @@ func (c *AuthController) PostSignup(w http.ResponseWriter, r *http.Request) {
 		Password:  password,
 	})
 	if err != nil {
-		page := views.BuildSignupPageWithError(email, firstName, lastName, err.Error())
+		msg := safeErrorMessage("AuthSvc CreateUser", err)
+		page := views.BuildSignupPageWithError(email, firstName, lastName, msg)
 		views.RenderSignupPage(w, c.templateCache, page)
 		return
 	}
@@ -234,8 +233,7 @@ func (c *AuthController) PostSignup(w http.ResponseWriter, r *http.Request) {
 	// Create and save session
 	session, err := c.authSvc.CreateSession(result.Result.ID, sessionDuration)
 	if err != nil {
-		log.Printf("Failed to create session: %v", err)
-		http.Error(w, "Session creation failed", http.StatusInternalServerError)
+		renderInternalError(w, r, c.templateCache, "AuthSvc CreateSession", err)
 		return
 	}
 
@@ -291,7 +289,7 @@ func (c *AuthController) PostProfileEdit(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 
@@ -303,7 +301,8 @@ func (c *AuthController) PostProfileEdit(w http.ResponseWriter, r *http.Request)
 		FirstName: firstName,
 		LastName:  lastName,
 	}); err != nil {
-		page := views.BuildProfileEditPage(user, err.Error())
+		msg := safeErrorMessage("AuthSvc UpdateUser", err)
+		page := views.BuildProfileEditPage(user, msg)
 		page.FirstName = firstName
 		page.LastName = lastName
 		views.RenderProfilePage(w, c.templateCache, page)
@@ -325,8 +324,8 @@ func (c *AuthController) PostProfileDelete(w http.ResponseWriter, r *http.Reques
 	}
 
 	if _, err := c.authSvc.DeleteUser(&commands.DeleteUser{UserID: user.ID()}); err != nil {
-		log.Printf("Failed to delete user: %v", err)
-		page := views.BuildProfilePageWithDeleteError(user, err.Error())
+		msg := safeErrorMessage("AuthSvc DeleteUser", err)
+		page := views.BuildProfilePageWithDeleteError(user, msg)
 		views.RenderProfilePage(w, c.templateCache, page)
 		return
 	}

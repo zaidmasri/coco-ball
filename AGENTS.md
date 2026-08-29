@@ -242,7 +242,7 @@ directly on the Sales Forecast form (`prod_cogs[]`) and saved via
 - [ ] CSRF protection
 - [ ] Input sanitization (largely mitigated already by `html/template`'s automatic contextual escaping, but no dedicated sanitization layer)
 - [ ] Rate limiting
-- [ ] Comprehensive error messages to users (validation messages exist per-field; a broader pass over generic 500-style messages is still open)
+- [x] Comprehensive error messages to users (panic recovery + a full pass over every raw `http.Error`/leaked-`err.Error()` call site in `internal/interface/web/` — see "Error Handling (2026-08-28)" below)
 
 ### API & Integration
 - [ ] JSON API endpoints (optional, for future mobile/frontend frameworks)
@@ -304,7 +304,7 @@ Note: the Makefile comments indicate the production image (`docker-compose.yml`)
 5. ~~**Docker containerization**~~ ✅ **COMPLETED** - Production + dev Dockerfiles, docker-compose files, Makefile targets
 6. ~~**Testing**~~ ✅ **COMPLETED** - `internal/interface/web/` now has handler-level tests for the report pages, all four wizard domains' form POST handlers, and the invite flow, alongside the existing domain/application-layer coverage (see the 2026-08-20 session summary below)
 7. ~~**Form Validation**~~ ✅ **COMPLETED** - Domain-layer bounds (name length, money magnitude, growth/tax rates, email format) now cover every wizard domain, the two singleton sections that previously had no validator at all (Payroll Tax Rates, Sales Growth Curve, plus Cash on Hand), invite self/duplicate checks, and matching client-side HTML5 attributes (see the 2026-08-20 session summary below). CSRF/rate limiting/sanitization remain separate, still-open backlog items
-8. **Error handling** - Comprehensive error messages and recovery flows
+8. ~~**Error handling**~~ ✅ **COMPLETED** - Panic-recovery middleware added (previously none — any panic killed the connection with no response), and every raw `http.Error`/leaked-`err.Error()` call site across `internal/interface/web/` fixed so infrastructure failures never reach the browser while real validation messages still do (see "Error Handling (2026-08-28)" below)
 9. **Income tax modeling** - No tax-rate input exists anywhere in the app; Net Income is currently pre-tax
 
 ## Project Structure Reference
@@ -934,10 +934,10 @@ step, not bolted onto this pass.
 
 ---
 
-**Last Updated**: 2026-08-20
-**Session Focus**: Closed the "Form Validation" item from High-Priority Items — added domain-layer bounds (name length, money magnitude, growth/tax rate ranges, RFC 5322 email format) to every existing `ValidateX` function across all wizard domains, added validators for the three singleton sections that had none at all (Payroll Tax Rates, Sales Growth Curve, Cash on Hand), added invite self-invite/duplicate-invite checks at the service layer, fixed two pre-existing bugs surfaced by the audit (Fixed Assets' `useful-life` step silently defaulting to 5 years instead of rejecting bad input; `PostSetup` swallowing month/year parse errors that `PostUpdateSetup` already caught), and aligned client-side HTML5 `min`/`max`/`maxlength`/`minlength` attributes with every new server-side bound (see "Session Summary (2026-08-20): Form Validation" below). Verified with `go build`/`vet`/`test ./...` (all green, extensive new domain and handler tests) plus a live-browser walkthrough confirming both layers: an out-of-range growth rate is blocked client-side (no POST sent) and a malformed signup email is rejected server-side via the handler test suite.
-**Total Remaining Items**: ~24 (across all categories — Testing and Form Validation are now closed)
-**Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → ~~Data Persistence~~ ✅ → ~~Docker Containerization~~ ✅ → ~~DDD/CQRS Architecture~~ ✅ → ~~DDD Violations Remediation~~ ✅ → ~~Testing~~ ✅ → ~~Form Validation~~ ✅ → Error Handling → Income Tax Modeling
+**Last Updated**: 2026-08-28
+**Session Focus**: Closed the "Error handling" item from High-Priority Items. Added `internal/interface/web/recover_middleware.go` (`Recover`) — a panic-recovery middleware that logs the stack trace and renders the shared error page, wired as the outermost layer in `cmd/cli/serve.go`'s middleware chain; previously a panic anywhere in a handler just killed the connection with no response, since net/http's own per-request recovery doesn't render anything. Then, an audit of every `http.Error`/`renderErrorPage`/`err.Error()` call site in `internal/interface/web/` found two recurring bugs: (1) ~15 `ParseForm` failures returned a bare unstyled `http.Error(w, "Bad Request", 400)` instead of the app's own error page, and (2) more seriously, `err.Error()` from a failed service call was shown to the user verbatim in 16 places (plan setup/update, signup, profile edit/delete, invite creation, and the final step of all 5 wizard hubs) — safe when the error was a domain validation message, but an information-disclosure bug when it wasn't, since those same service calls can also fail with a raw repository/SQL error. Fixing (2) required first fixing a latent gap in the domain layer: `entities.ErrValidation` (the sentinel meant to mark "safe to show" errors) was wrapped by exactly one call site in the whole codebase (`money.go`'s currency check) — nearly every other validation error is a distinct plain `errors.New` sentinel declared next to its entity (`ErrInvalidName`, `ErrWeakPassword`, `ErrSelfInvite`, etc.), so checking `errors.Is(err, ErrValidation)` alone would have masked ~25 legitimate, already-working validation messages as generic errors. Added `entities.IsUserFacing(err)` (`internal/domain/entities/errors.go`) as the single, centralized classification covering the full enumerated set, and built `internal/interface/web/errors.go`'s new `renderCommandError`/`renderInternalError`/`safeErrorMessage` helpers on top of it. See "Error Handling (2026-08-28)" below for the full list of fixed call sites and verification.
+**Total Remaining Items**: ~23 (across all categories — Testing, Form Validation, and Error Handling are now closed)
+**Critical Path**: ~~User Authorization~~ ✅ → ~~Form POST Handlers~~ ✅ → ~~Financial Calculations~~ ✅ → ~~Data Persistence~~ ✅ → ~~Docker Containerization~~ ✅ → ~~DDD/CQRS Architecture~~ ✅ → ~~DDD Violations Remediation~~ ✅ → ~~Testing~~ ✅ → ~~Form Validation~~ ✅ → ~~Error Handling~~ ✅ → Income Tax Modeling
 
 ## Session Summary (2026-07-29)
 
@@ -1592,3 +1592,91 @@ end to end with no regression.
 - Handler-level test coverage for the new validation paths is representative (one new case per
   category: growth-rate rejection, self-invite, duplicate-invite, malformed email, weak password),
   not exhaustive across every one of the ~15 newly-bounded fields.
+
+## Session Summary (2026-08-28): Error Handling
+
+### What Prompted It
+Item #8 on "High-Priority Items (Do First)" — Error Handling — was next once Form Validation
+closed. AGENTS.md's own open item read "a broader pass over generic 500-style messages is still
+open." A `grep` across every `http.Error`/`renderErrorPage`/`err.Error()` call site in
+`internal/interface/web/` (not sampling — all ~360 matching lines) found two distinct, recurring
+bugs rather than one:
+1. No panic-recovery middleware existed anywhere in the stack (`grep -rn "recover(" internal/
+   cmd/` returned nothing). net/http's own per-request recovery logs to stderr and closes the
+   connection, but renders nothing — a panic in any handler (a nil-pointer bug in the projection
+   engine, say) would just hang or drop the browser's connection with no response body at all.
+2. `err.Error()` from a failed service call was shown to the user verbatim in 16 places: plan
+   setup/update (`plan.go`), signup/profile-edit/profile-delete (`auth.go`), invite creation
+   (`invites.go`), and the final step of all 5 wizard hubs (Payroll ×3, Cash Flow ×2, Sales
+   Forecast ×2, Starting Point ×4, Operating Expenses ×2). This is correct when the error is a
+   domain validation message ("email address is not valid") but an information-disclosure bug
+   otherwise, since every one of those same service calls can also fail with a raw repository/SQL
+   error further down the same call path (e.g. `AuthService.CreateUser` calls both
+   `domain.NewUserWithPassword`, which validates, and `UserRepository.SaveUserWithPassword`, which
+   hits SQLite) — nothing in the handler distinguished the two before showing the message.
+   Separately, ~15 `ParseForm` failures returned a bare `http.Error(w, "Bad Request", 400)` instead
+   of the app's own styled error page — a smaller UX-consistency bug, not a disclosure one.
+
+### What Shipped
+1. **`internal/interface/web/recover_middleware.go`** (new) — `Recover(templateCache)` wraps the
+   handler chain, recovers a panic, logs it with `runtime/debug.Stack()`, and renders the shared
+   error page (generic message, 500) instead of the connection dying. Wired as the outermost layer
+   in `cmd/cli/serve.go`'s middleware chain (`httpHandler = web.Recover(templateCache)(httpHandler)`,
+   after `Logger`/`Authenticate`) so it catches panics from those middlewares too, not just the
+   route handlers.
+2. **`entities.IsUserFacing(err)`** (`internal/domain/entities/errors.go`) — the fix for bug #2
+   required first closing a latent gap in the domain layer itself: `ErrValidation`'s own doc
+   comment claims "all value-object and entity validation errors wrap" it, but a repo-wide grep
+   found exactly one call site that actually does (`money.go`'s currency check). Every other
+   validation/business-rule error — ~25 of them across `plan.go`, `session.go`, `user.go`,
+   `invite.go` (`ErrInvalidName`, `ErrWeakPassword`, `ErrSelfInvite`, `ErrDuplicateInvite`, etc.) —
+   is a distinct plain `errors.New` sentinel never wrapped in `ErrValidation`. Checking
+   `errors.Is(err, ErrValidation)` alone (the first approach tried) would have silently masked all
+   of them as generic 500s — a regression, since e.g. "you cannot invite yourself to your own plan"
+   was already working correctly before this session. `IsUserFacing` is a single, centralized,
+   additive enumeration of every known-safe sentinel (`ErrValidation` included) that `errors.Is`s
+   against each one — the one place that owns the full list, so `interface/web` doesn't re-derive
+   it per handler. New sentinels added later must be added to this list to be shown verbatim;
+   anything not on it (in particular every infrastructure/SQL error) falls through to the generic
+   message.
+3. **`internal/interface/web/errors.go`** — three new shared helpers built on `IsUserFacing`:
+   `renderInternalError` (logs with context, renders the generic 500 page — for cases with no
+   natural in-context error string), `renderCommandError` (400 with the real message for a
+   user-facing error, otherwise delegates to `renderInternalError` — for command/service failures
+   that redirect to the shared error page), and `safeErrorMessage` (returns the real message or logs
+   + returns the generic one — for handlers that re-render a specific form, e.g. signup, inline,
+   rather than the shared error page).
+4. **Every identified call site fixed**: all ~15 bare `http.Error(w, "Bad Request", 400)` →
+   `renderErrorPage` with a styled message; the "Unauthorized"/"Session creation failed" plain-text
+   `http.Error`s in `plan.go`/`auth.go` → styled equivalents; all 16 `err.Error()`/`renderStepError
+   (err.Error())` leaks → `renderCommandError` (plan setup/update) or `safeErrorMessage` (everywhere
+   else) — see the per-file diffs for the full list; each site now names its own context string
+   (e.g. `"PayrollSvc SaveSalaryRoleStep"`) so a masked internal error is still identifiable in the
+   server log.
+
+### Verified
+`go build ./...` / `go vet ./...` / `go test ./...` pass, including two new test files:
+`internal/domain/entities/errors_test.go` (`TestIsUserFacing` — every category of sentinel, a
+wrapped sentinel, and two unrelated stdlib errors) and `internal/interface/web/
+recover_middleware_test.go` (`TestRecover_CatchesPanicAndRendersGenericErrorPage` — panics, asserts
+a 500 with the generic message and confirms the panic value itself never reaches the response body;
+`TestRecover_DoesNotInterfereWithNormalRequests` — a non-panicking handler's response passes through
+unchanged). Live-verified against a scratch SQLite DB via `curl`: a weak signup password and a
+malformed signup email both still render their real, specific validation messages (proving
+`IsUserFacing` didn't regress the already-working cases); an unauthenticated `POST /plan/setup` now
+renders the styled error page instead of plain text; `PostSetup` with `startMonth=13` renders "plan
+starting month must be between 1-12" (a `plan.go` sentinel, exercised through the new
+`renderCommandError` path) instead of a generic message; a too-long company name renders "name
+cannot exceed 200 characters" the same way; and the ordinary signup → create-plan happy path still
+completes end to end with no regression.
+
+### Deliberately Deferred
+- The many `log.Printf(...)`-then-continue sites for non-critical reads (e.g. "Failed to load cash
+  flow section status for plan %s") were left untouched — those are intentional graceful-degradation
+  fallbacks (render the page with a default/empty status rather than a hard error), a different
+  category of behavior from the message-correctness bugs this session targeted, not an oversight.
+- CSRF protection, rate limiting, and dedicated input sanitization remain untouched — separate,
+  still-open items under "Input Validation & Error Handling" and "Security".
+- New test coverage is representative (the classification helper itself, plus the new middleware),
+  not an exhaustive per-handler regression suite for all ~31 fixed call sites — the live `curl`
+  verification above covers a representative sample of each category instead.

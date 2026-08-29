@@ -256,7 +256,7 @@ func (c *PayrollController) GetSalaryRoleStep(w http.ResponseWriter, r *http.Req
 func (c *PayrollController) PostSalaryRoleStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -348,7 +348,7 @@ func (c *PayrollController) PostSalaryRoleStep(w http.ResponseWriter, r *http.Re
 
 	if err := c.payrollSvc.SaveSalaryRoleStep(itemID, role, newCurrentStep, newStatus); err != nil {
 		if finishNow {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("PayrollSvc SaveSalaryRoleStep", err))
 		} else {
 			log.Printf("Failed to save salary role step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
@@ -511,7 +511,7 @@ func (c *PayrollController) GetBenefitStep(w http.ResponseWriter, r *http.Reques
 func (c *PayrollController) PostBenefitStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -594,7 +594,7 @@ func (c *PayrollController) PostBenefitStep(w http.ResponseWriter, r *http.Reque
 
 	if err := c.payrollSvc.SaveBenefitStep(itemID, benefit, newCurrentStep, newStatus); err != nil {
 		if finishNow {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("PayrollSvc SaveBenefitStep", err))
 		} else {
 			log.Printf("Failed to save benefit step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
@@ -725,7 +725,7 @@ func payrollTaxRatesButtonLabel(idx int) string {
 func (c *PayrollController) PostPayrollTaxRatesStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -782,7 +782,7 @@ func (c *PayrollController) PostPayrollTaxRatesStep(w http.ResponseWriter, r *ht
 	isLastStep := idx == len(payrollTaxRateSteps)-1
 	if err := c.payrollSvc.SavePayrollTaxRatesStep(planID, rates, newCurrentStep, isLastStep); err != nil {
 		if isLastStep {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("PayrollSvc SavePayrollTaxRatesStep", err))
 		} else {
 			log.Printf("Failed to save payroll tax rates step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")

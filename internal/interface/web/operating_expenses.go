@@ -172,7 +172,7 @@ func (c *OperatingExpensesController) GetOperatingExpenseStep(w http.ResponseWri
 func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		renderErrorPage(w, r, c.templateCache, http.StatusBadRequest, "We couldn't process that form submission. Please try again.")
 		return
 	}
 	planID, err := parsePlanID(r)
@@ -274,7 +274,7 @@ func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWr
 			Growth:             cost.Growth(),
 			CurrentStep:        len(operatingExpenseSteps),
 		}); err != nil {
-			renderStepError(err.Error())
+			renderStepError(safeErrorMessage("OpExSvc UpdateOperatingExpense", err))
 			return
 		}
 		http.Redirect(w, r, views.OperatingExpensesListURL(planID), http.StatusSeeOther)
@@ -288,7 +288,7 @@ func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWr
 		Growth:             cost.Growth(),
 		CurrentStep:        len(operatingExpenseSteps),
 	}); err != nil {
-		renderStepError(err.Error())
+		renderStepError(safeErrorMessage("OpExSvc CreateOperatingExpense", err))
 		return
 	}
 
