@@ -83,12 +83,12 @@ tags
 # Binaries
 /web
 /northbasis-cli
+/cli
 /bin
 
 # Database files
 northbasis.db
 northbasis.db-*
-cli
 
 # air (dev hot-reload)
 /tmp
