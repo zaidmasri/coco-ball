@@ -13,6 +13,7 @@ import (
 
 	"uuid"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -318,30 +319,48 @@ func (c *SalesForecastController) PostProductStep(w http.ResponseWriter, r *http
 
 	finishNow := step == "cost"
 
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-		newCurrentStep = len(productSteps)
-	}
-
-	if err := c.salesForecastSvc.SaveProductStep(itemID, product, newCurrentStep, newStatus); err != nil {
-		if finishNow {
-			renderStepError(safeErrorMessage("SalesForecastSvc SaveProductStep", err))
-		} else {
+	// The earlier steps only ever hold part of a valid Product, so they're
+	// saved as a raw draft via the pass-through below rather than through
+	// Create/UpdateProduct - there's no valid domain entity to construct
+	// until the wizard finishes.
+	if !finishNow {
+		if err := c.salesForecastSvc.SaveProductDraftStep(itemID, product, idx+1); err != nil {
 			log.Printf("Failed to save product step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
+			return
 		}
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.SalesForecastSectionStepURL(planID, itemID, domain.SectionProducts, nextStepName(productSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The final step completes the wizard: this is the first point a full
+	// Product exists. CreateProduct/UpdateProduct are the only code allowed
+	// to construct/mutate it (via domain.NewProduct).
 	if wasComplete {
+		if _, err := c.salesForecastSvc.UpdateProduct(&commands.UpdateProduct{
+			ItemID:       itemID,
+			Name:         product.Name,
+			Month1Units:  product.Month1Units,
+			PricePerUnit: product.PricePerUnit,
+			CostPerUnit:  product.CostPerUnit,
+			CurrentStep:  len(productSteps),
+		}); err != nil {
+			renderStepError(safeErrorMessage("SalesForecastSvc UpdateProduct", err))
+			return
+		}
 		http.Redirect(w, r, views.SalesForecastSectionListURL(planID, domain.SectionProducts), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.salesForecastSvc.CreateProduct(&commands.CreateProduct{
+		ItemID:       itemID,
+		Name:         product.Name,
+		Month1Units:  product.Month1Units,
+		PricePerUnit: product.PricePerUnit,
+		CostPerUnit:  product.CostPerUnit,
+		CurrentStep:  len(productSteps),
+	}); err != nil {
+		renderStepError(safeErrorMessage("SalesForecastSvc CreateProduct", err))
 		return
 	}
 

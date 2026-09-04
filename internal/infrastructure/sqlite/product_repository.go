@@ -75,7 +75,7 @@ func (r *ProductRepository) FindProductDraft(planID uuid.UUID) (*repositories.Pr
 
 	return &repositories.ProductItem{
 		ID:          id,
-		Product:     productFromRow(row.Name, row.Month1Units, row.PricePerUnit, row.CostPerUnit),
+		Product:     productFromRow(id, row.Name, row.Month1Units, row.PricePerUnit, row.CostPerUnit),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -97,13 +97,21 @@ func (r *ProductRepository) GetProduct(itemID uuid.UUID) (*repositories.ProductI
 
 	return &repositories.ProductItem{
 		ID:          id,
-		Product:     productFromRow(row.Name, row.Month1Units, row.PricePerUnit, row.CostPerUnit),
+		Product:     productFromRow(id, row.Name, row.Month1Units, row.PricePerUnit, row.CostPerUnit),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
 }
 
-func (r *ProductRepository) SaveProductStep(itemID uuid.UUID, product domain.Product, currentStep int, status repositories.ItemStatus) error {
+func (r *ProductRepository) SaveProductDraftStep(itemID uuid.UUID, product domain.Product, currentStep int) error {
+	return r.saveProductStep(itemID, product, currentStep, repositories.StatusDraft)
+}
+
+func (r *ProductRepository) CompleteProduct(itemID uuid.UUID, vp domain.ValidatedProduct, currentStep int) error {
+	return r.saveProductStep(itemID, vp.Product(), currentStep, repositories.StatusComplete)
+}
+
+func (r *ProductRepository) saveProductStep(itemID uuid.UUID, product domain.Product, currentStep int, status repositories.ItemStatus) error {
 	affected, err := r.queries.SaveProductStep(context.Background(), db.SaveProductStepParams{
 		Name:         product.Name,
 		Month1Units:  int64(product.Month1Units),
@@ -140,7 +148,7 @@ func (r *ProductRepository) ListCompleteProducts(planID uuid.UUID) ([]repositori
 		}
 		items[i] = repositories.ProductItem{
 			ID:          id,
-			Product:     productFromRow(row.Name, row.Month1Units, row.PricePerUnit, row.CostPerUnit),
+			Product:     productFromRow(id, row.Name, row.Month1Units, row.PricePerUnit, row.CostPerUnit),
 			Status:      repositories.ItemStatus(row.Status),
 			CurrentStep: int(row.CurrentStep),
 		}
@@ -162,11 +170,13 @@ func (r *ProductRepository) DeleteProduct(itemID uuid.UUID) error {
 	return nil
 }
 
-func productFromRow(name string, month1Units, pricePerUnit, costPerUnit int64) domain.Product {
-	return domain.Product{
+func productFromRow(id uuid.UUID, name string, month1Units, pricePerUnit, costPerUnit int64) domain.Product {
+	p := domain.Product{
 		Name:         name,
 		Month1Units:  int(month1Units),
 		PricePerUnit: mustUSD(pricePerUnit),
 		CostPerUnit:  mustUSD(costPerUnit),
 	}
+	p.SetID(id)
+	return p
 }

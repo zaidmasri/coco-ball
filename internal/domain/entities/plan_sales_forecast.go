@@ -1,12 +1,64 @@
 package entities
 
-// Product is a single sales-forecast product/service line.
+import "uuid"
+
+// Product is a single sales-forecast product/service line. It carries its
+// own identity (id) so a wizard row and the domain value it stores can be
+// referenced by the same UUID - mirrors Cost (plan_growth.go) and
+// SalaryRole (plan_payroll.go).
 type Product struct {
+	id           uuid.UUID
 	Name         string
 	Month1Units  int
 	PricePerUnit Money
 	CostPerUnit  Money
 }
+
+func (p Product) ID() uuid.UUID { return p.id }
+
+// SetID overrides a Product's identity. Used only by repository
+// implementations reconstructing a Product already persisted under a known
+// ID (the wizard item's row ID) - mirrors SalaryRole.SetID. Reconstructed
+// rows may be incomplete drafts, so this deliberately bypasses NewProduct's
+// validation.
+func (p *Product) SetID(id uuid.UUID) { p.id = id }
+
+// NewProduct creates a new Product line item with a domain-generated UUIDv7
+// identity, validating it against the same invariants a persisted Product
+// must satisfy. Mirrors NewSalaryRole's shape.
+func NewProduct(name string, month1Units int, pricePerUnit, costPerUnit Money) (Product, error) {
+	p := Product{
+		id:           uuid.NewV7(),
+		Name:         name,
+		Month1Units:  month1Units,
+		PricePerUnit: pricePerUnit,
+		CostPerUnit:  costPerUnit,
+	}
+	if err := ValidateProduct(p); err != nil {
+		return Product{}, err
+	}
+	return p, nil
+}
+
+// ValidatedProduct is an opaque token proving a Product passed every
+// invariant ValidateProduct checks. It can only be produced by
+// NewValidatedProduct - mirrors ValidatedSalaryRole's shape.
+// ProductRepository.CompleteProduct accepts only this type.
+type ValidatedProduct struct {
+	product     Product
+	isValidated bool
+}
+
+// NewValidatedProduct validates an existing Product value - including one
+// built while reconstructing a wizard draft - and wraps it.
+func NewValidatedProduct(p Product) (ValidatedProduct, error) {
+	if err := ValidateProduct(p); err != nil {
+		return ValidatedProduct{}, err
+	}
+	return ValidatedProduct{product: p, isValidated: true}, nil
+}
+
+func (v ValidatedProduct) Product() Product { return v.product }
 
 // SalesGrowthCurve is the global unit-sales growth schedule applied to every
 // product line: quarterly rates for Year 1, then one rate per subsequent year.

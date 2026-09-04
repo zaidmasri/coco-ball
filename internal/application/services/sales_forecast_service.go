@@ -3,7 +3,9 @@ package services
 import (
 	"uuid"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
+	"github.com/zaidmasri/business-planning-tool/internal/application/mapper"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
@@ -58,19 +60,52 @@ func (s *salesForecastService) FindProductDraft(planID uuid.UUID) (*repositories
 func (s *salesForecastService) GetProduct(itemID uuid.UUID) (*repositories.ProductItem, error) {
 	return s.products.GetProduct(itemID)
 }
-func (s *salesForecastService) SaveProductStep(itemID uuid.UUID, product domain.Product, currentStep int, status repositories.ItemStatus) error {
-	if status == repositories.StatusComplete {
-		if err := domain.ValidateProduct(product); err != nil {
-			return err
-		}
-	}
-	return s.products.SaveProductStep(itemID, product, currentStep, status)
+func (s *salesForecastService) SaveProductDraftStep(itemID uuid.UUID, product domain.Product, currentStep int) error {
+	return s.products.SaveProductDraftStep(itemID, product, currentStep)
 }
 func (s *salesForecastService) ListCompleteProducts(planID uuid.UUID) ([]repositories.ProductItem, error) {
 	return s.products.ListCompleteProducts(planID)
 }
 func (s *salesForecastService) DeleteProduct(itemID uuid.UUID) error {
 	return s.products.DeleteProduct(itemID)
+}
+
+func (s *salesForecastService) CreateProduct(cmd *commands.CreateProduct) (*commands.CreateProductResult, error) {
+	product, err := domain.NewProduct(cmd.Name, cmd.Month1Units, cmd.PricePerUnit, cmd.CostPerUnit)
+	if err != nil {
+		return nil, err
+	}
+	product.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedProduct(product)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.products.CompleteProduct(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.CreateProductResult{Result: mapper.NewProductResultFromEntity(product)}, nil
+}
+
+func (s *salesForecastService) UpdateProduct(cmd *commands.UpdateProduct) (*commands.UpdateProductResult, error) {
+	product, err := domain.NewProduct(cmd.Name, cmd.Month1Units, cmd.PricePerUnit, cmd.CostPerUnit)
+	if err != nil {
+		return nil, err
+	}
+	product.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedProduct(product)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.products.CompleteProduct(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.UpdateProductResult{Result: mapper.NewProductResultFromEntity(product)}, nil
 }
 
 func (s *salesForecastService) GetSalesGrowthCurveRow(planID uuid.UUID) (*repositories.SalesGrowthCurveRow, error) {
