@@ -14,6 +14,7 @@ import (
 
 	"uuid"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -374,38 +375,62 @@ func (c *StartingPointController) PostFixedAssetStep(w http.ResponseWriter, r *h
 	// after this step, skipping "useful-life" entirely.
 	finishNow := step == "useful-life" || (step == "depreciation-method" && asset.DepreciationMethod == domain.None)
 
-	// Full cross-field validation (domain.ValidateCapitalAsset, run by the
-	// service on StatusComplete) only makes sense once every field has
-	// actually been answered - running it after every intermediate step
-	// spuriously rejects a fresh draft (e.g. DepreciationMethod is still
-	// "" on the "name"/"cost" steps, tripping the "must have a useful
-	// life unless None" rule before the user has even reached that
-	// question). finishNow gates when we ask for StatusComplete at all.
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-		newCurrentStep = len(fixedAssetSteps)
-	}
-
-	if err := c.startingPointSvc.SaveCapitalAssetStep(itemID, asset, newCurrentStep, newStatus); err != nil {
-		if finishNow {
-			renderStepError(safeErrorMessage("StartingPointSvc SaveCapitalAssetStep", err))
-		} else {
+	// The earlier steps only ever hold part of a valid CapitalAsset, so
+	// they're saved as a raw draft via the pass-through below rather than
+	// through Create/UpdateCapitalAsset - there's no valid domain entity
+	// to construct until the wizard finishes. Full cross-field validation
+	// (domain.ValidateCapitalAsset, run inside NewCapitalAsset) only makes
+	// sense once every field has actually been answered - running it
+	// after every intermediate step spuriously rejects a fresh draft
+	// (e.g. DepreciationMethod is still "" on the "name"/"cost" steps,
+	// tripping the "must have a useful life unless None" rule before the
+	// user has even reached that question). finishNow gates when we
+	// attempt completion at all.
+	if !finishNow {
+		if err := c.startingPointSvc.SaveCapitalAssetDraftStep(itemID, asset, idx+1); err != nil {
 			log.Printf("Failed to save fixed asset step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
+			return
 		}
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.SectionStepURL(planID, itemID, domain.SectionFixedAssets, nextStepName(fixedAssetSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The final step completes the wizard: this is the first point a full
+	// CapitalAsset exists. CreateCapitalAsset/UpdateCapitalAsset are the
+	// only code allowed to construct/mutate it (via domain.NewCapitalAsset).
 	if wasComplete {
+		if _, err := c.startingPointSvc.UpdateCapitalAsset(&commands.UpdateCapitalAsset{
+			ItemID:             itemID,
+			Name:               asset.Name,
+			PurchaseCost:       asset.PurchaseCost,
+			UsefulLifeMonths:   asset.UsefulLifeMonths,
+			SalvageValue:       asset.SalvageValue,
+			PurchaseMonthIndex: asset.PurchaseMonthIndex,
+			DepreciationMethod: asset.DepreciationMethod,
+			AssociatedLoan:     asset.AssociatedLoan,
+			CurrentStep:        len(fixedAssetSteps),
+		}); err != nil {
+			renderStepError(safeErrorMessage("StartingPointSvc UpdateCapitalAsset", err))
+			return
+		}
 		// Editing an already-finished item: no "Add another?" detour.
 		http.Redirect(w, r, views.SectionListURL(planID, domain.SectionFixedAssets), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.startingPointSvc.CreateCapitalAsset(&commands.CreateCapitalAsset{
+		ItemID:             itemID,
+		Name:               asset.Name,
+		PurchaseCost:       asset.PurchaseCost,
+		UsefulLifeMonths:   asset.UsefulLifeMonths,
+		SalvageValue:       asset.SalvageValue,
+		PurchaseMonthIndex: asset.PurchaseMonthIndex,
+		DepreciationMethod: asset.DepreciationMethod,
+		AssociatedLoan:     asset.AssociatedLoan,
+		CurrentStep:        len(fixedAssetSteps),
+	}); err != nil {
+		renderStepError(safeErrorMessage("StartingPointSvc CreateCapitalAsset", err))
 		return
 	}
 
@@ -614,32 +639,44 @@ func (c *StartingPointController) PostStartupCostStep(w http.ResponseWriter, r *
 
 	finishNow := idx == len(startupCostSteps)-1
 
-	// Full validation (domain.ValidateStartupCost, run by the service on
-	// StatusComplete) only makes sense once every field has actually been
-	// answered - see the matching comment in PostFixedAssetStep.
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-	}
-
-	if err := c.startingPointSvc.SaveStartupCostStep(itemID, cost, newCurrentStep, newStatus); err != nil {
-		if finishNow {
-			renderStepError(safeErrorMessage("StartingPointSvc SaveStartupCostStep", err))
-		} else {
+	// The earlier steps only ever hold part of a valid StartupCost, so
+	// they're saved as a raw draft via the pass-through below rather than
+	// through Create/UpdateStartupCost - there's no valid domain entity to
+	// construct until the wizard finishes.
+	if !finishNow {
+		if err := c.startingPointSvc.SaveStartupCostDraftStep(itemID, cost, idx+1); err != nil {
 			log.Printf("Failed to save startup cost step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
+			return
 		}
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.SectionStepURL(planID, itemID, domain.SectionStartupCosts, nextStepName(startupCostSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The final step completes the wizard: this is the first point a full
+	// StartupCost exists. CreateStartupCost/UpdateStartupCost are the only
+	// code allowed to construct/mutate it (via domain.NewStartupCost).
 	if wasComplete {
+		if _, err := c.startingPointSvc.UpdateStartupCost(&commands.UpdateStartupCost{
+			ItemID:      itemID,
+			Name:        cost.Name,
+			Amount:      cost.Amount,
+			CurrentStep: len(startupCostSteps),
+		}); err != nil {
+			renderStepError(safeErrorMessage("StartingPointSvc UpdateStartupCost", err))
+			return
+		}
 		http.Redirect(w, r, views.SectionListURL(planID, domain.SectionStartupCosts), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.startingPointSvc.CreateStartupCost(&commands.CreateStartupCost{
+		ItemID:      itemID,
+		Name:        cost.Name,
+		Amount:      cost.Amount,
+		CurrentStep: len(startupCostSteps),
+	}); err != nil {
+		renderStepError(safeErrorMessage("StartingPointSvc CreateStartupCost", err))
 		return
 	}
 
@@ -862,32 +899,48 @@ func (c *StartingPointController) PostFundingSourceStep(w http.ResponseWriter, r
 
 	finishNow := idx == len(fundingSourceSteps)-1
 
-	// Full validation (domain.ValidateFundingSource, run by the service on
-	// StatusComplete) only makes sense once every field has actually been
-	// answered - see the matching comment in PostFixedAssetStep.
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-	}
-
-	if err := c.startingPointSvc.SaveFundingSourceStep(itemID, funding, newCurrentStep, newStatus); err != nil {
-		if finishNow {
-			renderStepError(safeErrorMessage("StartingPointSvc SaveFundingSourceStep", err))
-		} else {
+	// The earlier steps only ever hold part of a valid FundingSource, so
+	// they're saved as a raw draft via the pass-through below rather than
+	// through Create/UpdateFundingSource - there's no valid domain entity
+	// to construct until the wizard finishes.
+	if !finishNow {
+		if err := c.startingPointSvc.SaveFundingSourceDraftStep(itemID, funding, idx+1); err != nil {
 			log.Printf("Failed to save funding source step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
+			return
 		}
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.SectionStepURL(planID, itemID, domain.SectionFundingSources, nextStepName(fundingSourceSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The final step completes the wizard: this is the first point a full
+	// FundingSource exists. CreateFundingSource/UpdateFundingSource are the
+	// only code allowed to construct/mutate it (via domain.NewFundingSource).
 	if wasComplete {
+		if _, err := c.startingPointSvc.UpdateFundingSource(&commands.UpdateFundingSource{
+			ItemID:       itemID,
+			Name:         funding.Name,
+			Amount:       funding.Amount,
+			InterestRate: funding.InterestRate,
+			TermMonths:   funding.TermMonths,
+			CurrentStep:  len(fundingSourceSteps),
+		}); err != nil {
+			renderStepError(safeErrorMessage("StartingPointSvc UpdateFundingSource", err))
+			return
+		}
 		http.Redirect(w, r, views.SectionListURL(planID, domain.SectionFundingSources), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.startingPointSvc.CreateFundingSource(&commands.CreateFundingSource{
+		ItemID:       itemID,
+		Name:         funding.Name,
+		Amount:       funding.Amount,
+		InterestRate: funding.InterestRate,
+		TermMonths:   funding.TermMonths,
+		CurrentStep:  len(fundingSourceSteps),
+	}); err != nil {
+		renderStepError(safeErrorMessage("StartingPointSvc CreateFundingSource", err))
 		return
 	}
 

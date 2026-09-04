@@ -75,7 +75,7 @@ func (r *FundingSourceRepository) FindFundingSourceDraft(planID uuid.UUID) (*rep
 
 	return &repositories.FundingSourceItem{
 		ID:          id,
-		Funding:     fundingSourceFromRow(row.Name, row.Amount, row.InterestRate, row.TermMonths),
+		Funding:     fundingSourceFromRow(id, row.Name, row.Amount, row.InterestRate, row.TermMonths),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -97,13 +97,21 @@ func (r *FundingSourceRepository) GetFundingSource(itemID uuid.UUID) (*repositor
 
 	return &repositories.FundingSourceItem{
 		ID:          id,
-		Funding:     fundingSourceFromRow(row.Name, row.Amount, row.InterestRate, row.TermMonths),
+		Funding:     fundingSourceFromRow(id, row.Name, row.Amount, row.InterestRate, row.TermMonths),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
 }
 
-func (r *FundingSourceRepository) SaveFundingSourceStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int, status repositories.ItemStatus) error {
+func (r *FundingSourceRepository) SaveFundingSourceDraftStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int) error {
+	return r.saveFundingSourceStep(itemID, funding, currentStep, repositories.StatusDraft)
+}
+
+func (r *FundingSourceRepository) CompleteFundingSource(itemID uuid.UUID, vf domain.ValidatedFundingSource, currentStep int) error {
+	return r.saveFundingSourceStep(itemID, vf.FundingSource(), currentStep, repositories.StatusComplete)
+}
+
+func (r *FundingSourceRepository) saveFundingSourceStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int, status repositories.ItemStatus) error {
 	affected, err := r.queries.SaveFundingSourceStep(context.Background(), db.SaveFundingSourceStepParams{
 		Name:         funding.Name,
 		Amount:       funding.Amount.MinorUnits(),
@@ -140,7 +148,7 @@ func (r *FundingSourceRepository) ListCompleteFundingSources(planID uuid.UUID) (
 		}
 		items[i] = repositories.FundingSourceItem{
 			ID:          id,
-			Funding:     fundingSourceFromRow(row.Name, row.Amount, row.InterestRate, row.TermMonths),
+			Funding:     fundingSourceFromRow(id, row.Name, row.Amount, row.InterestRate, row.TermMonths),
 			Status:      repositories.ItemStatus(row.Status),
 			CurrentStep: int(row.CurrentStep),
 		}
@@ -162,11 +170,13 @@ func (r *FundingSourceRepository) DeleteFundingSource(itemID uuid.UUID) error {
 	return nil
 }
 
-func fundingSourceFromRow(name string, amount int64, interestRate float64, termMonths int64) domain.FundingSource {
-	return domain.FundingSource{
+func fundingSourceFromRow(id uuid.UUID, name string, amount int64, interestRate float64, termMonths int64) domain.FundingSource {
+	f := domain.FundingSource{
 		Name:         name,
 		Amount:       mustUSD(amount),
 		InterestRate: interestRate,
 		TermMonths:   int(termMonths),
 	}
+	f.SetID(id)
+	return f
 }

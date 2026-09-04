@@ -3,7 +3,9 @@ package services
 import (
 	"uuid"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
+	"github.com/zaidmasri/business-planning-tool/internal/application/mapper"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
@@ -76,19 +78,52 @@ func (s *startingPointService) FindCapitalAssetDraft(planID uuid.UUID) (*reposit
 func (s *startingPointService) GetCapitalAsset(itemID uuid.UUID) (*repositories.CapitalAssetItem, error) {
 	return s.capitalAssets.GetCapitalAsset(itemID)
 }
-func (s *startingPointService) SaveCapitalAssetStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int, status repositories.ItemStatus) error {
-	if status == repositories.StatusComplete {
-		if err := domain.ValidateCapitalAsset(asset); err != nil {
-			return err
-		}
-	}
-	return s.capitalAssets.SaveCapitalAssetStep(itemID, asset, currentStep, status)
+func (s *startingPointService) SaveCapitalAssetDraftStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int) error {
+	return s.capitalAssets.SaveCapitalAssetDraftStep(itemID, asset, currentStep)
 }
 func (s *startingPointService) ListCompleteCapitalAssets(planID uuid.UUID) ([]repositories.CapitalAssetItem, error) {
 	return s.capitalAssets.ListCompleteCapitalAssets(planID)
 }
 func (s *startingPointService) DeleteCapitalAsset(itemID uuid.UUID) error {
 	return s.capitalAssets.DeleteCapitalAsset(itemID)
+}
+
+func (s *startingPointService) CreateCapitalAsset(cmd *commands.CreateCapitalAsset) (*commands.CreateCapitalAssetResult, error) {
+	asset, err := domain.NewCapitalAsset(cmd.Name, cmd.PurchaseCost, cmd.UsefulLifeMonths, cmd.SalvageValue, cmd.PurchaseMonthIndex, cmd.DepreciationMethod, cmd.AssociatedLoan)
+	if err != nil {
+		return nil, err
+	}
+	asset.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedCapitalAsset(asset)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.capitalAssets.CompleteCapitalAsset(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.CreateCapitalAssetResult{Result: mapper.NewCapitalAssetResultFromEntity(asset)}, nil
+}
+
+func (s *startingPointService) UpdateCapitalAsset(cmd *commands.UpdateCapitalAsset) (*commands.UpdateCapitalAssetResult, error) {
+	asset, err := domain.NewCapitalAsset(cmd.Name, cmd.PurchaseCost, cmd.UsefulLifeMonths, cmd.SalvageValue, cmd.PurchaseMonthIndex, cmd.DepreciationMethod, cmd.AssociatedLoan)
+	if err != nil {
+		return nil, err
+	}
+	asset.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedCapitalAsset(asset)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.capitalAssets.CompleteCapitalAsset(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.UpdateCapitalAssetResult{Result: mapper.NewCapitalAssetResultFromEntity(asset)}, nil
 }
 
 // Startup Costs
@@ -102,19 +137,52 @@ func (s *startingPointService) FindStartupCostDraft(planID uuid.UUID) (*reposito
 func (s *startingPointService) GetStartupCost(itemID uuid.UUID) (*repositories.StartupCostItem, error) {
 	return s.startupCosts.GetStartupCost(itemID)
 }
-func (s *startingPointService) SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int, status repositories.ItemStatus) error {
-	if status == repositories.StatusComplete {
-		if err := domain.ValidateStartupCost(cost); err != nil {
-			return err
-		}
-	}
-	return s.startupCosts.SaveStartupCostStep(itemID, cost, currentStep, status)
+func (s *startingPointService) SaveStartupCostDraftStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int) error {
+	return s.startupCosts.SaveStartupCostDraftStep(itemID, cost, currentStep)
 }
 func (s *startingPointService) ListCompleteStartupCosts(planID uuid.UUID) ([]repositories.StartupCostItem, error) {
 	return s.startupCosts.ListCompleteStartupCosts(planID)
 }
 func (s *startingPointService) DeleteStartupCost(itemID uuid.UUID) error {
 	return s.startupCosts.DeleteStartupCost(itemID)
+}
+
+func (s *startingPointService) CreateStartupCost(cmd *commands.CreateStartupCost) (*commands.CreateStartupCostResult, error) {
+	cost, err := domain.NewStartupCost(cmd.Name, cmd.Amount)
+	if err != nil {
+		return nil, err
+	}
+	cost.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedStartupCost(cost)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.startupCosts.CompleteStartupCost(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.CreateStartupCostResult{Result: mapper.NewStartupCostResultFromEntity(cost)}, nil
+}
+
+func (s *startingPointService) UpdateStartupCost(cmd *commands.UpdateStartupCost) (*commands.UpdateStartupCostResult, error) {
+	cost, err := domain.NewStartupCost(cmd.Name, cmd.Amount)
+	if err != nil {
+		return nil, err
+	}
+	cost.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedStartupCost(cost)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.startupCosts.CompleteStartupCost(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.UpdateStartupCostResult{Result: mapper.NewStartupCostResultFromEntity(cost)}, nil
 }
 
 // Funding Sources
@@ -128,19 +196,52 @@ func (s *startingPointService) FindFundingSourceDraft(planID uuid.UUID) (*reposi
 func (s *startingPointService) GetFundingSource(itemID uuid.UUID) (*repositories.FundingSourceItem, error) {
 	return s.fundingSources.GetFundingSource(itemID)
 }
-func (s *startingPointService) SaveFundingSourceStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int, status repositories.ItemStatus) error {
-	if status == repositories.StatusComplete {
-		if err := domain.ValidateFundingSource(funding); err != nil {
-			return err
-		}
-	}
-	return s.fundingSources.SaveFundingSourceStep(itemID, funding, currentStep, status)
+func (s *startingPointService) SaveFundingSourceDraftStep(itemID uuid.UUID, funding domain.FundingSource, currentStep int) error {
+	return s.fundingSources.SaveFundingSourceDraftStep(itemID, funding, currentStep)
 }
 func (s *startingPointService) ListCompleteFundingSources(planID uuid.UUID) ([]repositories.FundingSourceItem, error) {
 	return s.fundingSources.ListCompleteFundingSources(planID)
 }
 func (s *startingPointService) DeleteFundingSource(itemID uuid.UUID) error {
 	return s.fundingSources.DeleteFundingSource(itemID)
+}
+
+func (s *startingPointService) CreateFundingSource(cmd *commands.CreateFundingSource) (*commands.CreateFundingSourceResult, error) {
+	funding, err := domain.NewFundingSource(cmd.Name, cmd.Amount, cmd.InterestRate, cmd.TermMonths)
+	if err != nil {
+		return nil, err
+	}
+	funding.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedFundingSource(funding)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.fundingSources.CompleteFundingSource(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.CreateFundingSourceResult{Result: mapper.NewFundingSourceResultFromEntity(funding)}, nil
+}
+
+func (s *startingPointService) UpdateFundingSource(cmd *commands.UpdateFundingSource) (*commands.UpdateFundingSourceResult, error) {
+	funding, err := domain.NewFundingSource(cmd.Name, cmd.Amount, cmd.InterestRate, cmd.TermMonths)
+	if err != nil {
+		return nil, err
+	}
+	funding.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedFundingSource(funding)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.fundingSources.CompleteFundingSource(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.UpdateFundingSourceResult{Result: mapper.NewFundingSourceResultFromEntity(funding)}, nil
 }
 
 // Starting Balances

@@ -75,7 +75,7 @@ func (r *StartupCostRepository) FindStartupCostDraft(planID uuid.UUID) (*reposit
 
 	return &repositories.StartupCostItem{
 		ID:          id,
-		Cost:        domain.StartupCost{Name: row.Name, Amount: mustUSD(row.Amount)},
+		Cost:        startupCostFromRow(id, row.Name, row.Amount),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -97,13 +97,21 @@ func (r *StartupCostRepository) GetStartupCost(itemID uuid.UUID) (*repositories.
 
 	return &repositories.StartupCostItem{
 		ID:          id,
-		Cost:        domain.StartupCost{Name: row.Name, Amount: mustUSD(row.Amount)},
+		Cost:        startupCostFromRow(id, row.Name, row.Amount),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
 }
 
-func (r *StartupCostRepository) SaveStartupCostStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int, status repositories.ItemStatus) error {
+func (r *StartupCostRepository) SaveStartupCostDraftStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int) error {
+	return r.saveStartupCostStep(itemID, cost, currentStep, repositories.StatusDraft)
+}
+
+func (r *StartupCostRepository) CompleteStartupCost(itemID uuid.UUID, vc domain.ValidatedStartupCost, currentStep int) error {
+	return r.saveStartupCostStep(itemID, vc.StartupCost(), currentStep, repositories.StatusComplete)
+}
+
+func (r *StartupCostRepository) saveStartupCostStep(itemID uuid.UUID, cost domain.StartupCost, currentStep int, status repositories.ItemStatus) error {
 	affected, err := r.queries.SaveStartupCostStep(context.Background(), db.SaveStartupCostStepParams{
 		Name:        cost.Name,
 		Amount:      cost.Amount.MinorUnits(),
@@ -138,7 +146,7 @@ func (r *StartupCostRepository) ListCompleteStartupCosts(planID uuid.UUID) ([]re
 		}
 		items[i] = repositories.StartupCostItem{
 			ID:          id,
-			Cost:        domain.StartupCost{Name: row.Name, Amount: mustUSD(row.Amount)},
+			Cost:        startupCostFromRow(id, row.Name, row.Amount),
 			Status:      repositories.ItemStatus(row.Status),
 			CurrentStep: int(row.CurrentStep),
 		}
@@ -158,4 +166,13 @@ func (r *StartupCostRepository) DeleteStartupCost(itemID uuid.UUID) error {
 		return errors.New("startup cost not found")
 	}
 	return nil
+}
+
+func startupCostFromRow(id uuid.UUID, name string, amount int64) domain.StartupCost {
+	c := domain.StartupCost{
+		Name:   name,
+		Amount: mustUSD(amount),
+	}
+	c.SetID(id)
+	return c
 }

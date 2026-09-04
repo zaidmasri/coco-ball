@@ -1,12 +1,19 @@
 package entities
 
+import "uuid"
+
 type FinancingTerm struct {
 	PrincipalMoney Money
 	InterestRate   float64 // e.g., 0.07 for 7%
 	TermMonths     int
 }
 
+// CapitalAsset is a single Fixed Assets wizard line item. It carries its
+// own identity (id) so a wizard row and the domain value it stores can be
+// referenced by the same UUID - mirrors Cost (plan_growth.go) and
+// SalaryRole (plan_payroll.go).
 type CapitalAsset struct {
+	id                 uuid.UUID
 	Name               string
 	PurchaseCost       Money
 	UsefulLifeMonths   int
@@ -16,17 +23,157 @@ type CapitalAsset struct {
 	AssociatedLoan     *FinancingTerm
 }
 
+func (c CapitalAsset) ID() uuid.UUID { return c.id }
+
+// SetID overrides a CapitalAsset's identity. Used only by repository
+// implementations reconstructing a CapitalAsset already persisted under a
+// known ID (the wizard item's row ID) - mirrors SalaryRole.SetID.
+// Reconstructed rows may be incomplete drafts, so this deliberately
+// bypasses NewCapitalAsset's validation.
+func (c *CapitalAsset) SetID(id uuid.UUID) { c.id = id }
+
+// NewCapitalAsset creates a new CapitalAsset line item with a
+// domain-generated UUIDv7 identity, validating it against the same
+// invariants a persisted CapitalAsset must satisfy. Mirrors NewSalaryRole's
+// shape.
+func NewCapitalAsset(name string, purchaseCost Money, usefulLifeMonths int, salvageValue Money, purchaseMonthIndex MonthIndex, depreciationMethod DepreciationMethod, associatedLoan *FinancingTerm) (CapitalAsset, error) {
+	c := CapitalAsset{
+		id:                 uuid.NewV7(),
+		Name:               name,
+		PurchaseCost:       purchaseCost,
+		UsefulLifeMonths:   usefulLifeMonths,
+		SalvageValue:       salvageValue,
+		PurchaseMonthIndex: purchaseMonthIndex,
+		DepreciationMethod: depreciationMethod,
+		AssociatedLoan:     associatedLoan,
+	}
+	if err := ValidateCapitalAsset(c); err != nil {
+		return CapitalAsset{}, err
+	}
+	return c, nil
+}
+
+// ValidatedCapitalAsset is an opaque token proving a CapitalAsset passed
+// every invariant ValidateCapitalAsset checks. It can only be produced by
+// NewValidatedCapitalAsset - mirrors ValidatedSalaryRole's shape.
+// CapitalAssetRepository.CompleteCapitalAsset accepts only this type.
+type ValidatedCapitalAsset struct {
+	asset       CapitalAsset
+	isValidated bool
+}
+
+// NewValidatedCapitalAsset validates an existing CapitalAsset value -
+// including one built while reconstructing a wizard draft - and wraps it.
+func NewValidatedCapitalAsset(c CapitalAsset) (ValidatedCapitalAsset, error) {
+	if err := ValidateCapitalAsset(c); err != nil {
+		return ValidatedCapitalAsset{}, err
+	}
+	return ValidatedCapitalAsset{asset: c, isValidated: true}, nil
+}
+
+func (v ValidatedCapitalAsset) CapitalAsset() CapitalAsset { return v.asset }
+
+// StartupCost is a single Startup Costs wizard line item. It carries its
+// own identity (id) - mirrors CapitalAsset/SalaryRole.
 type StartupCost struct {
+	id     uuid.UUID
 	Name   string
 	Amount Money
 }
 
+func (s StartupCost) ID() uuid.UUID { return s.id }
+
+// SetID overrides a StartupCost's identity - mirrors CapitalAsset.SetID.
+func (s *StartupCost) SetID(id uuid.UUID) { s.id = id }
+
+// NewStartupCost creates a new StartupCost line item with a
+// domain-generated UUIDv7 identity, validating it against the same
+// invariants a persisted StartupCost must satisfy. Mirrors NewSalaryRole's
+// shape.
+func NewStartupCost(name string, amount Money) (StartupCost, error) {
+	s := StartupCost{
+		id:     uuid.NewV7(),
+		Name:   name,
+		Amount: amount,
+	}
+	if err := ValidateStartupCost(s); err != nil {
+		return StartupCost{}, err
+	}
+	return s, nil
+}
+
+// ValidatedStartupCost is an opaque token proving a StartupCost passed
+// every invariant ValidateStartupCost checks. It can only be produced by
+// NewValidatedStartupCost - mirrors ValidatedSalaryRole's shape.
+// StartupCostRepository.CompleteStartupCost accepts only this type.
+type ValidatedStartupCost struct {
+	cost        StartupCost
+	isValidated bool
+}
+
+// NewValidatedStartupCost validates an existing StartupCost value and
+// wraps it.
+func NewValidatedStartupCost(s StartupCost) (ValidatedStartupCost, error) {
+	if err := ValidateStartupCost(s); err != nil {
+		return ValidatedStartupCost{}, err
+	}
+	return ValidatedStartupCost{cost: s, isValidated: true}, nil
+}
+
+func (v ValidatedStartupCost) StartupCost() StartupCost { return v.cost }
+
+// FundingSource is a single Funding Sources wizard line item. It carries
+// its own identity (id) - mirrors CapitalAsset/SalaryRole.
 type FundingSource struct {
+	id           uuid.UUID
 	Name         string
 	Amount       Money
 	InterestRate float64
 	TermMonths   int
 }
+
+func (f FundingSource) ID() uuid.UUID { return f.id }
+
+// SetID overrides a FundingSource's identity - mirrors CapitalAsset.SetID.
+func (f *FundingSource) SetID(id uuid.UUID) { f.id = id }
+
+// NewFundingSource creates a new FundingSource line item with a
+// domain-generated UUIDv7 identity, validating it against the same
+// invariants a persisted FundingSource must satisfy. Mirrors
+// NewSalaryRole's shape.
+func NewFundingSource(name string, amount Money, interestRate float64, termMonths int) (FundingSource, error) {
+	f := FundingSource{
+		id:           uuid.NewV7(),
+		Name:         name,
+		Amount:       amount,
+		InterestRate: interestRate,
+		TermMonths:   termMonths,
+	}
+	if err := ValidateFundingSource(f); err != nil {
+		return FundingSource{}, err
+	}
+	return f, nil
+}
+
+// ValidatedFundingSource is an opaque token proving a FundingSource passed
+// every invariant ValidateFundingSource checks. It can only be produced by
+// NewValidatedFundingSource - mirrors ValidatedSalaryRole's shape.
+// FundingSourceRepository.CompleteFundingSource accepts only this type.
+type ValidatedFundingSource struct {
+	funding     FundingSource
+	isValidated bool
+}
+
+// NewValidatedFundingSource validates an existing FundingSource value and
+// wraps it.
+func NewValidatedFundingSource(f FundingSource) (ValidatedFundingSource, error) {
+	if err := ValidateFundingSource(f); err != nil {
+		return ValidatedFundingSource{}, err
+	}
+	return ValidatedFundingSource{funding: f, isValidated: true}, nil
+}
+
+func (v ValidatedFundingSource) FundingSource() FundingSource { return v.funding }
 
 type StartingBalances struct {
 	Cash               Money

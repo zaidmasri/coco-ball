@@ -6,18 +6,19 @@ import (
 	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/services"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
-	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 	"github.com/zaidmasri/business-planning-tool/internal/infrastructure/sqlite"
 )
 
-// TestStartingPointService_SaveCapitalAssetStep_RejectsInvalidOnComplete is
-// the representative case for the fix to "wizard hub services never call
-// their own domain validators before persisting a complete item"
-// (AGENTS.md's DDD violations audit): SaveCapitalAssetStep must reject an
-// invalid CapitalAsset when the caller asks for StatusComplete, even though
-// the equivalent web handler no longer runs domain.ValidateCapitalAsset
-// itself - the service is now the authoritative gate.
-func TestStartingPointService_SaveCapitalAssetStep_RejectsInvalidOnComplete(t *testing.T) {
+// TestStartingPointService_CreateCapitalAsset_RejectsInvalid is the
+// representative case for the fix to "wizard hub services never call their
+// own domain validators before persisting a complete item" (AGENTS.md's DDD
+// violations audit): CreateCapitalAsset must reject an invalid CapitalAsset,
+// even though the equivalent web handler no longer runs
+// domain.ValidateCapitalAsset itself - domain.NewCapitalAsset (called
+// inside CreateCapitalAsset) is now the authoritative gate. SaveCapitalAssetDraftStep,
+// used for the wizard's intermediate steps, must not validate - a fresh,
+// incomplete draft is expected to be "invalid" by the full-entity rule.
+func TestStartingPointService_CreateCapitalAsset_RejectsInvalid(t *testing.T) {
 	plans, users, sessions, dbPath, cleanup := newTestStore(t)
 	defer cleanup()
 
@@ -61,13 +62,23 @@ func TestStartingPointService_SaveCapitalAssetStep_RejectsInvalidOnComplete(t *t
 
 	// Draft saves (intermediate steps) must not validate - a fresh,
 	// incomplete draft is expected to be "invalid" by the full-entity rule.
-	if err := svc.SaveCapitalAssetStep(itemID, invalidAsset, 1, repositories.StatusDraft); err != nil {
+	if err := svc.SaveCapitalAssetDraftStep(itemID, invalidAsset, 1); err != nil {
 		t.Fatalf("expected draft save to succeed without validation, got error: %v", err)
 	}
 
-	// The finish step (StatusComplete) must reject it.
-	if err := svc.SaveCapitalAssetStep(itemID, invalidAsset, 4, repositories.StatusComplete); err == nil {
-		t.Error("expected SaveCapitalAssetStep to reject an invalid asset on StatusComplete, got nil")
+	// CreateCapitalAsset (the finish step) must reject it.
+	if _, err := svc.CreateCapitalAsset(&commands.CreateCapitalAsset{
+		ItemID:             itemID,
+		Name:               invalidAsset.Name,
+		PurchaseCost:       invalidAsset.PurchaseCost,
+		UsefulLifeMonths:   invalidAsset.UsefulLifeMonths,
+		SalvageValue:       invalidAsset.SalvageValue,
+		PurchaseMonthIndex: invalidAsset.PurchaseMonthIndex,
+		DepreciationMethod: invalidAsset.DepreciationMethod,
+		AssociatedLoan:     invalidAsset.AssociatedLoan,
+		CurrentStep:        4,
+	}); err == nil {
+		t.Error("expected CreateCapitalAsset to reject an invalid asset, got nil")
 	}
 }
 

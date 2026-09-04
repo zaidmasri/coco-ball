@@ -75,7 +75,7 @@ func (r *CapitalAssetRepository) FindCapitalAssetDraft(planID uuid.UUID) (*repos
 
 	return &repositories.CapitalAssetItem{
 		ID:          id,
-		Asset:       capitalAssetFromRow(row.Name, row.PurchaseCost, row.UsefulLifeMonths, row.SalvageValue, row.PurchaseMonthIndex, row.DepreciationMethod),
+		Asset:       capitalAssetFromRow(id, row.Name, row.PurchaseCost, row.UsefulLifeMonths, row.SalvageValue, row.PurchaseMonthIndex, row.DepreciationMethod),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -97,13 +97,21 @@ func (r *CapitalAssetRepository) GetCapitalAsset(itemID uuid.UUID) (*repositorie
 
 	return &repositories.CapitalAssetItem{
 		ID:          id,
-		Asset:       capitalAssetFromRow(row.Name, row.PurchaseCost, row.UsefulLifeMonths, row.SalvageValue, row.PurchaseMonthIndex, row.DepreciationMethod),
+		Asset:       capitalAssetFromRow(id, row.Name, row.PurchaseCost, row.UsefulLifeMonths, row.SalvageValue, row.PurchaseMonthIndex, row.DepreciationMethod),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
 }
 
-func (r *CapitalAssetRepository) SaveCapitalAssetStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int, status repositories.ItemStatus) error {
+func (r *CapitalAssetRepository) SaveCapitalAssetDraftStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int) error {
+	return r.saveCapitalAssetStep(itemID, asset, currentStep, repositories.StatusDraft)
+}
+
+func (r *CapitalAssetRepository) CompleteCapitalAsset(itemID uuid.UUID, va domain.ValidatedCapitalAsset, currentStep int) error {
+	return r.saveCapitalAssetStep(itemID, va.CapitalAsset(), currentStep, repositories.StatusComplete)
+}
+
+func (r *CapitalAssetRepository) saveCapitalAssetStep(itemID uuid.UUID, asset domain.CapitalAsset, currentStep int, status repositories.ItemStatus) error {
 	affected, err := r.queries.SaveCapitalAssetStep(context.Background(), db.SaveCapitalAssetStepParams{
 		Name:               asset.Name,
 		PurchaseCost:       asset.PurchaseCost.MinorUnits(),
@@ -142,7 +150,7 @@ func (r *CapitalAssetRepository) ListCompleteCapitalAssets(planID uuid.UUID) ([]
 		}
 		items[i] = repositories.CapitalAssetItem{
 			ID:          id,
-			Asset:       capitalAssetFromRow(row.Name, row.PurchaseCost, row.UsefulLifeMonths, row.SalvageValue, row.PurchaseMonthIndex, row.DepreciationMethod),
+			Asset:       capitalAssetFromRow(id, row.Name, row.PurchaseCost, row.UsefulLifeMonths, row.SalvageValue, row.PurchaseMonthIndex, row.DepreciationMethod),
 			Status:      repositories.ItemStatus(row.Status),
 			CurrentStep: int(row.CurrentStep),
 		}
@@ -164,8 +172,8 @@ func (r *CapitalAssetRepository) DeleteCapitalAsset(itemID uuid.UUID) error {
 	return nil
 }
 
-func capitalAssetFromRow(name string, purchaseCost, usefulLifeMonths, salvageValue, purchaseMonthIndex int64, depreciationMethod string) domain.CapitalAsset {
-	return domain.CapitalAsset{
+func capitalAssetFromRow(id uuid.UUID, name string, purchaseCost, usefulLifeMonths, salvageValue, purchaseMonthIndex int64, depreciationMethod string) domain.CapitalAsset {
+	c := domain.CapitalAsset{
 		Name:               name,
 		PurchaseCost:       mustUSD(purchaseCost),
 		UsefulLifeMonths:   int(usefulLifeMonths),
@@ -173,4 +181,6 @@ func capitalAssetFromRow(name string, purchaseCost, usefulLifeMonths, salvageVal
 		PurchaseMonthIndex: domain.MonthIndex(purchaseMonthIndex),
 		DepreciationMethod: domain.DepreciationMethod(depreciationMethod),
 	}
+	c.SetID(id)
+	return c
 }
