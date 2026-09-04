@@ -57,8 +57,8 @@ func (s *operatingExpensesService) FindOperatingExpenseDraft(planID uuid.UUID) (
 func (s *operatingExpensesService) GetOperatingExpense(itemID uuid.UUID) (*repositories.OperatingExpenseItem, error) {
 	return s.operatingExpenses.GetOperatingExpense(itemID)
 }
-func (s *operatingExpensesService) SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status repositories.ItemStatus) error {
-	return s.operatingExpenses.SaveOperatingExpenseStep(itemID, cost, currentStep, status)
+func (s *operatingExpensesService) SaveOperatingExpenseDraftStep(itemID uuid.UUID, cost domain.Cost, currentStep int) error {
+	return s.operatingExpenses.SaveOperatingExpenseDraftStep(itemID, cost, currentStep)
 }
 func (s *operatingExpensesService) ListCompleteOperatingExpenses(planID uuid.UUID) ([]repositories.OperatingExpenseItem, error) {
 	return s.operatingExpenses.ListCompleteOperatingExpenses(planID)
@@ -71,7 +71,12 @@ func (s *operatingExpensesService) CreateOperatingExpense(cmd *commands.CreateOp
 	}
 	cost.SetID(cmd.ItemID)
 
-	if err := s.operatingExpenses.SaveOperatingExpenseStep(cmd.ItemID, cost, cmd.CurrentStep, repositories.StatusComplete); err != nil {
+	validated, err := domain.NewValidatedCost(cost)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.operatingExpenses.CompleteOperatingExpense(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
 		return nil, err
 	}
 
@@ -85,7 +90,12 @@ func (s *operatingExpensesService) UpdateOperatingExpense(cmd *commands.UpdateOp
 	}
 	cost.SetID(cmd.ItemID)
 
-	if err := s.operatingExpenses.SaveOperatingExpenseStep(cmd.ItemID, cost, cmd.CurrentStep, repositories.StatusComplete); err != nil {
+	validated, err := domain.NewValidatedCost(cost)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.operatingExpenses.CompleteOperatingExpense(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
 		return nil, err
 	}
 

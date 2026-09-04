@@ -103,7 +103,15 @@ func (r *OperatingExpenseRepository) GetOperatingExpense(itemID uuid.UUID) (*rep
 	}, nil
 }
 
-func (r *OperatingExpenseRepository) SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status repositories.ItemStatus) error {
+func (r *OperatingExpenseRepository) SaveOperatingExpenseDraftStep(itemID uuid.UUID, cost domain.Cost, currentStep int) error {
+	return r.saveOperatingExpenseStep(itemID, cost, currentStep, repositories.StatusDraft)
+}
+
+func (r *OperatingExpenseRepository) CompleteOperatingExpense(itemID uuid.UUID, cost domain.ValidatedCost, currentStep int) error {
+	return r.saveOperatingExpenseStep(itemID, cost.Cost(), currentStep, repositories.StatusComplete)
+}
+
+func (r *OperatingExpenseRepository) saveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status repositories.ItemStatus) error {
 	affected, err := r.queries.SaveOperatingExpenseStep(context.Background(), db.SaveOperatingExpenseStepParams{
 		Name:          cost.Name(),
 		MonthlyAmount: cost.BaseAmountPerMonth().MinorUnits(),

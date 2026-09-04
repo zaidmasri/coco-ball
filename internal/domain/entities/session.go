@@ -143,3 +143,47 @@ func NewUserWithPassword(email, firstName, lastName, password string) (*UserWith
 func (u *UserWithPassword) VerifyPassword(password string) bool {
 	return VerifyPassword(u.PasswordHash, password)
 }
+
+// validate checks the invariants a UserWithPassword must satisfy before
+// persistence: a real User with a valid email and non-empty name, and a
+// non-empty password hash. It does not re-validate the raw password - by
+// the time a UserWithPassword exists, the password has already been
+// consumed into PasswordHash and is not retained.
+func (u *UserWithPassword) validate() error {
+	if u.User == nil {
+		return ErrUserNotFound
+	}
+	if u.Email() == "" {
+		return ErrInvalidEmail
+	}
+	if err := validateEmailFormat(u.Email()); err != nil {
+		return err
+	}
+	if strings.TrimSpace(u.FirstName()) == "" || strings.TrimSpace(u.LastName()) == "" {
+		return ErrInvalidUserName
+	}
+	if u.PasswordHash == "" {
+		return ErrInvalidPassword
+	}
+	return nil
+}
+
+// ValidatedUserWithPassword is an opaque token proving a UserWithPassword
+// passed every invariant UserWithPassword.validate() checks. It can only be
+// produced by NewValidatedUserWithPassword - mirrors ValidatedPlan's shape
+// (plan.go). UserRepository.SaveUserWithPassword accepts only this type.
+type ValidatedUserWithPassword struct {
+	user        *UserWithPassword
+	isValidated bool
+}
+
+// NewValidatedUserWithPassword validates an existing *UserWithPassword and
+// wraps it.
+func NewValidatedUserWithPassword(u *UserWithPassword) (ValidatedUserWithPassword, error) {
+	if err := u.validate(); err != nil {
+		return ValidatedUserWithPassword{}, err
+	}
+	return ValidatedUserWithPassword{user: u, isValidated: true}, nil
+}
+
+func (v ValidatedUserWithPassword) User() *UserWithPassword { return v.user }

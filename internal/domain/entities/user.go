@@ -106,6 +106,47 @@ func (u *User) ChangeName(firstName, lastName string) error {
 	return nil
 }
 
+// validate checks the invariants a User must satisfy before persistence: a
+// non-empty, well-formed email, and non-empty first/last names within
+// bounds. Mirrors Plan.validate()/Cost.validate(). Not called by NewUser or
+// the reconstruction setters (SetFirstName/SetLastName) directly - legacy
+// accounts may have blank names (see FullName's fallback) - only by
+// NewValidatedUser, at the point a name change is about to be persisted.
+func (u *User) validate() error {
+	if u.email == "" {
+		return ErrInvalidEmail
+	}
+	if err := validateEmailFormat(u.email); err != nil {
+		return err
+	}
+	if strings.TrimSpace(u.firstName) == "" || strings.TrimSpace(u.lastName) == "" {
+		return ErrInvalidUserName
+	}
+	if len(u.firstName) > maxNameLength || len(u.lastName) > maxNameLength {
+		return ErrNameTooLong
+	}
+	return nil
+}
+
+// ValidatedUser is an opaque token proving a User passed every invariant
+// User.validate() checks. It can only be produced by NewValidatedUser -
+// mirrors ValidatedPlan's shape (plan.go). UserRepository.UpdateUser
+// accepts only this type, not a bare *User.
+type ValidatedUser struct {
+	user        *User
+	isValidated bool
+}
+
+// NewValidatedUser validates an existing *User and wraps it.
+func NewValidatedUser(u *User) (ValidatedUser, error) {
+	if err := u.validate(); err != nil {
+		return ValidatedUser{}, err
+	}
+	return ValidatedUser{user: u, isValidated: true}, nil
+}
+
+func (v ValidatedUser) User() *User { return v.user }
+
 func (u *User) ID() uuid.UUID          { return u.id }
 func (u *User) Email() string          { return u.email }
 func (u *User) FirstName() string      { return u.firstName }

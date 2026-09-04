@@ -45,7 +45,7 @@ type PlanRepository interface {
 	// (its UserInvitedToPlan) in one transaction - PlanInvite lives within
 	// Plan's aggregate boundary, so its creation is not exposed on
 	// InviteRepository. See InviteService.CreateInvite, the only caller.
-	SaveWithInvite(p domain.ValidatedPlan, invite *domain.PlanInvite) error
+	SaveWithInvite(p domain.ValidatedPlan, invite domain.ValidatedPlanInvite) error
 	Get(id uuid.UUID) (*domain.Plan, error)
 	GetAll() ([]*domain.Plan, error)
 	Delete(id uuid.UUID) error

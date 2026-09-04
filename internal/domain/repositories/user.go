@@ -9,8 +9,8 @@ import (
 type UserRepository interface {
 	GetUser(id uuid.UUID) (*domain.User, error)
 	GetUserByEmail(email string) (*domain.User, error)
-	SaveUserWithPassword(u *domain.UserWithPassword) error
+	SaveUserWithPassword(u domain.ValidatedUserWithPassword) error
 	GetUserWithPassword(email string) (*domain.UserWithPassword, error)
-	UpdateUser(u *domain.User) error
+	UpdateUser(u domain.ValidatedUser) error
 	DeleteUser(id uuid.UUID) error
 }

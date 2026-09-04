@@ -253,7 +253,7 @@ func (c *OperatingExpensesController) PostOperatingExpenseStep(w http.ResponseWr
 	// pass-through below rather than through Create/UpdateOperatingExpense -
 	// there's no valid domain entity to construct until the wizard finishes.
 	if !finishNow {
-		if err := c.opExSvc.SaveOperatingExpenseStep(itemID, cost, idx+1, repositories.StatusDraft); err != nil {
+		if err := c.opExSvc.SaveOperatingExpenseDraftStep(itemID, cost, idx+1); err != nil {
 			log.Printf("Failed to save operating expense step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
 			return

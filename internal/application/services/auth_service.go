@@ -64,7 +64,12 @@ func (s *authService) CreateUser(cmd *commands.CreateUser) (*commands.CreateUser
 		return nil, err
 	}
 
-	if err := s.users.SaveUserWithPassword(userCreds); err != nil {
+	validated, err := domain.NewValidatedUserWithPassword(userCreds)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.users.SaveUserWithPassword(validated); err != nil {
 		return nil, err
 	}
 
@@ -81,7 +86,12 @@ func (s *authService) UpdateUser(cmd *commands.UpdateUser) (*commands.UpdateUser
 		return nil, err
 	}
 
-	if err := s.users.UpdateUser(user); err != nil {
+	validated, err := domain.NewValidatedUser(user)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.users.UpdateUser(validated); err != nil {
 		return nil, err
 	}
 

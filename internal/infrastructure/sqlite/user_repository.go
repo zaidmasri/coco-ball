@@ -63,7 +63,8 @@ func (r *UserRepository) GetUserByEmail(email string) (*domain.User, error) {
 	return r.GetUser(id)
 }
 
-func (r *UserRepository) SaveUserWithPassword(u *domain.UserWithPassword) error {
+func (r *UserRepository) SaveUserWithPassword(vu domain.ValidatedUserWithPassword) error {
+	u := vu.User()
 	ctx := context.Background()
 
 	tx, err := r.conn.Begin()
@@ -125,7 +126,8 @@ func (r *UserRepository) GetUserWithPassword(email string) (*domain.UserWithPass
 // UpdateUser persists a user's changed first/last name and atomically writes
 // any accumulated domain events to the outbox table, in one transaction.
 // Mirrors PlanRepository.Save's shape.
-func (r *UserRepository) UpdateUser(u *domain.User) error {
+func (r *UserRepository) UpdateUser(vu domain.ValidatedUser) error {
+	u := vu.User()
 	ctx := context.Background()
 
 	tx, err := r.conn.Begin()

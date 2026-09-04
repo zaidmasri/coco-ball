@@ -42,27 +42,54 @@ type PlanInvite struct {
 	RespondedAt int64 // Unix timestamp, 0 until responded
 }
 
+// validate checks a PlanInvite's business invariants (mirrors Cost.validate()).
+func (pi *PlanInvite) validate() error {
+	if pi.Email == "" {
+		return ErrInvalidEmail
+	}
+	if err := validateEmailFormat(pi.Email); err != nil {
+		return err
+	}
+	if !pi.AccessLevel.IsValid() {
+		return errors.New("invalid access level")
+	}
+	return nil
+}
+
 // NewPlanInvite creates a new pending invite for a plan.
 func NewPlanInvite(planID uuid.UUID, email string, level AccessLevel, invitedBy uuid.UUID) (*PlanInvite, error) {
-	cleanEmail := strings.TrimSpace(strings.ToLower(email))
-	if cleanEmail == "" {
-		return nil, ErrInvalidEmail
-	}
-	if err := validateEmailFormat(cleanEmail); err != nil {
-		return nil, err
-	}
-	if !level.IsValid() {
-		return nil, errors.New("invalid access level")
-	}
-
 	id := uuid.NewV7()
 
-	return &PlanInvite{
+	invite := &PlanInvite{
 		ID:          id,
 		PlanID:      planID,
-		Email:       cleanEmail,
+		Email:       strings.TrimSpace(strings.ToLower(email)),
 		AccessLevel: level,
 		Status:      InvitePending,
 		InvitedBy:   invitedBy,
-	}, nil
+	}
+	if err := invite.validate(); err != nil {
+		return nil, err
+	}
+	return invite, nil
 }
+
+// ValidatedPlanInvite is an opaque token proving a PlanInvite passed every
+// invariant PlanInvite.validate() checks. It can only be produced by
+// NewValidatedPlanInvite - mirrors ValidatedPlan's shape (plan.go).
+// PlanRepository.SaveWithInvite accepts only this type, not a bare
+// *PlanInvite, so an invite can never be persisted without validation.
+type ValidatedPlanInvite struct {
+	invite      *PlanInvite
+	isValidated bool
+}
+
+// NewValidatedPlanInvite validates an existing *PlanInvite and wraps it.
+func NewValidatedPlanInvite(invite *PlanInvite) (ValidatedPlanInvite, error) {
+	if err := invite.validate(); err != nil {
+		return ValidatedPlanInvite{}, err
+	}
+	return ValidatedPlanInvite{invite: invite, isValidated: true}, nil
+}
+
+func (v ValidatedPlanInvite) Invite() *PlanInvite { return v.invite }

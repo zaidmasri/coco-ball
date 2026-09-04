@@ -14,7 +14,8 @@ import (
 // entity within the Plan aggregate boundary (see invite.go's doc comment),
 // so its row is written in the same transaction as the Plan aggregate's own
 // save and outbox event, not via a separate, non-atomic repository call.
-func insertInviteRow(ctx context.Context, q *db.Queries, invite *domain.PlanInvite, now int64) error {
+func insertInviteRow(ctx context.Context, q *db.Queries, vi domain.ValidatedPlanInvite, now int64) error {
+	invite := vi.Invite()
 	if err := q.CreateInvite(ctx, db.CreateInviteParams{
 		ID:          invite.ID.String(),
 		PlanID:      invite.PlanID.String(),

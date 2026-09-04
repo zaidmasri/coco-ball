@@ -59,7 +59,12 @@ func (s *inviteService) CreateInvite(cmd *commands.CreateInvite) (*commands.Crea
 		return nil, err
 	}
 
-	if err := s.plans.SaveWithInvite(validated, invite); err != nil {
+	validatedInvite, err := domain.NewValidatedPlanInvite(invite)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.plans.SaveWithInvite(validated, validatedInvite); err != nil {
 		return nil, err
 	}
 

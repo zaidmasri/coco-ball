@@ -110,6 +110,28 @@ func NewCost(name string, baseAmount Money, growth GrowthStrategy) (Cost, error)
 	return c, nil
 }
 
+// ValidatedCost is an opaque token proving a Cost passed every invariant
+// Cost.validate() checks. It can only be produced by NewValidatedCost -
+// mirrors ValidatedPlan's shape (plan.go). Repository methods that persist a
+// Cost as StatusComplete accept only this type, not a bare Cost, so a
+// caller can never mark an unvalidated Cost complete - see
+// OperatingExpenseRepository.CompleteOperatingExpense.
+type ValidatedCost struct {
+	cost        Cost
+	isValidated bool
+}
+
+// NewValidatedCost validates an existing Cost value - including one built
+// via the SetX setters while reconstructing a wizard draft - and wraps it.
+func NewValidatedCost(c Cost) (ValidatedCost, error) {
+	if err := c.validate(); err != nil {
+		return ValidatedCost{}, err
+	}
+	return ValidatedCost{cost: c, isValidated: true}, nil
+}
+
+func (vc ValidatedCost) Cost() Cost { return vc.cost }
+
 func (c Cost) ProjectedAmount(month MonthIndex) Money {
 	if c.growth.Type == AnnualStepPercent && c.growth.AnnualRate > 0 {
 		yearsPassed := int(month) / 12

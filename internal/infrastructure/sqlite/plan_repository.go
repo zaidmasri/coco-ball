@@ -94,7 +94,7 @@ func (r *PlanRepository) SaveNew(vp domain.ValidatedPlan, ownerID uuid.UUID) err
 // silently drop the invite's UserInvitedToPlan event (the bug this method
 // replaces: InviteRepository.CreateInvite and Plan.Save used to be two
 // independent, non-atomic writes).
-func (r *PlanRepository) SaveWithInvite(vp domain.ValidatedPlan, invite *domain.PlanInvite) error {
+func (r *PlanRepository) SaveWithInvite(vp domain.ValidatedPlan, invite domain.ValidatedPlanInvite) error {
 	ctx := context.Background()
 
 	tx, err := r.conn.Begin()

@@ -24,7 +24,7 @@ type OperatingExpensesService interface {
 	CreateOperatingExpenseDraft(planID uuid.UUID) (uuid.UUID, error)
 	FindOperatingExpenseDraft(planID uuid.UUID) (*repositories.OperatingExpenseItem, error)
 	GetOperatingExpense(itemID uuid.UUID) (*repositories.OperatingExpenseItem, error)
-	SaveOperatingExpenseStep(itemID uuid.UUID, cost domain.Cost, currentStep int, status repositories.ItemStatus) error
+	SaveOperatingExpenseDraftStep(itemID uuid.UUID, cost domain.Cost, currentStep int) error
 	ListCompleteOperatingExpenses(planID uuid.UUID) ([]repositories.OperatingExpenseItem, error)
 
 	// CreateOperatingExpense/UpdateOperatingExpense/DeleteOperatingExpense
