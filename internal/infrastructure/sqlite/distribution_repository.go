@@ -75,7 +75,7 @@ func (r *DistributionRepository) FindDistributionDraft(planID uuid.UUID) (*repos
 
 	return &repositories.DistributionItem{
 		ID:           id,
-		Distribution: distributionFromRow(row.Name, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+		Distribution: distributionFromRow(id, row.Name, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 		Status:       repositories.ItemStatus(row.Status),
 		CurrentStep:  int(row.CurrentStep),
 	}, nil
@@ -97,13 +97,21 @@ func (r *DistributionRepository) GetDistribution(itemID uuid.UUID) (*repositorie
 
 	return &repositories.DistributionItem{
 		ID:           id,
-		Distribution: distributionFromRow(row.Name, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+		Distribution: distributionFromRow(id, row.Name, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 		Status:       repositories.ItemStatus(row.Status),
 		CurrentStep:  int(row.CurrentStep),
 	}, nil
 }
 
-func (r *DistributionRepository) SaveDistributionStep(itemID uuid.UUID, dist domain.Distribution, currentStep int, status repositories.ItemStatus) error {
+func (r *DistributionRepository) SaveDistributionDraftStep(itemID uuid.UUID, dist domain.Distribution, currentStep int) error {
+	return r.saveDistributionStep(itemID, dist, currentStep, repositories.StatusDraft)
+}
+
+func (r *DistributionRepository) CompleteDistribution(itemID uuid.UUID, vd domain.ValidatedDistribution, currentStep int) error {
+	return r.saveDistributionStep(itemID, vd.Distribution(), currentStep, repositories.StatusComplete)
+}
+
+func (r *DistributionRepository) saveDistributionStep(itemID uuid.UUID, dist domain.Distribution, currentStep int, status repositories.ItemStatus) error {
 	var yr2, yr3 float64
 	if len(dist.GrowthAfterYr1.RatesAfterYear1) > 0 {
 		yr2 = dist.GrowthAfterYr1.RatesAfterYear1[0]
@@ -148,7 +156,7 @@ func (r *DistributionRepository) ListCompleteDistributions(planID uuid.UUID) ([]
 		}
 		items[i] = repositories.DistributionItem{
 			ID:           id,
-			Distribution: distributionFromRow(row.Name, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+			Distribution: distributionFromRow(id, row.Name, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 			Status:       repositories.ItemStatus(row.Status),
 			CurrentStep:  int(row.CurrentStep),
 		}
@@ -170,10 +178,12 @@ func (r *DistributionRepository) DeleteDistribution(itemID uuid.UUID) error {
 	return nil
 }
 
-func distributionFromRow(name string, monthlyAmount int64, growthYr2, growthYr3 float64) domain.Distribution {
-	return domain.Distribution{
+func distributionFromRow(id uuid.UUID, name string, monthlyAmount int64, growthYr2, growthYr3 float64) domain.Distribution {
+	d := domain.Distribution{
 		Name:           name,
 		MonthlyAmount:  mustUSD(monthlyAmount),
 		GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 	}
+	d.SetID(id)
+	return d
 }

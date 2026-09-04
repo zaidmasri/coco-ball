@@ -75,7 +75,7 @@ func (r *InventoryPurchaseRepository) FindInventoryPurchaseDraft(planID uuid.UUI
 
 	return &repositories.InventoryPurchaseItem{
 		ID:          id,
-		Purchase:    inventoryPurchaseFromRow(row.Category, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+		Purchase:    inventoryPurchaseFromRow(id, row.Category, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -97,13 +97,21 @@ func (r *InventoryPurchaseRepository) GetInventoryPurchase(itemID uuid.UUID) (*r
 
 	return &repositories.InventoryPurchaseItem{
 		ID:          id,
-		Purchase:    inventoryPurchaseFromRow(row.Category, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+		Purchase:    inventoryPurchaseFromRow(id, row.Category, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
 }
 
-func (r *InventoryPurchaseRepository) SaveInventoryPurchaseStep(itemID uuid.UUID, inv domain.InventoryPurchase, currentStep int, status repositories.ItemStatus) error {
+func (r *InventoryPurchaseRepository) SaveInventoryPurchaseDraftStep(itemID uuid.UUID, inv domain.InventoryPurchase, currentStep int) error {
+	return r.saveInventoryPurchaseStep(itemID, inv, currentStep, repositories.StatusDraft)
+}
+
+func (r *InventoryPurchaseRepository) CompleteInventoryPurchase(itemID uuid.UUID, vi domain.ValidatedInventoryPurchase, currentStep int) error {
+	return r.saveInventoryPurchaseStep(itemID, vi.InventoryPurchase(), currentStep, repositories.StatusComplete)
+}
+
+func (r *InventoryPurchaseRepository) saveInventoryPurchaseStep(itemID uuid.UUID, inv domain.InventoryPurchase, currentStep int, status repositories.ItemStatus) error {
 	var yr2, yr3 float64
 	if len(inv.GrowthAfterYr1.RatesAfterYear1) > 0 {
 		yr2 = inv.GrowthAfterYr1.RatesAfterYear1[0]
@@ -148,7 +156,7 @@ func (r *InventoryPurchaseRepository) ListCompleteInventoryPurchases(planID uuid
 		}
 		items[i] = repositories.InventoryPurchaseItem{
 			ID:          id,
-			Purchase:    inventoryPurchaseFromRow(row.Category, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+			Purchase:    inventoryPurchaseFromRow(id, row.Category, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 			Status:      repositories.ItemStatus(row.Status),
 			CurrentStep: int(row.CurrentStep),
 		}
@@ -170,10 +178,12 @@ func (r *InventoryPurchaseRepository) DeleteInventoryPurchase(itemID uuid.UUID) 
 	return nil
 }
 
-func inventoryPurchaseFromRow(category string, monthlyAmount int64, growthYr2, growthYr3 float64) domain.InventoryPurchase {
-	return domain.InventoryPurchase{
+func inventoryPurchaseFromRow(id uuid.UUID, category string, monthlyAmount int64, growthYr2, growthYr3 float64) domain.InventoryPurchase {
+	i := domain.InventoryPurchase{
 		Category:       category,
 		MonthlyAmount:  mustUSD(monthlyAmount),
 		GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 	}
+	i.SetID(id)
+	return i
 }

@@ -12,6 +12,7 @@ import (
 
 	"uuid"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -324,30 +325,47 @@ func (c *CashFlowController) PostInventoryPurchaseStep(w http.ResponseWriter, r 
 
 	finishNow := step == "growth-yr3"
 
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-		newCurrentStep = len(inventoryPurchaseSteps)
-	}
-
-	if err := c.cashFlowSvc.SaveInventoryPurchaseStep(itemID, purchase, newCurrentStep, newStatus); err != nil {
-		if finishNow {
-			renderStepError(safeErrorMessage("CashFlowSvc SaveInventoryPurchaseStep", err))
-		} else {
+	// The earlier steps only ever hold part of a valid InventoryPurchase, so
+	// they're saved as a raw draft via the pass-through below rather than
+	// through Create/UpdateInventoryPurchase - there's no valid domain
+	// entity to construct until the wizard finishes.
+	if !finishNow {
+		if err := c.cashFlowSvc.SaveInventoryPurchaseDraftStep(itemID, purchase, idx+1); err != nil {
 			log.Printf("Failed to save inventory purchase step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
+			return
 		}
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.CashFlowSectionStepURL(planID, itemID, domain.SectionInventoryPurchases, nextStepName(inventoryPurchaseSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The final step completes the wizard: this is the first point a full
+	// InventoryPurchase exists. CreateInventoryPurchase/UpdateInventoryPurchase
+	// are the only code allowed to construct/mutate it (via
+	// domain.NewInventoryPurchase).
 	if wasComplete {
+		if _, err := c.cashFlowSvc.UpdateInventoryPurchase(&commands.UpdateInventoryPurchase{
+			ItemID:        itemID,
+			Category:      purchase.Category,
+			MonthlyAmount: purchase.MonthlyAmount,
+			Growth:        purchase.GrowthAfterYr1,
+			CurrentStep:   len(inventoryPurchaseSteps),
+		}); err != nil {
+			renderStepError(safeErrorMessage("CashFlowSvc UpdateInventoryPurchase", err))
+			return
+		}
 		http.Redirect(w, r, views.CashFlowSectionListURL(planID, domain.SectionInventoryPurchases), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.cashFlowSvc.CreateInventoryPurchase(&commands.CreateInventoryPurchase{
+		ItemID:        itemID,
+		Category:      purchase.Category,
+		MonthlyAmount: purchase.MonthlyAmount,
+		Growth:        purchase.GrowthAfterYr1,
+		CurrentStep:   len(inventoryPurchaseSteps),
+	}); err != nil {
+		renderStepError(safeErrorMessage("CashFlowSvc CreateInventoryPurchase", err))
 		return
 	}
 
@@ -570,30 +588,46 @@ func (c *CashFlowController) PostDistributionStep(w http.ResponseWriter, r *http
 
 	finishNow := step == "growth-yr3"
 
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-		newCurrentStep = len(distributionSteps)
-	}
-
-	if err := c.cashFlowSvc.SaveDistributionStep(itemID, dist, newCurrentStep, newStatus); err != nil {
-		if finishNow {
-			renderStepError(safeErrorMessage("CashFlowSvc SaveDistributionStep", err))
-		} else {
+	// The earlier steps only ever hold part of a valid Distribution, so
+	// they're saved as a raw draft via the pass-through below rather than
+	// through Create/UpdateDistribution - there's no valid domain entity to
+	// construct until the wizard finishes.
+	if !finishNow {
+		if err := c.cashFlowSvc.SaveDistributionDraftStep(itemID, dist, idx+1); err != nil {
 			log.Printf("Failed to save distribution step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
+			return
 		}
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.CashFlowSectionStepURL(planID, itemID, domain.SectionDistributions, nextStepName(distributionSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The final step completes the wizard: this is the first point a full
+	// Distribution exists. CreateDistribution/UpdateDistribution are the
+	// only code allowed to construct/mutate it (via domain.NewDistribution).
 	if wasComplete {
+		if _, err := c.cashFlowSvc.UpdateDistribution(&commands.UpdateDistribution{
+			ItemID:        itemID,
+			Name:          dist.Name,
+			MonthlyAmount: dist.MonthlyAmount,
+			Growth:        dist.GrowthAfterYr1,
+			CurrentStep:   len(distributionSteps),
+		}); err != nil {
+			renderStepError(safeErrorMessage("CashFlowSvc UpdateDistribution", err))
+			return
+		}
 		http.Redirect(w, r, views.CashFlowSectionListURL(planID, domain.SectionDistributions), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.cashFlowSvc.CreateDistribution(&commands.CreateDistribution{
+		ItemID:        itemID,
+		Name:          dist.Name,
+		MonthlyAmount: dist.MonthlyAmount,
+		Growth:        dist.GrowthAfterYr1,
+		CurrentStep:   len(distributionSteps),
+	}); err != nil {
+		renderStepError(safeErrorMessage("CashFlowSvc CreateDistribution", err))
 		return
 	}
 
