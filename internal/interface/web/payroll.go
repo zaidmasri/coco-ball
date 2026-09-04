@@ -13,6 +13,7 @@ import (
 
 	"uuid"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	ifaces "github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
@@ -339,30 +340,50 @@ func (c *PayrollController) PostSalaryRoleStep(w http.ResponseWriter, r *http.Re
 
 	finishNow := step == "growth-yr3"
 
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-		newCurrentStep = len(salaryRoleSteps)
-	}
-
-	if err := c.payrollSvc.SaveSalaryRoleStep(itemID, role, newCurrentStep, newStatus); err != nil {
-		if finishNow {
-			renderStepError(safeErrorMessage("PayrollSvc SaveSalaryRoleStep", err))
-		} else {
+	// The earlier steps only ever hold part of a valid SalaryRole, so
+	// they're saved as a raw draft via the pass-through below rather than
+	// through Create/UpdateSalaryRole - there's no valid domain entity to
+	// construct until the wizard finishes.
+	if !finishNow {
+		if err := c.payrollSvc.SaveSalaryRoleDraftStep(itemID, role, idx+1); err != nil {
 			log.Printf("Failed to save salary role step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
+			return
 		}
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.PayrollSectionStepURL(planID, itemID, domain.SectionSalaryRoles, nextStepName(salaryRoleSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The final step completes the wizard: this is the first point a full
+	// SalaryRole exists. CreateSalaryRole/UpdateSalaryRole are the only code
+	// allowed to construct/mutate it (via domain.NewSalaryRole).
 	if wasComplete {
+		if _, err := c.payrollSvc.UpdateSalaryRole(&commands.UpdateSalaryRole{
+			ItemID:       itemID,
+			Role:         role.Role,
+			IsContractor: role.IsContractor,
+			Headcount:    role.Headcount,
+			MonthlyPay:   role.MonthlyPay,
+			Growth:       role.GrowthAfterYr1,
+			CurrentStep:  len(salaryRoleSteps),
+		}); err != nil {
+			renderStepError(safeErrorMessage("PayrollSvc UpdateSalaryRole", err))
+			return
+		}
 		http.Redirect(w, r, views.PayrollSectionListURL(planID, domain.SectionSalaryRoles), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.payrollSvc.CreateSalaryRole(&commands.CreateSalaryRole{
+		ItemID:       itemID,
+		Role:         role.Role,
+		IsContractor: role.IsContractor,
+		Headcount:    role.Headcount,
+		MonthlyPay:   role.MonthlyPay,
+		Growth:       role.GrowthAfterYr1,
+		CurrentStep:  len(salaryRoleSteps),
+	}); err != nil {
+		renderStepError(safeErrorMessage("PayrollSvc CreateSalaryRole", err))
 		return
 	}
 
@@ -585,30 +606,46 @@ func (c *PayrollController) PostBenefitStep(w http.ResponseWriter, r *http.Reque
 
 	finishNow := step == "growth-yr3"
 
-	newStatus := repositories.StatusDraft
-	newCurrentStep := idx + 1
-	if finishNow {
-		newStatus = repositories.StatusComplete
-		newCurrentStep = len(benefitSteps)
-	}
-
-	if err := c.payrollSvc.SaveBenefitStep(itemID, benefit, newCurrentStep, newStatus); err != nil {
-		if finishNow {
-			renderStepError(safeErrorMessage("PayrollSvc SaveBenefitStep", err))
-		} else {
+	// The earlier steps only ever hold part of a valid Benefit, so they're
+	// saved as a raw draft via the pass-through below rather than through
+	// Create/UpdateBenefit - there's no valid domain entity to construct
+	// until the wizard finishes.
+	if !finishNow {
+		if err := c.payrollSvc.SaveBenefitDraftStep(itemID, benefit, idx+1); err != nil {
 			log.Printf("Failed to save benefit step: %v", err)
 			renderStepError("An internal database error occurred. Please try again.")
+			return
 		}
-		return
-	}
-
-	if !finishNow {
 		http.Redirect(w, r, views.PayrollSectionStepURL(planID, itemID, domain.SectionBenefits, nextStepName(benefitSteps, idx)), http.StatusSeeOther)
 		return
 	}
 
+	// The final step completes the wizard: this is the first point a full
+	// Benefit exists. CreateBenefit/UpdateBenefit are the only code allowed
+	// to construct/mutate it (via domain.NewBenefit).
 	if wasComplete {
+		if _, err := c.payrollSvc.UpdateBenefit(&commands.UpdateBenefit{
+			ItemID:        itemID,
+			Type:          benefit.Type,
+			MonthlyAmount: benefit.MonthlyAmount,
+			Growth:        benefit.GrowthAfterYr1,
+			CurrentStep:   len(benefitSteps),
+		}); err != nil {
+			renderStepError(safeErrorMessage("PayrollSvc UpdateBenefit", err))
+			return
+		}
 		http.Redirect(w, r, views.PayrollSectionListURL(planID, domain.SectionBenefits), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := c.payrollSvc.CreateBenefit(&commands.CreateBenefit{
+		ItemID:        itemID,
+		Type:          benefit.Type,
+		MonthlyAmount: benefit.MonthlyAmount,
+		Growth:        benefit.GrowthAfterYr1,
+		CurrentStep:   len(benefitSteps),
+	}); err != nil {
+		renderStepError(safeErrorMessage("PayrollSvc CreateBenefit", err))
 		return
 	}
 

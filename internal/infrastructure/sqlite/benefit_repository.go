@@ -75,7 +75,7 @@ func (r *BenefitRepository) FindBenefitDraft(planID uuid.UUID) (*repositories.Be
 
 	return &repositories.BenefitItem{
 		ID:          id,
-		Benefit:     benefitFromRow(row.Type, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+		Benefit:     benefitFromRow(id, row.Type, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -97,13 +97,21 @@ func (r *BenefitRepository) GetBenefit(itemID uuid.UUID) (*repositories.BenefitI
 
 	return &repositories.BenefitItem{
 		ID:          id,
-		Benefit:     benefitFromRow(row.Type, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+		Benefit:     benefitFromRow(id, row.Type, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
 }
 
-func (r *BenefitRepository) SaveBenefitStep(itemID uuid.UUID, benefit domain.Benefit, currentStep int, status repositories.ItemStatus) error {
+func (r *BenefitRepository) SaveBenefitDraftStep(itemID uuid.UUID, benefit domain.Benefit, currentStep int) error {
+	return r.saveBenefitStep(itemID, benefit, currentStep, repositories.StatusDraft)
+}
+
+func (r *BenefitRepository) CompleteBenefit(itemID uuid.UUID, vb domain.ValidatedBenefit, currentStep int) error {
+	return r.saveBenefitStep(itemID, vb.Benefit(), currentStep, repositories.StatusComplete)
+}
+
+func (r *BenefitRepository) saveBenefitStep(itemID uuid.UUID, benefit domain.Benefit, currentStep int, status repositories.ItemStatus) error {
 	var yr2, yr3 float64
 	if len(benefit.GrowthAfterYr1.RatesAfterYear1) > 0 {
 		yr2 = benefit.GrowthAfterYr1.RatesAfterYear1[0]
@@ -148,7 +156,7 @@ func (r *BenefitRepository) ListCompleteBenefits(planID uuid.UUID) ([]repositori
 		}
 		items[i] = repositories.BenefitItem{
 			ID:          id,
-			Benefit:     benefitFromRow(row.Type, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
+			Benefit:     benefitFromRow(id, row.Type, row.MonthlyAmount, row.GrowthYr2, row.GrowthYr3),
 			Status:      repositories.ItemStatus(row.Status),
 			CurrentStep: int(row.CurrentStep),
 		}
@@ -170,10 +178,12 @@ func (r *BenefitRepository) DeleteBenefit(itemID uuid.UUID) error {
 	return nil
 }
 
-func benefitFromRow(benefitType string, monthlyAmount int64, growthYr2, growthYr3 float64) domain.Benefit {
-	return domain.Benefit{
+func benefitFromRow(id uuid.UUID, benefitType string, monthlyAmount int64, growthYr2, growthYr3 float64) domain.Benefit {
+	b := domain.Benefit{
 		Type:           benefitType,
 		MonthlyAmount:  mustUSD(monthlyAmount),
 		GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 	}
+	b.SetID(id)
+	return b
 }

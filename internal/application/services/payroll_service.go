@@ -3,7 +3,9 @@ package services
 import (
 	"uuid"
 
+	"github.com/zaidmasri/business-planning-tool/internal/application/commands"
 	"github.com/zaidmasri/business-planning-tool/internal/application/interfaces"
+	"github.com/zaidmasri/business-planning-tool/internal/application/mapper"
 	domain "github.com/zaidmasri/business-planning-tool/internal/domain/entities"
 	"github.com/zaidmasri/business-planning-tool/internal/domain/repositories"
 )
@@ -66,19 +68,52 @@ func (s *payrollService) FindSalaryRoleDraft(planID uuid.UUID) (*repositories.Sa
 func (s *payrollService) GetSalaryRole(itemID uuid.UUID) (*repositories.SalaryRoleItem, error) {
 	return s.salaryRoles.GetSalaryRole(itemID)
 }
-func (s *payrollService) SaveSalaryRoleStep(itemID uuid.UUID, role domain.SalaryRole, currentStep int, status repositories.ItemStatus) error {
-	if status == repositories.StatusComplete {
-		if err := domain.ValidateSalaryRole(role); err != nil {
-			return err
-		}
-	}
-	return s.salaryRoles.SaveSalaryRoleStep(itemID, role, currentStep, status)
+func (s *payrollService) SaveSalaryRoleDraftStep(itemID uuid.UUID, role domain.SalaryRole, currentStep int) error {
+	return s.salaryRoles.SaveSalaryRoleDraftStep(itemID, role, currentStep)
 }
 func (s *payrollService) ListCompleteSalaryRoles(planID uuid.UUID) ([]repositories.SalaryRoleItem, error) {
 	return s.salaryRoles.ListCompleteSalaryRoles(planID)
 }
 func (s *payrollService) DeleteSalaryRole(itemID uuid.UUID) error {
 	return s.salaryRoles.DeleteSalaryRole(itemID)
+}
+
+func (s *payrollService) CreateSalaryRole(cmd *commands.CreateSalaryRole) (*commands.CreateSalaryRoleResult, error) {
+	role, err := domain.NewSalaryRole(cmd.Role, cmd.IsContractor, cmd.Headcount, cmd.MonthlyPay, cmd.Growth)
+	if err != nil {
+		return nil, err
+	}
+	role.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedSalaryRole(role)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.salaryRoles.CompleteSalaryRole(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.CreateSalaryRoleResult{Result: mapper.NewSalaryRoleResultFromEntity(role)}, nil
+}
+
+func (s *payrollService) UpdateSalaryRole(cmd *commands.UpdateSalaryRole) (*commands.UpdateSalaryRoleResult, error) {
+	role, err := domain.NewSalaryRole(cmd.Role, cmd.IsContractor, cmd.Headcount, cmd.MonthlyPay, cmd.Growth)
+	if err != nil {
+		return nil, err
+	}
+	role.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedSalaryRole(role)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.salaryRoles.CompleteSalaryRole(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.UpdateSalaryRoleResult{Result: mapper.NewSalaryRoleResultFromEntity(role)}, nil
 }
 
 func (s *payrollService) CreateBenefitDraft(planID uuid.UUID) (uuid.UUID, error) {
@@ -90,19 +125,52 @@ func (s *payrollService) FindBenefitDraft(planID uuid.UUID) (*repositories.Benef
 func (s *payrollService) GetBenefit(itemID uuid.UUID) (*repositories.BenefitItem, error) {
 	return s.benefits.GetBenefit(itemID)
 }
-func (s *payrollService) SaveBenefitStep(itemID uuid.UUID, benefit domain.Benefit, currentStep int, status repositories.ItemStatus) error {
-	if status == repositories.StatusComplete {
-		if err := domain.ValidateBenefit(benefit); err != nil {
-			return err
-		}
-	}
-	return s.benefits.SaveBenefitStep(itemID, benefit, currentStep, status)
+func (s *payrollService) SaveBenefitDraftStep(itemID uuid.UUID, benefit domain.Benefit, currentStep int) error {
+	return s.benefits.SaveBenefitDraftStep(itemID, benefit, currentStep)
 }
 func (s *payrollService) ListCompleteBenefits(planID uuid.UUID) ([]repositories.BenefitItem, error) {
 	return s.benefits.ListCompleteBenefits(planID)
 }
 func (s *payrollService) DeleteBenefit(itemID uuid.UUID) error {
 	return s.benefits.DeleteBenefit(itemID)
+}
+
+func (s *payrollService) CreateBenefit(cmd *commands.CreateBenefit) (*commands.CreateBenefitResult, error) {
+	benefit, err := domain.NewBenefit(cmd.Type, cmd.MonthlyAmount, cmd.Growth)
+	if err != nil {
+		return nil, err
+	}
+	benefit.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedBenefit(benefit)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.benefits.CompleteBenefit(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.CreateBenefitResult{Result: mapper.NewBenefitResultFromEntity(benefit)}, nil
+}
+
+func (s *payrollService) UpdateBenefit(cmd *commands.UpdateBenefit) (*commands.UpdateBenefitResult, error) {
+	benefit, err := domain.NewBenefit(cmd.Type, cmd.MonthlyAmount, cmd.Growth)
+	if err != nil {
+		return nil, err
+	}
+	benefit.SetID(cmd.ItemID)
+
+	validated, err := domain.NewValidatedBenefit(benefit)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.benefits.CompleteBenefit(cmd.ItemID, validated, cmd.CurrentStep); err != nil {
+		return nil, err
+	}
+
+	return &commands.UpdateBenefitResult{Result: mapper.NewBenefitResultFromEntity(benefit)}, nil
 }
 
 func (s *payrollService) GetPayrollTaxRatesRow(planID uuid.UUID) (*repositories.PayrollTaxRatesRow, error) {

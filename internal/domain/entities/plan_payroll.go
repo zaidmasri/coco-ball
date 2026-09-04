@@ -1,7 +1,12 @@
 package entities
 
-// SalaryRole is a single payroll line item (a role/title with headcount).
+import "uuid"
+
+// SalaryRole is a single payroll line item (a role/title with headcount). It
+// carries its own identity (id) so a wizard row and the domain value it
+// stores can be referenced by the same UUID - mirrors Cost (plan_growth.go).
 type SalaryRole struct {
+	id             uuid.UUID
 	Role           string
 	IsContractor   bool
 	Headcount      int
@@ -9,12 +14,101 @@ type SalaryRole struct {
 	GrowthAfterYr1 AnnualGrowth
 }
 
-// Benefit is a single employee benefit line item.
+func (s SalaryRole) ID() uuid.UUID { return s.id }
+
+// SetID overrides a SalaryRole's identity. Used only by repository
+// implementations reconstructing a SalaryRole already persisted under a
+// known ID (the wizard item's row ID) - mirrors Cost.SetID. Reconstructed
+// rows may be incomplete drafts, so this deliberately bypasses NewSalaryRole's
+// validation.
+func (s *SalaryRole) SetID(id uuid.UUID) { s.id = id }
+
+// NewSalaryRole creates a new SalaryRole line item with a domain-generated
+// UUIDv7 identity, validating it against the same invariants a persisted
+// SalaryRole must satisfy. Mirrors NewCost's shape.
+func NewSalaryRole(role string, isContractor bool, headcount int, monthlyPay Money, growth AnnualGrowth) (SalaryRole, error) {
+	s := SalaryRole{
+		id:             uuid.NewV7(),
+		Role:           role,
+		IsContractor:   isContractor,
+		Headcount:      headcount,
+		MonthlyPay:     monthlyPay,
+		GrowthAfterYr1: growth,
+	}
+	if err := ValidateSalaryRole(s); err != nil {
+		return SalaryRole{}, err
+	}
+	return s, nil
+}
+
+// ValidatedSalaryRole is an opaque token proving a SalaryRole passed every
+// invariant ValidateSalaryRole checks. It can only be produced by
+// NewValidatedSalaryRole - mirrors ValidatedCost's shape (plan_growth.go).
+// SalaryRoleRepository.CompleteSalaryRole accepts only this type.
+type ValidatedSalaryRole struct {
+	role        SalaryRole
+	isValidated bool
+}
+
+// NewValidatedSalaryRole validates an existing SalaryRole value - including
+// one built while reconstructing a wizard draft - and wraps it.
+func NewValidatedSalaryRole(s SalaryRole) (ValidatedSalaryRole, error) {
+	if err := ValidateSalaryRole(s); err != nil {
+		return ValidatedSalaryRole{}, err
+	}
+	return ValidatedSalaryRole{role: s, isValidated: true}, nil
+}
+
+func (v ValidatedSalaryRole) SalaryRole() SalaryRole { return v.role }
+
+// Benefit is a single employee benefit line item. It carries its own
+// identity (id) - mirrors SalaryRole/Cost.
 type Benefit struct {
+	id             uuid.UUID
 	Type           string
 	MonthlyAmount  Money
 	GrowthAfterYr1 AnnualGrowth
 }
+
+func (b Benefit) ID() uuid.UUID { return b.id }
+
+// SetID overrides a Benefit's identity - mirrors SalaryRole.SetID.
+func (b *Benefit) SetID(id uuid.UUID) { b.id = id }
+
+// NewBenefit creates a new Benefit line item with a domain-generated UUIDv7
+// identity, validating it against the same invariants a persisted Benefit
+// must satisfy. Mirrors NewCost's shape.
+func NewBenefit(benefitType string, monthlyAmount Money, growth AnnualGrowth) (Benefit, error) {
+	b := Benefit{
+		id:             uuid.NewV7(),
+		Type:           benefitType,
+		MonthlyAmount:  monthlyAmount,
+		GrowthAfterYr1: growth,
+	}
+	if err := ValidateBenefit(b); err != nil {
+		return Benefit{}, err
+	}
+	return b, nil
+}
+
+// ValidatedBenefit is an opaque token proving a Benefit passed every
+// invariant ValidateBenefit checks. It can only be produced by
+// NewValidatedBenefit - mirrors ValidatedCost's shape. BenefitRepository.
+// CompleteBenefit accepts only this type.
+type ValidatedBenefit struct {
+	benefit     Benefit
+	isValidated bool
+}
+
+// NewValidatedBenefit validates an existing Benefit value and wraps it.
+func NewValidatedBenefit(b Benefit) (ValidatedBenefit, error) {
+	if err := ValidateBenefit(b); err != nil {
+		return ValidatedBenefit{}, err
+	}
+	return ValidatedBenefit{benefit: b, isValidated: true}, nil
+}
+
+func (v ValidatedBenefit) Benefit() Benefit { return v.benefit }
 
 // PayrollTaxRates holds employer-side payroll tax rates.
 type PayrollTaxRates struct {

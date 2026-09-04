@@ -75,7 +75,7 @@ func (r *SalaryRoleRepository) FindSalaryRoleDraft(planID uuid.UUID) (*repositor
 
 	return &repositories.SalaryRoleItem{
 		ID:          id,
-		Role:        salaryRoleFromRow(row.Role, row.IsContractor, row.Headcount, row.MonthlyPay, row.GrowthYr2, row.GrowthYr3),
+		Role:        salaryRoleFromRow(id, row.Role, row.IsContractor, row.Headcount, row.MonthlyPay, row.GrowthYr2, row.GrowthYr3),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
@@ -97,13 +97,21 @@ func (r *SalaryRoleRepository) GetSalaryRole(itemID uuid.UUID) (*repositories.Sa
 
 	return &repositories.SalaryRoleItem{
 		ID:          id,
-		Role:        salaryRoleFromRow(row.Role, row.IsContractor, row.Headcount, row.MonthlyPay, row.GrowthYr2, row.GrowthYr3),
+		Role:        salaryRoleFromRow(id, row.Role, row.IsContractor, row.Headcount, row.MonthlyPay, row.GrowthYr2, row.GrowthYr3),
 		Status:      repositories.ItemStatus(row.Status),
 		CurrentStep: int(row.CurrentStep),
 	}, nil
 }
 
-func (r *SalaryRoleRepository) SaveSalaryRoleStep(itemID uuid.UUID, role domain.SalaryRole, currentStep int, status repositories.ItemStatus) error {
+func (r *SalaryRoleRepository) SaveSalaryRoleDraftStep(itemID uuid.UUID, role domain.SalaryRole, currentStep int) error {
+	return r.saveSalaryRoleStep(itemID, role, currentStep, repositories.StatusDraft)
+}
+
+func (r *SalaryRoleRepository) CompleteSalaryRole(itemID uuid.UUID, vr domain.ValidatedSalaryRole, currentStep int) error {
+	return r.saveSalaryRoleStep(itemID, vr.SalaryRole(), currentStep, repositories.StatusComplete)
+}
+
+func (r *SalaryRoleRepository) saveSalaryRoleStep(itemID uuid.UUID, role domain.SalaryRole, currentStep int, status repositories.ItemStatus) error {
 	var yr2, yr3 float64
 	if len(role.GrowthAfterYr1.RatesAfterYear1) > 0 {
 		yr2 = role.GrowthAfterYr1.RatesAfterYear1[0]
@@ -150,7 +158,7 @@ func (r *SalaryRoleRepository) ListCompleteSalaryRoles(planID uuid.UUID) ([]repo
 		}
 		items[i] = repositories.SalaryRoleItem{
 			ID:          id,
-			Role:        salaryRoleFromRow(row.Role, row.IsContractor, row.Headcount, row.MonthlyPay, row.GrowthYr2, row.GrowthYr3),
+			Role:        salaryRoleFromRow(id, row.Role, row.IsContractor, row.Headcount, row.MonthlyPay, row.GrowthYr2, row.GrowthYr3),
 			Status:      repositories.ItemStatus(row.Status),
 			CurrentStep: int(row.CurrentStep),
 		}
@@ -172,12 +180,14 @@ func (r *SalaryRoleRepository) DeleteSalaryRole(itemID uuid.UUID) error {
 	return nil
 }
 
-func salaryRoleFromRow(role string, isContractor, headcount, monthlyPay int64, growthYr2, growthYr3 float64) domain.SalaryRole {
-	return domain.SalaryRole{
+func salaryRoleFromRow(id uuid.UUID, role string, isContractor, headcount, monthlyPay int64, growthYr2, growthYr3 float64) domain.SalaryRole {
+	s := domain.SalaryRole{
 		Role:           role,
 		IsContractor:   int64ToBool(isContractor),
 		Headcount:      int(headcount),
 		MonthlyPay:     mustUSD(monthlyPay),
 		GrowthAfterYr1: domain.AnnualGrowth{RatesAfterYear1: []float64{growthYr2, growthYr3}},
 	}
+	s.SetID(id)
+	return s
 }
